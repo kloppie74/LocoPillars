@@ -1,0 +1,24 @@
+name: LocoPillars
+main: org.Kloppie74.locoPillars.LocoPillars
+version: 1.0.0
+api-version: 1.21
+authors: [kloppie74]
+description: "Pillars of the Fortune - memory-friendly multi-instance minigame!"
+depend: [WorldEdit, WorldGuard]
+
+commands:
+  pillars:
+    description: "Main command for Pillars of Fortune"
+    usage: "/pillars <join|leave|list|status|stats|help> [args]"
+    aliases: [pillar, pof, pillarsoffortune]
+
+permissions:
+  locoPillars.play:
+    description: "Allow players to join and play games"
+    default: true
+  locoPillars.admin:
+    description: "Administrative permissions for LocoPillars"
+    default: op
+  locoPillars.stats:
+    description: "View server statistics"
+    default: true
