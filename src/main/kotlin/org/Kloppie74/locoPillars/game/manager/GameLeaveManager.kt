@@ -6,6 +6,8 @@ import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.data.GameState
+import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
+import org.Kloppie74.locoPillars.utils.achievements.AchievementListener
 import java.util.*
 
 class GameLeaveManager(
@@ -14,33 +16,60 @@ class GameLeaveManager(
     private val playerToInstance: MutableMap<UUID, GameInstance>
 ) {
 
+    private val achievementListener get() = plugin.achievementListener
+    private val statsTable get() = plugin.databaseManager.statsTable
+
     fun leaveGame(player: Player, gameplayManager: GameplayManager): Boolean {
-        plugin.logger.info("[GameLeaveManager] Player ${player.name} attempting to leave game")
+        debugLog("Player ${player.name} attempting to leave game")
 
         val instance = playerToInstance[player.uniqueId]
         if (instance == null) {
-            plugin.logger.info("[GameLeaveManager] Player ${player.name} is not in any game")
+            debugLog("Player ${player.name} is not in any game")
+            SpectatorUtils.removeSpectatorStatus(player, plugin)
             return false
         }
 
-        plugin.logger.info("[GameLeaveManager] Removing player ${player.name} from instance ${instance.id}")
+        debugLog("Removing player ${player.name} from instance ${instance.id}")
+
+        // Update database stats for leaving
+        val statsTracker = plugin.databaseManager.StatsEventTracker
+        val playerId = statsTracker.getPlayerIdByName(player.name)
+
+        if (playerId != null) {
+            // Set player as inactive
+            statsTracker.setActiveStatus(playerId, false)
+
+            // Update last seen
+            statsTracker.updateLastSeen(playerId)
+
+            // If game was active and player is leaving, count as quit
+            if (instance.state == GameState.ACTIVE) {
+                statsTable.incrementGamesQuit(playerId)
+                achievementListener.onQuitGame(player)
+                debugLog("Recorded game quit for player: ${player.name}")
+            }
+
+            // Update arena stats for player leaving
+            val arenaName = instance.arenaInstance.config.name
+            statsTracker.createOrUpdatePlayerArenaStats(playerId, arenaName)
+
+            debugLog("Updated database stats for player leave: ${player.name}")
+        }
 
         instance.players.remove(player.uniqueId)
         playerToInstance.remove(player.uniqueId)
-        plugin.logger.info("[GameLeaveManager] Player removed, remaining players: ${instance.players.size}")
+        debugLog("Player removed, remaining players: ${instance.players.size}")
 
-        // Restore player state
         val playerManager = PlayerManager(plugin)
         playerManager.restorePlayerState(player)
-        plugin.logger.info("[GameLeaveManager] Player state restored")
+        SpectatorUtils.removeSpectatorStatus(player, plugin)
+        debugLog("Player state restored")
 
-        // Teleport player back to main world
-        val mainWorld = Bukkit.getWorlds().firstOrNull { !it.name.startsWith("pillars_") }
-        if (mainWorld != null) {
-            player.teleport(mainWorld.spawnLocation)
-            plugin.logger.info("[GameLeaveManager] Player ${player.name} teleported to main world")
+        val lobbySpawn = plugin.configManager.getLobbySpawnLocation()
+        if (lobbySpawn != null) {
+            player.teleport(lobbySpawn)
         } else {
-            plugin.logger.warning("[GameLeaveManager] No main world found for teleporting player ${player.name}")
+            player.teleport(player.server.worlds[0].spawnLocation)
         }
 
         broadcastToGame(
@@ -49,24 +78,20 @@ class GameLeaveManager(
         )
         player.sendMessage("${ChatColor.GREEN}You left the game!")
 
-        // Check if game should end or reset
         when {
             instance.players.isEmpty() -> {
-                plugin.logger.info("[GameLeaveManager] No players remaining in instance ${instance.id}, resetting instance")
+                debugLog("No players remaining in instance ${instance.id}, resetting instance")
 
-                // Cancel any running countdown
                 gameplayManager.cancelCountdown(instance.id)
 
-                // Reset instance state
                 instance.state = GameState.WAITING
 
-                // Release the arena so it becomes available again
                 plugin.arenaManager.releaseInstance(instance.arenaInstance)
-                plugin.logger.info("[GameLeaveManager] Instance reset to WAITING state and arena released")
+                debugLog("Instance reset to WAITING state and arena released")
             }
 
             instance.state == GameState.ACTIVE && instance.players.size < 2 -> {
-                plugin.logger.info("[GameLeaveManager] Less than 2 players remaining during active game, ending")
+                debugLog("Less than 2 players remaining during active game, ending")
                 val winner = Bukkit.getPlayer(instance.players.first())
                 if (winner != null) {
                     gameplayManager.endGame(instance, "${winner.name} wins by elimination!", playerToInstance)
@@ -76,19 +101,16 @@ class GameLeaveManager(
             }
 
             instance.state == GameState.STARTING && instance.players.size < instance.getMinPlayers() -> {
-                plugin.logger.info("[GameLeaveManager] Below minimum players during countdown, cancelling start")
+                debugLog("Below minimum players during countdown, cancelling start")
 
-                // Cancel countdown
                 gameplayManager.cancelCountdown(instance.id)
 
                 instance.state = GameState.WAITING
                 broadcastToGame(instance, "${ChatColor.RED}Not enough players! Game start cancelled.")
-
-                // Don't release arena here if there are still players
             }
 
             else -> {
-                plugin.logger.info("[GameLeaveManager] Game continues with ${instance.players.size} players")
+                debugLog("Game continues with ${instance.players.size} players")
             }
         }
 
@@ -97,7 +119,7 @@ class GameLeaveManager(
 
     private fun broadcastToGame(instance: GameInstance, message: String) {
         val players = getPlayersInGame(instance)
-        plugin.logger.info("[GameLeaveManager] Broadcasting to ${players.size} players: $message")
+        debugLog("Broadcasting to ${players.size} players: $message")
         players.forEach { player ->
             player.sendMessage(message)
         }
@@ -106,6 +128,12 @@ class GameLeaveManager(
     private fun getPlayersInGame(instance: GameInstance): List<Player> {
         return instance.players.mapNotNull { playerId ->
             plugin.server.getPlayer(playerId)?.takeIf { it.isOnline }
+        }
+    }
+
+    private fun debugLog(message: String) {
+        if (plugin.configManager.debugMode) {
+            plugin.logger.info("[GameLeaveManager] $message")
         }
     }
 }

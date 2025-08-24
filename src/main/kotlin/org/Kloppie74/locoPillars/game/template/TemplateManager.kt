@@ -3,34 +3,42 @@ package org.Kloppie74.locoPillars.game.template
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.game.config.GameConfig
 import org.Kloppie74.locoPillars.game.arena.ArenaTemplate
+import org.Kloppie74.locoPillars.config.ConfigManager
 import java.io.File
 
-class TemplateManager(private val plugin: JavaPlugin) {
+class TemplateManager(
+    private val plugin: JavaPlugin,
+    private val configManager: ConfigManager // <-- debug mode support
+) {
+
+    private fun debugLog(message: String) {
+        if (configManager.debugMode) {
+            plugin.logger.info("[TemplateManager] $message")
+        }
+    }
 
     fun createDefaultTemplates() {
-        plugin.logger.info("[TemplateManager] Creating default template structure...")
+        debugLog("Creating default template structure...")
 
         val gamesFolder = File(plugin.dataFolder, "Games")
         val schemsFolder = File(plugin.dataFolder, "Schems")
 
-        // Create folders
         if (!gamesFolder.exists()) {
             gamesFolder.mkdirs()
-            plugin.logger.info("[TemplateManager] Created Games folder")
+            debugLog("Created Games folder")
         }
 
         if (!schemsFolder.exists()) {
             schemsFolder.mkdirs()
-            plugin.logger.info("[TemplateManager] Created Schems folder")
+            debugLog("Created Schems folder")
         }
 
-        // Create example template files if they don't exist
         createExampleTemplate("example-solo", gamesFolder, schemsFolder)
         createExampleTemplate("example-team", gamesFolder, schemsFolder)
 
-        plugin.logger.info("[TemplateManager] Default template structure created!")
-        plugin.logger.info("[TemplateManager] Please place your .schem files in: ${schemsFolder.absolutePath}")
-        plugin.logger.info("[TemplateManager] Config files (.yml) go in: ${gamesFolder.absolutePath}")
+        debugLog("Default template structure created!")
+        debugLog("Please place your .schem files in: ${schemsFolder.absolutePath}")
+        debugLog("Config files (.yml) go in: ${gamesFolder.absolutePath}")
     }
 
     private fun createExampleTemplate(templateName: String, gamesFolder: File, schemsFolder: File) {
@@ -38,7 +46,7 @@ class TemplateManager(private val plugin: JavaPlugin) {
         val readmeFile = File(schemsFolder, "$templateName.schem.readme")
 
         if (!configFile.exists()) {
-            plugin.logger.info("[TemplateManager] Creating example config: $templateName.yml")
+            debugLog("Creating example config: $templateName.yml")
 
             val configContent = when (templateName) {
                 "example-solo" -> createSoloExampleConfig()
@@ -47,11 +55,11 @@ class TemplateManager(private val plugin: JavaPlugin) {
             }
 
             configFile.writeText(configContent)
-            plugin.logger.info("[TemplateManager] Created: ${configFile.absolutePath}")
+            debugLog("Created: ${configFile.absolutePath}")
         }
 
         if (!readmeFile.exists()) {
-            plugin.logger.info("[TemplateManager] Creating schematic readme: $templateName.schem.readme")
+            debugLog("Creating schematic readme: $templateName.schem.readme")
 
             val readmeContent = """
 # Schematic File Required: $templateName.schem
@@ -77,7 +85,7 @@ Make sure the schematic origin point (where you stand when copying) is at the ce
             """.trimIndent()
 
             readmeFile.writeText(readmeContent)
-            plugin.logger.info("[TemplateManager] Created: ${readmeFile.absolutePath}")
+            debugLog("Created: ${readmeFile.absolutePath}")
         }
     }
 
@@ -401,7 +409,7 @@ SpawnLocations:
     }
 
     fun validateTemplate(templateName: String): TemplateValidationResult {
-        plugin.logger.info("[TemplateManager] Validating template: $templateName")
+        debugLog("Validating template: $templateName")
 
         val gamesFolder = File(plugin.dataFolder, "Games")
         val schemsFolder = File(plugin.dataFolder, "Schems")
@@ -411,35 +419,29 @@ SpawnLocations:
         val errors = mutableListOf<String>()
         val warnings = mutableListOf<String>()
 
-        // Check if config file exists
         if (!configFile.exists()) {
             errors.add("Config file not found: ${configFile.absolutePath}")
         } else {
-            plugin.logger.info("[TemplateManager] ✓ Config file found")
+            debugLog("✓ Config file found")
         }
 
-        // Check if schematic file exists
         if (!schemFile.exists()) {
             errors.add("Schematic file not found: ${schemFile.absolutePath}")
         } else {
-            plugin.logger.info("[TemplateManager] ✓ Schematic file found")
-
-            // Validate schematic file
-            if (!org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, schemFile)) {
+            debugLog("✓ Schematic file found")
+            if (!org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, configManager, schemFile)) {
                 errors.add("Invalid schematic file: ${schemFile.name}")
             } else {
-                plugin.logger.info("[TemplateManager] ✓ Schematic file is valid")
+                debugLog("✓ Schematic file is valid")
             }
         }
 
-        // Try to load and validate config
         if (configFile.exists()) {
             try {
                 val config = GameConfig.loadSingle(plugin, configFile)
                 if (config != null) {
-                    plugin.logger.info("[TemplateManager] ✓ Config loaded successfully")
+                    debugLog("✓ Config loaded successfully")
 
-                    // Validate config values
                     if (config.getMaxPlayers() <= 0) {
                         errors.add("MaximumPlayers must be greater than 0")
                     }
@@ -452,9 +454,7 @@ SpawnLocations:
                     if (config.teams.isEmpty()) {
                         errors.add("No teams defined in config")
                     } else {
-                        plugin.logger.info("[TemplateManager] ✓ Found ${config.teams.size} teams")
-
-                        // Validate each team has spawn points
+                        debugLog("✓ Found ${config.teams.size} teams")
                         config.teams.forEachIndexed { index, team ->
                             if (team.spawns.isEmpty()) {
                                 errors.add("Team ${index + 1} (${team.name}) has no spawn points")
@@ -466,16 +466,16 @@ SpawnLocations:
                 }
             } catch (e: Exception) {
                 errors.add("Error loading config: ${e.message}")
-                plugin.logger.warning("[TemplateManager] Config validation error: ${e.message}")
+                debugLog("Config validation error: ${e.message}")
             }
         }
 
         val isValid = errors.isEmpty()
 
-        plugin.logger.info("[TemplateManager] Template validation result for $templateName:")
-        plugin.logger.info("[TemplateManager]   Valid: $isValid")
-        plugin.logger.info("[TemplateManager]   Errors: ${errors.size}")
-        plugin.logger.info("[TemplateManager]   Warnings: ${warnings.size}")
+        debugLog("Template validation result for $templateName:")
+        debugLog("  Valid: $isValid")
+        debugLog("  Errors: ${errors.size}")
+        debugLog("  Warnings: ${warnings.size}")
 
         return TemplateValidationResult(isValid, errors, warnings)
     }
@@ -511,7 +511,7 @@ SpawnLocations:
                 )
             } else null
         } catch (e: Exception) {
-            plugin.logger.warning("[TemplateManager] Error loading template info for $templateName: ${e.message}")
+            debugLog("Error loading template info for $templateName: ${e.message}")
             null
         }
     }

@@ -1,0 +1,34 @@
+# ==============================================
+#   LocoPillars Custom Achievement Definition
+# ==============================================
+id: marathon_runner
+name: "Marathon Runner"
+display_name: "Marathon Runner"
+description: "Walk %amount% blocks total in games"
+category: "GENERAL"
+type: "PROGRESSIVE"
+difficulty: "MEDIUM"
+rarity: 22.5
+icon:
+  material: "LEATHER_BOOTS"
+  custom_model_data: 0
+display_order: 30
+hidden: false
+secret: false
+active: true
+unlock_message: "&bYou unlocked Marathon Runner!"
+requirements:
+  target:
+    id: "walk_distance"
+    amount: 100000
+rewards:
+  experience: 80
+  coins: 40
+  commands:
+    - "broadcast &b%player% has walked 100,000 blocks!"
+milestones:
+  - amount: 10000
+    message: "&e10,000 blocks walked!"
+  - amount: 100000
+    message: "&aYou completed the Marathon Runner achievement!"
+# =========================

@@ -1,0 +1,29 @@
+# ==============================================
+#   Pillars Custom Achievement Definition
+# ==============================================
+id: win_master
+name: "Win Master"
+display_name: "Win Master"
+description: "Win %amount% games to become a true champion"
+category: "GENERAL"
+type: "PROGRESSIVE"
+difficulty: "HARD"
+rarity: 10.0
+hidden: false
+secret: false
+active: true
+unlock_message: "&6You unlocked the Win Master achievement!"
+requirements:
+  target:
+    id: "win_game"
+    amount: 100
+rewards:
+  experience: 250
+  coins: 150
+  commands:
+    - "broadcast &6%player% is now a Win Master!"
+milestones:
+  - amount: 25
+    message: "&e25 wins! Keep going!"
+  - amount: 100
+    message: "&aYou are now a Win Master!"

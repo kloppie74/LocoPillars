@@ -6,29 +6,28 @@ import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.arena.ArenaManager
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.events.TimerEvent
+import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import java.util.*
 
 class GameManager(private val plugin: LocoPillars) {
     private val instances = mutableListOf<GameInstance>()
     private val playerToInstance = mutableMapOf<UUID, GameInstance>()
-    private lateinit var timerEvent: TimerEvent
+    lateinit var timerEvent: TimerEvent
 
-    // Sub-managers
-    private lateinit var instanceManager: GameInstanceManager
-    private lateinit var joinManager: GameJoinManager
-    private lateinit var leaveManager: GameLeaveManager
-    private lateinit var gameplayManager: GameplayManager
-    private lateinit var playerManager: PlayerManager
+    lateinit var instanceManager: GameInstanceManager
+    lateinit var joinManager: GameJoinManager
+    lateinit var leaveManager: GameLeaveManager
+    lateinit var gameplayManager: GameplayManager
+    lateinit var playerManager: PlayerManager
 
     fun initialize() {
         timerEvent = TimerEvent(plugin)
         plugin.logger.info("[GameManager] TimerEvent initialized")
 
-        // Initialize sub-managers
-        instanceManager = GameInstanceManager(plugin, instances)
+        instanceManager = GameInstanceManager(plugin, instances, plugin.configManager)
         joinManager = GameJoinManager(plugin, instances, playerToInstance)
         leaveManager = GameLeaveManager(plugin, instances, playerToInstance)
-        gameplayManager = GameplayManager(plugin, timerEvent)
+        gameplayManager = GameplayManager(plugin, timerEvent, plugin.configManager)
         playerManager = PlayerManager(plugin)
 
         plugin.logger.info("[GameManager] All sub-managers initialized")
@@ -43,23 +42,27 @@ class GameManager(private val plugin: LocoPillars) {
     }
 
     fun joinGame(player: Player, gameTypeName: String): GameInstance? {
-        return joinManager.joinGame(player, gameTypeName, gameplayManager)
+        val instance = joinManager.joinGame(player, gameTypeName, gameplayManager)
+        if (instance != null) {
+            SpectatorUtils.removeSpectatorStatus(player, plugin)
+        }
+        return instance
     }
 
     fun leaveGame(player: Player): Boolean {
-        return leaveManager.leaveGame(player, gameplayManager)
+        val success = leaveManager.leaveGame(player, gameplayManager)
+        SpectatorUtils.removeSpectatorStatus(player, plugin)
+        return success
     }
 
     fun handlePlayerDeath(player: Player): Boolean {
         return gameplayManager.handlePlayerDeath(player, playerToInstance, playerManager)
     }
 
-    // Called by TimerEvent when game timer expires
     fun endGameByTimer(instance: GameInstance) {
         gameplayManager.endGameByTimer(instance, playerToInstance, playerManager)
     }
 
-    // Called by TimerEvent to give items to players
     fun giveItemsToPlayers(instance: GameInstance) {
         gameplayManager.giveItemsToPlayers(instance)
     }

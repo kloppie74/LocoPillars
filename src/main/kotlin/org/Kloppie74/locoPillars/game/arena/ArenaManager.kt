@@ -15,7 +15,9 @@ import com.sk89q.worldguard.bukkit.WorldGuardPlugin
 import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion
 import com.sk89q.worldguard.protection.flags.Flags
 import com.sk89q.worldguard.protection.flags.StateFlag
+import org.Kloppie74.locoPillars.config.ConfigManager
 import org.Kloppie74.locoPillars.game.config.GameConfig
+import kotlin.random.Random
 
 enum class ArenaStatus {
     AVAILABLE, OCCUPIED, RESETTING
@@ -24,7 +26,7 @@ enum class ArenaStatus {
 data class ArenaTemplate(
     val name: String,
     val configFile: File,
-    val schemFile: File
+    val schemFiles: List<File>
 )
 
 data class ArenaInstance(
@@ -34,109 +36,151 @@ data class ArenaInstance(
     val origin: Location,
     val world: World,
     var status: ArenaStatus = ArenaStatus.AVAILABLE,
-    val regionId: String
+    val regionId: String,
+    var currentSchematicFile: File? = null
 )
 
 class ArenaManager(
     private val plugin: JavaPlugin,
-    private val worldManager: ArenaWorldManager
+    private val worldManager: ArenaWorldManager,
+    private val configManager: ConfigManager // <-- debug modus via configManager!
 ) {
     private val templates = mutableMapOf<String, ArenaTemplate>()
     private val instances = mutableListOf<ArenaInstance>()
-    private val instanceDistance = 1000 // Distance between arena origins
+    private val instanceDistance = 1000
     private val worldGuard = WorldGuard.getInstance()
+
+    private fun debugLog(message: String) {
+        if (configManager.debugMode) {
+            plugin.logger.info("[ArenaManager] $message")
+        }
+    }
 
     init {
         loadArenaTemplates()
     }
 
     private fun loadArenaTemplates() {
-        // Create necessary folders
         val gamesFolder = File(plugin.dataFolder, "Games")
         val schemsFolder = File(plugin.dataFolder, "Schems")
         val dataFolder = File(plugin.dataFolder, "Data")
         val gameWorldsFolder = File(dataFolder, "GameWorlds")
 
-        // Create folders if they don't exist
         if (!gamesFolder.exists()) {
             gamesFolder.mkdirs()
-            plugin.logger.info("[ArenaManager] Created Games folder at: ${gamesFolder.absolutePath}")
+            debugLog("Created Games folder at: ${gamesFolder.absolutePath}")
         }
-
         if (!schemsFolder.exists()) {
             schemsFolder.mkdirs()
-            plugin.logger.info("[ArenaManager] Created Schems folder at: ${schemsFolder.absolutePath}")
+            debugLog("Created Schems folder at: ${schemsFolder.absolutePath}")
         }
-
         if (!dataFolder.exists()) {
             dataFolder.mkdirs()
-            plugin.logger.info("[ArenaManager] Created Data folder at: ${dataFolder.absolutePath}")
+            debugLog("Created Data folder at: ${dataFolder.absolutePath}")
         }
-
         if (!gameWorldsFolder.exists()) {
             gameWorldsFolder.mkdirs()
-            plugin.logger.info("[ArenaManager] Created GameWorlds folder at: ${gameWorldsFolder.absolutePath}")
+            debugLog("Created GameWorlds folder at: ${gameWorldsFolder.absolutePath}")
         }
 
-        plugin.logger.info("[ArenaManager] Scanning for templates...")
-        plugin.logger.info("[ArenaManager] Games folder: ${gamesFolder.absolutePath}")
-        plugin.logger.info("[ArenaManager] Schems folder: ${schemsFolder.absolutePath}")
+        debugLog("Scanning for templates...")
+        debugLog("Games folder: ${gamesFolder.absolutePath}")
+        debugLog("Schems folder: ${schemsFolder.absolutePath}")
 
         val configs = gamesFolder.listFiles { f -> f.extension == "yml" } ?: emptyArray()
-        plugin.logger.info("[ArenaManager] Found ${configs.size} .yml config files")
+        debugLog("Found ${configs.size} .yml config files")
 
         configs.forEach { configFile ->
             val name = configFile.nameWithoutExtension
-            val schemFile = File(schemsFolder, "$name.schem")
+            debugLog("Processing template: $name")
+            debugLog("Config: ${configFile.absolutePath} (exists: ${configFile.exists()})")
 
-            plugin.logger.info("[ArenaManager] Checking template: $name")
-            plugin.logger.info("[ArenaManager] Config: ${configFile.absolutePath} (exists: ${configFile.exists()})")
-            plugin.logger.info("[ArenaManager] Schematic: ${schemFile.absolutePath} (exists: ${schemFile.exists()})")
+            val schemFolder = File(schemsFolder, name)
+            val schemFiles = mutableListOf<File>()
 
-            if (schemFile.exists()) {
-                // Validate the schematic file
-                if (org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, schemFile)) {
-                    templates[name] = ArenaTemplate(name, configFile, schemFile)
-                    plugin.logger.info("[ArenaManager] ✓ Arena template registered: $name")
-                    plugin.logger.info("[ArenaManager]   Config: ${configFile.name}")
-                    plugin.logger.info("[ArenaManager]   Schematic: ${schemFile.name} (${schemFile.length()} bytes)")
+            if (schemFolder.exists() && schemFolder.isDirectory) {
+                debugLog("Found schematic folder: ${schemFolder.absolutePath}")
+                val folderSchematics = schemFolder.listFiles { f -> f.extension == "schem" } ?: emptyArray()
+                debugLog("Found ${folderSchematics.size} .schem files in folder")
+
+                folderSchematics.forEach { schemFile ->
+                    if (org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, configManager, schemFile)) {
+                        schemFiles.add(schemFile)
+                        debugLog("✓ Valid schematic: ${schemFile.name} (${schemFile.length()} bytes)")
+                    } else {
+                        debugLog("✗ Invalid schematic: ${schemFile.name}")
+                    }
+                }
+            }
+
+            if (schemFiles.isEmpty()) {
+                val singleSchemFile = File(schemsFolder, "$name.schem")
+                debugLog("No folder found, checking single schematic: ${singleSchemFile.absolutePath}")
+
+                if (singleSchemFile.exists()) {
+                    if (org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, configManager, singleSchemFile)) {
+                        schemFiles.add(singleSchemFile)
+                        debugLog("✓ Valid single schematic: ${singleSchemFile.name} (${singleSchemFile.length()} bytes)")
+                    } else {
+                        debugLog("✗ Invalid single schematic: ${singleSchemFile.name}")
+                    }
                 } else {
-                    plugin.logger.warning("[ArenaManager] ✗ Invalid schematic file for: $name")
+                    debugLog("✗ No schematic found for config: $name")
+                }
+            }
+
+            if (schemFiles.isNotEmpty()) {
+                templates[name] = ArenaTemplate(name, configFile, schemFiles)
+                debugLog("✓ Arena template registered: $name")
+                debugLog("  Config: ${configFile.name}")
+                debugLog("  Schematics: ${schemFiles.size} files")
+                schemFiles.forEachIndexed { index, file ->
+                    debugLog("    ${index + 1}. ${file.name} (${file.length()} bytes)")
                 }
             } else {
-                plugin.logger.warning("[ArenaManager] ✗ No .schem found for config: $name.yml")
-                plugin.logger.warning("[ArenaManager] Expected schematic at: ${schemFile.absolutePath}")
+                debugLog("✗ No valid schematics found for config: $name")
             }
         }
 
-        plugin.logger.info("[ArenaManager] Template loading completed")
-        plugin.logger.info("[ArenaManager] Total templates loaded: ${templates.size}")
+        debugLog("Template loading completed")
+        debugLog("Total templates loaded: ${templates.size}")
 
         if (templates.isEmpty()) {
-            plugin.logger.warning("[ArenaManager] No templates found! Please ensure:")
-            plugin.logger.warning("[ArenaManager] 1. Config files (.yml) are in: ${gamesFolder.absolutePath}")
-            plugin.logger.warning("[ArenaManager] 2. Schematic files (.schem) are in: ${schemsFolder.absolutePath}")
-            plugin.logger.warning("[ArenaManager] 3. Config and schematic files have matching names (without extension)")
+            debugLog("No templates found! Please ensure:")
+            debugLog("1. Config files (.yml) are in: ${gamesFolder.absolutePath}")
+            debugLog("2. Either:")
+            debugLog("   - Single schematic files (.schem) in: ${schemsFolder.absolutePath}")
+            debugLog("   - Multiple schematic files in folders: ${schemsFolder.absolutePath}/[config-name]/")
+            debugLog("3. Config and schematic files have matching names")
         } else {
             templates.forEach { (name, template) ->
-                plugin.logger.info("[ArenaManager] ✓ Template: $name")
-                plugin.logger.info("[ArenaManager]   Config: ${template.configFile.name}")
-                plugin.logger.info("[ArenaManager]   Schematic: ${template.schemFile.name}")
+                debugLog("✓ Template: $name")
+                debugLog("  Config: ${template.configFile.name}")
+                debugLog("  Schematics: ${template.schemFiles.size} files")
             }
         }
     }
 
+    private fun pickRandomSchematic(template: ArenaTemplate): File {
+        if (template.schemFiles.isEmpty()) {
+            throw IllegalStateException("No schematic files available for template: ${template.name}")
+        }
+        val selectedFile = template.schemFiles[Random.nextInt(template.schemFiles.size)]
+        debugLog("Selected schematic for ${template.name}: ${selectedFile.name}")
+        return selectedFile
+    }
+
     fun preloadInstances(configs: List<GameConfig>, amountPerType: Int) {
-        plugin.logger.info("[ArenaManager] Starting preload of instances...")
-        plugin.logger.info("[ArenaManager] Configs to process: ${configs.size}")
-        plugin.logger.info("[ArenaManager] Templates available: ${templates.size}")
-        plugin.logger.info("[ArenaManager] Instances per type: $amountPerType")
+        debugLog("Starting preload of instances...")
+        debugLog("Configs to process: ${configs.size}")
+        debugLog("Templates available: ${templates.size}")
+        debugLog("Instances per type: $amountPerType")
 
         if (templates.isEmpty()) {
             plugin.logger.severe("[ArenaManager] No templates available! Cannot preload instances.")
             plugin.logger.severe("[ArenaManager] Please check that:")
             plugin.logger.severe("[ArenaManager] 1. .yml config files are in Games/ folder")
-            plugin.logger.severe("[ArenaManager] 2. .schem files are in Schems/ folder")
+            plugin.logger.severe("[ArenaManager] 2. .schem files are in Schems/ folder or Schems/[config-name]/ folders")
             plugin.logger.severe("[ArenaManager] 3. File names match (without extensions)")
             return
         }
@@ -145,32 +189,28 @@ class ArenaManager(
         var totalInstancesCreated = 0
 
         configs.forEach { config ->
-            plugin.logger.info("[ArenaManager] Processing config: ${config.name}")
+            debugLog("Processing config: ${config.name}")
 
             val template = templates[config.name]
             if (template == null) {
-                plugin.logger.warning("[ArenaManager] No template found for config: ${config.name}")
-                plugin.logger.warning("[ArenaManager] Available templates: ${templates.keys}")
+                debugLog("No template found for config: ${config.name}")
+                debugLog("Available templates: ${templates.keys}")
                 return@forEach
             }
 
-            plugin.logger.info("[ArenaManager] ✓ Template found for ${config.name}")
-            plugin.logger.info("[ArenaManager] Template details:")
-            plugin.logger.info("[ArenaManager]   Config file: ${template.configFile.absolutePath}")
-            plugin.logger.info("[ArenaManager]   Schematic file: ${template.schemFile.absolutePath}")
-            plugin.logger.info("[ArenaManager]   Schematic exists: ${template.schemFile.exists()}")
-            plugin.logger.info("[ArenaManager]   Schematic size: ${template.schemFile.length()} bytes")
+            debugLog("✓ Template found for ${config.name}")
+            debugLog("Template details:")
+            debugLog("  Config file: ${template.configFile.absolutePath}")
+            debugLog("  Available schematics: ${template.schemFiles.size}")
 
-            // Create one world per game type in the GameWorlds folder
             val worldName = "pillars_${config.name}"
-            plugin.logger.info("[ArenaManager] Creating world: $worldName")
+            debugLog("Creating world: $worldName")
 
             val world = worldManager.createArenaWorld(worldName)
-            plugin.logger.info("[ArenaManager] ✓ World created successfully: ${world.name}")
+            debugLog("✓ World created successfully: ${world.name}")
 
             repeat(amountPerType) { instanceIndex ->
-                // Calculate position in grid
-                val gridX = globalIndex % 10 // 10 instances per row
+                val gridX = globalIndex % 10
                 val gridZ = globalIndex / 10
 
                 val x = gridX * instanceDistance
@@ -179,11 +219,11 @@ class ArenaManager(
 
                 val regionId = "pillars_${config.name}_${instanceIndex}"
 
-                plugin.logger.info("[ArenaManager] Creating instance $instanceIndex for ${config.name}")
-                plugin.logger.info("[ArenaManager] Instance details:")
-                plugin.logger.info("[ArenaManager]   Origin: (${origin.x}, ${origin.y}, ${origin.z})")
-                plugin.logger.info("[ArenaManager]   World: ${world.name}")
-                plugin.logger.info("[ArenaManager]   Region ID: $regionId")
+                debugLog("Creating instance $instanceIndex for ${config.name}")
+                debugLog("Instance details:")
+                debugLog("  Origin: (${origin.x}, ${origin.y}, ${origin.z})")
+                debugLog("  World: ${world.name}")
+                debugLog("  Region ID: $regionId")
 
                 val instance = ArenaInstance(
                     id = UUID.randomUUID(),
@@ -195,40 +235,39 @@ class ArenaManager(
                 )
 
                 instances.add(instance)
-                plugin.logger.info("[ArenaManager] Instance added to list, total: ${instances.size}")
+                debugLog("Instance added to list, total: ${instances.size}")
 
                 createWorldGuardRegion(instance)
-                plugin.logger.info("[ArenaManager] WorldGuard region created for instance $instanceIndex")
+                debugLog("WorldGuard region created for instance $instanceIndex")
 
                 resetArena(instance)
-                plugin.logger.info("[ArenaManager] Arena reset completed for instance $instanceIndex")
+                debugLog("Arena reset completed for instance $instanceIndex")
 
                 globalIndex++
                 totalInstancesCreated++
             }
 
-            plugin.logger.info("[ArenaManager] Completed processing config: ${config.name}")
-            plugin.logger.info("[ArenaManager] Instances created for this config: $amountPerType")
+            debugLog("Completed processing config: ${config.name}")
+            debugLog("Instances created for this config: $amountPerType")
         }
 
-        plugin.logger.info("[ArenaManager] ==========================================")
-        plugin.logger.info("[ArenaManager] PRELOAD COMPLETED SUCCESSFULLY!")
-        plugin.logger.info("[ArenaManager] ==========================================")
-        plugin.logger.info("[ArenaManager] Total instances created: $totalInstancesCreated")
-        plugin.logger.info("[ArenaManager] Total instances in list: ${instances.size}")
-        plugin.logger.info("[ArenaManager] Configs processed: ${configs.size}")
-        plugin.logger.info("[ArenaManager] Templates used: ${templates.size}")
-        plugin.logger.info("[ArenaManager] Worlds created: ${configs.size}")
+        debugLog("==========================================")
+        debugLog("PRELOAD COMPLETED SUCCESSFULLY!")
+        debugLog("==========================================")
+        debugLog("Total instances created: $totalInstancesCreated")
+        debugLog("Total instances in list: ${instances.size}")
+        debugLog("Configs processed: ${configs.size}")
+        debugLog("Templates used: ${templates.size}")
+        debugLog("Worlds created: ${configs.size}")
 
-        // Log summary per game type
         configs.forEach { config ->
             val typeInstances = instances.filter { it.template.name == config.name }
-            plugin.logger.info("[ArenaManager] ${config.name}: ${typeInstances.size} instances")
+            debugLog("${config.name}: ${typeInstances.size} instances")
         }
     }
 
     private fun createWorldGuardRegion(instance: ArenaInstance) {
-        plugin.logger.info("[ArenaManager] Creating WorldGuard region for ${instance.regionId}")
+        debugLog("Creating WorldGuard region for ${instance.regionId}")
 
         val regionManager = worldGuard.platform.regionContainer.get(BukkitAdapter.adapt(instance.world))
         if (regionManager == null) {
@@ -239,7 +278,6 @@ class ArenaManager(
         val origin = instance.origin
         val halfDistance = instanceDistance / 2
 
-        // Create a region around the instance origin
         val min = BlockVector3.at(
             origin.blockX - halfDistance,
             0,
@@ -251,11 +289,10 @@ class ArenaManager(
             origin.blockZ + halfDistance
         )
 
-        plugin.logger.info("[ArenaManager] Region bounds: ($min) to ($max)")
+        debugLog("Region bounds: ($min) to ($max)")
 
         val region = ProtectedCuboidRegion(instance.regionId, min, max)
 
-        // Set all relevant flags for full access
         region.setFlag(Flags.PVP, StateFlag.State.ALLOW)
         region.setFlag(Flags.BLOCK_BREAK, StateFlag.State.ALLOW)
         region.setFlag(Flags.BLOCK_PLACE, StateFlag.State.ALLOW)
@@ -303,24 +340,23 @@ class ArenaManager(
 
         regionManager.addRegion(region)
 
-        plugin.logger.info("[ArenaManager] WorldGuard region created successfully: ${instance.regionId}")
+        debugLog("WorldGuard region created successfully: ${instance.regionId}")
     }
 
     fun getAvailableInstance(templateName: String): ArenaInstance? {
-        plugin.logger.info("[ArenaManager] Looking for available instance of type: $templateName")
-
+        debugLog("Looking for available instance of type: $templateName")
         val instance = instances.firstOrNull {
             it.template.name == templateName &&
                     it.status == ArenaStatus.AVAILABLE
         }
 
         if (instance != null) {
-            plugin.logger.info("[ArenaManager] Found available instance: ${instance.id}")
+            debugLog("Found available instance: ${instance.id}")
         } else {
-            plugin.logger.warning("[ArenaManager] No available instance found for: $templateName")
-            plugin.logger.info("[ArenaManager] Available instances:")
+            debugLog("No available instance found for: $templateName")
+            debugLog("Available instances:")
             instances.forEach { inst ->
-                plugin.logger.info("[ArenaManager]   - ${inst.template.name}: ${inst.status} (${inst.id})")
+                debugLog("  - ${inst.template.name}: ${inst.status} (${inst.id})")
             }
         }
 
@@ -328,29 +364,27 @@ class ArenaManager(
     }
 
     fun occupyInstance(instance: ArenaInstance) {
-        plugin.logger.info("[ArenaManager] Occupying instance: ${instance.id} (${instance.template.name})")
+        debugLog("Occupying instance: ${instance.id} (${instance.template.name})")
         instance.status = ArenaStatus.OCCUPIED
-        plugin.logger.info("[ArenaManager] Instance ${instance.id} status changed to OCCUPIED")
+        debugLog("Instance ${instance.id} status changed to OCCUPIED")
     }
 
     fun releaseInstance(instance: ArenaInstance) {
-        plugin.logger.info("[ArenaManager] Releasing instance: ${instance.id} (${instance.template.name})")
+        debugLog("Releasing instance: ${instance.id} (${instance.template.name})")
         instance.status = ArenaStatus.RESETTING
 
-        // Clear all players from the region
         clearPlayersFromInstance(instance)
-        plugin.logger.info("[ArenaManager] Players cleared from instance")
+        debugLog("Players cleared from instance")
 
-        // Reset the arena
         resetArena(instance)
-        plugin.logger.info("[ArenaManager] Arena reset completed")
+        debugLog("Arena reset completed")
 
         instance.status = ArenaStatus.AVAILABLE
-        plugin.logger.info("[ArenaManager] Instance ${instance.id} status changed to AVAILABLE")
+        debugLog("Instance ${instance.id} status changed to AVAILABLE")
     }
 
     private fun clearPlayersFromInstance(instance: ArenaInstance) {
-        plugin.logger.info("[ArenaManager] Clearing players from instance: ${instance.id}")
+        debugLog("Clearing players from instance: ${instance.id}")
 
         val halfDistance = instanceDistance / 2
         val origin = instance.origin
@@ -361,51 +395,55 @@ class ArenaManager(
             if (loc.x >= origin.x - halfDistance && loc.x <= origin.x + halfDistance &&
                 loc.z >= origin.z - halfDistance && loc.z <= origin.z + halfDistance) {
 
-                plugin.logger.info("[ArenaManager] Found player ${player.name} in instance area, teleporting out")
+                debugLog("Found player ${player.name} in instance area, teleporting out")
 
-                // Teleport player to main world spawn
-                val mainWorld = plugin.server.worlds.firstOrNull { !it.name.startsWith("pillars_") }
-                if (mainWorld != null) {
-                    player.teleport(mainWorld.spawnLocation)
-                    playersCleared++
-                    plugin.logger.info("[ArenaManager] Teleported ${player.name} to main world")
+                val lobbySpawn = configManager.getLobbySpawnLocation()
+                if (lobbySpawn != null) {
+                    player.teleport(lobbySpawn)
                 } else {
-                    plugin.logger.warning("[ArenaManager] No main world found for player teleport")
+                    player.teleport(player.server.worlds[0].spawnLocation)
                 }
+                playersCleared++
             }
         }
 
-        plugin.logger.info("[ArenaManager] Cleared $playersCleared players from instance")
+        debugLog("Cleared $playersCleared players from instance")
     }
 
     fun resetArena(instance: ArenaInstance) {
-        plugin.logger.info("[ArenaManager] Starting arena reset for: ${instance.template.name} (${instance.id})")
-        plugin.logger.info("[ArenaManager] Schematic file: ${instance.template.schemFile.absolutePath}")
-        plugin.logger.info("[ArenaManager] Origin location: ${instance.origin}")
+        debugLog("Starting arena reset for: ${instance.template.name} (${instance.id})")
 
-        // Use the SchematicHelper for better error handling and logging
+        val selectedSchematic = pickRandomSchematic(instance.template)
+        instance.currentSchematicFile = selectedSchematic
+
+        debugLog("Using schematic: ${selectedSchematic.name}")
+        debugLog("Schematic file: ${selectedSchematic.absolutePath}")
+        debugLog("Origin location: ${instance.origin}")
+
         val success = org.Kloppie74.locoPillars.utils.SchematicHelper.pasteSchematic(
             plugin,
-            instance.template.schemFile,
+            configManager,
+            selectedSchematic,
             instance.origin
         )
 
         if (success) {
-            plugin.logger.info("[ArenaManager] ✓ Arena ${instance.template.name} (instance ${instance.id}) successfully reset")
-            plugin.logger.info("[ArenaManager]   Location: ${instance.origin}")
-            plugin.logger.info("[ArenaManager]   World: ${instance.world.name}")
+            debugLog("✓ Arena ${instance.template.name} (instance ${instance.id}) successfully reset")
+            debugLog("  Used schematic: ${selectedSchematic.name}")
+            debugLog("  Location: ${instance.origin}")
+            debugLog("  World: ${instance.world.name}")
         } else {
             plugin.logger.severe("[ArenaManager] ✗ Failed to reset arena ${instance.template.name} (instance ${instance.id})")
             plugin.logger.severe("[ArenaManager] Debug information:")
             plugin.logger.severe("[ArenaManager]   Template name: ${instance.template.name}")
-            plugin.logger.severe("[ArenaManager]   Schematic path: ${instance.template.schemFile.absolutePath}")
+            plugin.logger.severe("[ArenaManager]   Selected schematic: ${selectedSchematic.name}")
+            plugin.logger.severe("[ArenaManager]   Schematic path: ${selectedSchematic.absolutePath}")
             plugin.logger.severe("[ArenaManager]   World: ${instance.world.name}")
             plugin.logger.severe("[ArenaManager]   Origin: ${instance.origin}")
             plugin.logger.severe("[ArenaManager]   Instance ID: ${instance.id}")
 
-            // Try to validate the schematic file
             plugin.logger.severe("[ArenaManager] Running additional validation...")
-            org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, instance.template.schemFile)
+            org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, configManager, selectedSchematic)
         }
     }
 
@@ -422,25 +460,25 @@ class ArenaManager(
     }
 
     fun getAllInstances(): List<ArenaInstance> {
-        plugin.logger.info("[ArenaManager] Returning ${instances.size} instances")
+        debugLog("Returning ${instances.size} instances")
         return instances
     }
 
     fun getAllTemplates(): List<ArenaTemplate> {
-        plugin.logger.info("[ArenaManager] Returning ${templates.size} templates")
+        debugLog("Returning ${templates.size} templates")
         return templates.values.toList()
     }
 
     fun getInstancesByTemplate(templateName: String): List<ArenaInstance> {
         val matchingInstances = instances.filter { it.template.name == templateName }
-        plugin.logger.info("[ArenaManager] Found ${matchingInstances.size} instances for template: $templateName")
+        debugLog("Found ${matchingInstances.size} instances for template: $templateName")
         return matchingInstances
     }
 
     fun onDisable() {
-        plugin.logger.info("[ArenaManager] Disabling plugin: Unloading and deleting game worlds...")
+        debugLog("Disabling plugin: Unloading and deleting game worlds...")
         worldManager.unloadAllGameWorlds()
-        worldManager.deleteGameWorldsFolder()
-        plugin.logger.info("[ArenaManager] All game worlds unloaded and GameWorlds folder deleted.")
+        worldManager.deleteAllUnloadedPillarsWorldFolders()
+        debugLog("All game worlds unloaded and GameWorlds folder deleted.")
     }
 }

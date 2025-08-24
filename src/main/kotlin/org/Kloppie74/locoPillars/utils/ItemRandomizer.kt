@@ -194,56 +194,6 @@ class ItemRandomizer(private val arenaConfig: FileConfiguration) {
     }
 
     /**
-     * Safely add an item to a player's inventory
-     * private fun addItemSafely(player: org.bukkit.entity.Player, item: ItemStack) {
-     *         if (item.type == Material.AIR) return
-     *
-     *         val inventory = player.inventory
-     *
-     *         // Try to stack with existing items first
-     *         if (item.maxStackSize > 1) {
-     *             for (i in 0 until 36) { // Main inventory slots (0-35)
-     *                 val slotItem = inventory.getItem(i)
-     *                 if (slotItem != null &&
-     *                     slotItem.type == item.type &&
-     *                     slotItem.durability == item.durability &&
-     *                     slotItem.amount < slotItem.maxStackSize &&
-     *                     (slotItem.itemMeta == null || slotItem.itemMeta == item.itemMeta)) {
-     *
-     *                     val spaceInStack = slotItem.maxStackSize - slotItem.amount
-     *                     if (spaceInStack >= item.amount) {
-     *                         // The entire item fits in this stack
-     *                         slotItem.amount = slotItem.amount + item.amount
-     *                         return
-     *                     } else {
-     *                         // Only part fits
-     *                         slotItem.amount = slotItem.maxStackSize
-     *                         item.amount = item.amount - spaceInStack
-     *                     }
-     *                 }
-     *             }
-     *         }
-     *
-     *         // If the item still exists, find an empty slot
-     *         if (item.amount > 0) {
-     *             for (i in 0 until 36) {
-     *                 val slotItem = inventory.getItem(i)
-     *                 if (slotItem == null || slotItem.type == Material.AIR) {
-     *                     inventory.setItem(i, item)
-     *                     return
-     *                 }
-     *             }
-     *
-     *             // If there are no empty slots, drop the item
-     *             val leftover = inventory.addItem(item)
-     *             if (leftover.isNotEmpty()) {
-     *                 player.world.dropItem(player.location, item)
-     *             }
-     *         }
-     *     }
-     */
-
-    /**
      * Helper class to store a Material, ItemStack or command
      */
     private data class ItemOrCommand(

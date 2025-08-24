@@ -1,0 +1,39 @@
+# Real Achievement Triggers (actual stat/database fields)
+
+BLOCKS_PLACED            # Blocks placed by the player
+BLOCKS_BROKEN            # Blocks broken by the player
+WALK_DISTANCE            # Distance moved/walked by the player
+WIN_GAME                 # Wins (games_won)
+LOSE_GAME                # Losses (games_lost)
+QUIT_GAME                # Games quit (games_quit)
+KILL_PLAYER              # Kills (total_kills)
+DEATH                    # Deaths (total_deaths)
+ASSIST                   # Assists (total_assists)
+GAMES_PLAYED             # Games played (games_played)
+GAMES_WON                # Games won (games_won)
+GAMES_LOST               # Games lost (games_lost)
+GAMES_QUIT               # Games quit (games_quit)
+DOUBLE_KILL              # Double kills
+TRIPLE_KILL              # Triple kills
+QUAD_KILL                # Quad kills
+PERFECT_GAME             # Perfect games
+COMEBACK_WIN             # Comeback wins
+FASTEST_WIN              # Fastest win time
+LONGEST_GAME             # Longest game time
+KILL_STREAK              # Highest killstreak achieved
+WIN_STREAK               # Highest win streak
+LOSS_STREAK              # Highest loss streak
+LEVEL_UP                 # Level up (level)
+COINS_EARNED             # Coins earned (coins)
+EXPERIENCE_EARNED        # Experience earned (experience)
+DAMAGE_DEALT             # Damage dealt
+DAMAGE_TAKEN             # Damage taken
+FALL_DAMAGE_TAKEN        # Fall damage taken
+TIME_PLAYED              # Total playtime (total_playtime)
+ITEMS_COLLECTED          # Items collected (if tracked)
+ITEMS_CRAFTED            # Items crafted (if tracked)
+TEAM_WIN                 # Team wins (if tracked separately)
+TEAM_LOSS                # Team losses (if tracked separately)
+ARENAS_PLAYED            # Distinct arenas played (if tracked)
+
+# Only real stats/columns from your DB. No fantasy, no custom triggers.

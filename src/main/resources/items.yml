@@ -1,0 +1,91 @@
+items:
+  spectate:
+    1:
+      type: COMPASS
+      name: "&bJoin Random Game"
+      lore:
+        - "&7Click to join a random game"
+      command: "/pillars join random"
+      slot: 4
+    2:
+      type: FEATHER
+      name: "&eSpectate Speed &7(GUI)"
+      lore:
+        - "&7Select your spectate speed"
+      command: "%speed%"
+      slot: 6
+  lobby:
+    1:
+      type: CLOCK
+      name: "&aLobby Menu"
+      lore:
+        - "&7Open the lobby menu"
+      command: "/menu"
+      slot: 4
+    2:
+      type: BOOK
+      name: "&bInfo"
+      lore:
+        - "&7View server info"
+      slot: 6
+    3:
+      type: COMPASS
+      name: "&bJoin Random Game"
+      lore:
+        - "&7Click to join a random game"
+      command: "/pillars join random"
+      slot: 8
+  game_lobby:
+    1:
+      type: BARRIER
+      name: "&cLeave Game"
+      lore:
+        - "&7Click to leave this game and return to the lobby"
+      command: "/pillars leave"
+      slot: 4
+    2:
+      type: PAPER
+      name: "&eVote for Event"
+      lore:
+        - "&7Vote for a special event in this game!"
+      command: "/pillars vote"
+      slot: 6
+Menu:
+  Speed:
+    Title: "&8■ &fSpeed Selection &8■"
+    Border:
+      Item: BLACK_STAINED_GLASS_PANE
+    Filler:
+      Item: GRAY_STAINED_GLASS_PANE
+    Speeds:
+      1:
+        Slot: 10
+        SpeedLevel: 1
+        Item: FEATHER
+      2:
+        Slot: 11
+        SpeedLevel: 2
+        Item: FEATHER
+      3:
+        Slot: 12
+        SpeedLevel: 3
+        Item: FEATHER
+      4:
+        Slot: 13
+        SpeedLevel: 4
+        Item: FEATHER
+      5:
+        Slot: 14
+        SpeedLevel: 5
+        Item: FEATHER
+      6:
+        Slot: 15
+        SpeedLevel: 6
+        Item: FEATHER
+      7:
+        Slot: 16
+        SpeedLevel: 7
+        Item: FEATHER
+    Close:
+      Slot: 22
+      Item: BARRIER

@@ -1,0 +1,41 @@
+
+ScoreBoards:
+  Lobby:
+    Enabled: true
+    Title: ""
+    Lines:
+      1: "&7Welkom in de Lobby!"
+      2: "&fGebruik &e/pillars join <gametype> &fom een spel te starten."
+      3: "&fOnline: %online_players%"
+      4: "&fGames: %active_games%"
+  GameLobby:
+    Enabled: true
+    Title: ""
+    Lines:
+      1: "&eWachten tot start..."
+      2: "&fGame: %game_name%"
+      3: "&fSpelers: %players% / %max_players%"
+      4: "&fMap: %map_name%"
+  Cage:
+    Enabled: true
+    Title: ""
+    Lines:
+      1: "&6Je staat in de cage!"
+      2: "&fGame start over: %cage_timer%"
+      3: "&fTeam: %team_name%"
+  Game:
+    Enabled: true
+    Title: ""
+    Lines:
+      1: "&cGAME ACTIEF!"
+      2: "&fSpelers: %players_left%"
+      3: "&fTimer: %game_timer%"
+      4: "&fMap: %map_name%"
+  Spectate:
+    Enabled: true
+    Title: ""
+    Lines:
+      1: "&7Je bent nu toeschouwer."
+      2: "&fGame: %game_name%"
+      3: "&fSpelers over: %players_left%"
+      4: "&fTimer: %game_timer%"

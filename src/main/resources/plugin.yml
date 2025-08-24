@@ -10,9 +10,102 @@ commands:
   pillars:
     description: "Main command for Pillars of Fortune"
     usage: "/pillars <join|leave|list|status|stats|help> [args]"
-    aliases: [pillar, pof, pillarsoffortune]
+    aliases: [pillar, pof, pillarsoffortune, games]
+  memory:
+    description: "Memory management commands"
+    usage: "/memory <check|clear|status>"
+    aliases: [mem, memcheck]
+    permission: locopillars.memory.use
+    permission-message: "§cYou don't have permission to use /memory!"
+  vanish:
+    description: Toggle vanish mode for yourself or others
+    usage: /vanish [player]
+    permission: locopillars.vanish
+    aliases: [ v ]
+  hideme:
+    description: Hide yourself from other players or toggle for others
+    usage: /hideme [player]
+    permission: locopillars.hideme
+    aliases: [ hm ]
+  hideothers:
+    description: Hide other players from your view or toggle for others
+    usage: /hideothers [player]
+    permission: locopillars.hideothers
+    aliases: [ ho ]
+  showothers:
+    description: Show specific players when hideothers is enabled
+    usage: /showothers <player>
+    permission: locopillars.showothers
+    aliases: [ so ]
+  stats:
+    description: View your game statistics
+    usage: /stats [achievements|leaderboards|history]
+    permission: locopillars.stats
+    aliases: [statistics, mystats]
+  achievements:
+    description: Achievement system commands
+    usage: /achievements <subcommand>
+    aliases: [ ach, achievement ]
+    permission: locopillars.achievements.use
+    permission-message: "§cYou don't have permission to use this command!"
+
+  # === CHAT SYSTEM COMMANDS ===
+  chatadmin:
+    description: "Chat administration commands"
+    usage: "/chatadmin <reload|stats|announce|mute|unmute|clear|spy|toggle|cooldown|help> [args]"
+    permission: locopillars.chat.admin
+    aliases: [ca, chatmanager]
+    permission-message: "§cYou don't have permission to use chat admin commands!"
+
+  socialspy:
+    description: "Toggle social spy to see all chat messages"
+    usage: "/socialspy"
+    permission: locopillars.chat.socialspy
+    aliases: [spy, ss]
+    permission-message: "§cYou don't have permission to use social spy!"
+
+  teamchat:
+    description: "Toggle team chat mode during games"
+    usage: "/teamchat"
+    permission: locopillars.chat.teamchat
+    aliases: [tc, team]
+    permission-message: "§cYou don't have permission to use team chat!"
+  luckyblocks:
+    description: "Show the LuckyBlocks menu or get a LuckyBlock"
+    usage: "/luckyblocks [menu|getluckyblock]"
+    aliases: [ luckyblock, luckyb ]
+
 
 permissions:
+  locopillars.luckyblocks.menu:
+    description: "Open the LuckyBlocks menu"
+    default: true
+  locopillars.luckyblocks.getluckyblock:
+    description: "Get a LuckyBlock with /luckyblocks getluckyblock"
+    default: op
+  locopillars.pillars.join:
+    description: "Use /pillars join"
+    default: true
+  locopillars.pillars.leave:
+    description: "Use /pillars leave"
+    default: true
+  locopillars.pillars.list:
+    description: "Use /pillars list"
+    default: true
+  locopillars.pillars.status:
+    description: "Use /pillars status"
+    default: true
+  locopillars.pillars.stats:
+    description: "Use /pillars stats"
+    default: true
+  locopillars.pillars.help:
+    description: "Use /pillars help"
+    default: true
+
+  locopillars.memory.use:
+    description: "Use /memory command"
+    default: op
+
   locoPillars.play:
     description: "Allow players to join and play games"
     default: true
@@ -22,3 +115,116 @@ permissions:
   locoPillars.stats:
     description: "View server statistics"
     default: true
+
+  # === CHAT SYSTEM PERMISSIONS ===
+  locopillars.chat.*:
+    description: "All chat permissions"
+    default: op
+    children:
+      locopillars.chat.admin: true
+      locopillars.chat.socialspy: true
+      locopillars.chat.bypass-cooldown: true
+      locopillars.chat.bypass-filter: true
+      locopillars.chat.stats: true
+
+  locopillars.chat.use:
+    description: "Basic chat usage permission"
+    default: true
+
+  locopillars.chat.admin:
+    description: "Chat administration permissions"
+    default: op
+    children:
+      locopillars.chat.admin.reload: true
+      locopillars.chat.admin.stats: true
+      locopillars.chat.admin.announce: true
+      locopillars.chat.admin.mute: true
+      locopillars.chat.admin.unmute: true
+      locopillars.chat.admin.clear: true
+      locopillars.chat.admin.toggle: true
+      locopillars.chat.admin.cooldown: true
+
+  locopillars.chat.admin.reload:
+    description: "Reload chat configuration"
+    default: op
+
+  locopillars.chat.admin.stats:
+    description: "View detailed chat statistics"
+    default: op
+
+  locopillars.chat.admin.announce:
+    description: "Send announcements to players"
+    default: op
+
+  locopillars.chat.admin.mute:
+    description: "Mute players from chat"
+    default: op
+
+  locopillars.chat.admin.unmute:
+    description: "Unmute players from chat"
+    default: op
+
+  locopillars.chat.admin.clear:
+    description: "Clear chat for players"
+    default: op
+
+  locopillars.chat.admin.toggle:
+    description: "Toggle chat features"
+    default: op
+
+  locopillars.chat.admin.cooldown:
+    description: "Manage player chat cooldowns"
+    default: op
+
+  locopillars.chat.socialspy:
+    description: "Use social spy to see all chat messages"
+    default: op
+
+  locopillars.chat.teamchat:
+    description: "Use team chat during games"
+    default: true
+
+  locopillars.chat.bypass-cooldown:
+    description: "Bypass chat cooldown restrictions"
+    default: op
+
+  locopillars.chat.bypass-filter:
+    description: "Bypass profanity and other chat filters"
+    default: op
+
+  locopillars.chat.stats:
+    description: "View basic chat statistics"
+    default: op
+
+  # === VANISH PERMISSIONS ===
+  locopillars.vanish:
+    description: "Use vanish commands"
+    default: op
+
+  locopillars.hideme:
+    description: "Use hideme command"
+    default: true
+
+  locopillars.hideothers:
+    description: "Use hideothers command"
+    default: true
+
+  locopillars.showothers:
+    description: "Use showothers command"
+    default: true
+
+  # === ACHIEVEMENT PERMISSIONS ===
+  locopillars.achievements.*:
+    description: "All achievement permissions"
+    default: op
+    children:
+      locopillars.achievements.use: true
+      locopillars.achievements.admin: true
+
+  locopillars.achievements.use:
+    description: "Use basic achievement commands"
+    default: true
+
+  locopillars.achievements.admin:
+    description: "Administer achievements"
+    default: op

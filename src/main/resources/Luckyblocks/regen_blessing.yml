@@ -1,0 +1,18 @@
+id: regen_blessing
+display_name: "Regeneration Blessing"
+description: "Gives you strong regeneration for 10 seconds."
+rarity: "COMMON"
+icon:
+  material: "GOLDEN_APPLE"
+  custom_model_data: 0
+block_type: "LUCKY_BLOCK"
+effects:
+  - type: "GIVE_EFFECT"
+    effect: "REGENERATION"
+    duration: 10
+    amplifier: 2
+    message: "&aYou feel blessed with regeneration!"
+conditions:
+  - player_health: "<10"
+filters:
+  - biome: "PLAINS"

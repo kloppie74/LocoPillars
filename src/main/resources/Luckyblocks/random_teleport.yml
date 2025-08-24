@@ -1,0 +1,16 @@
+id: random_teleport
+display_name: "Random Teleport"
+description: "Teleports you randomly within 50 blocks."
+rarity: "COMMON"
+icon:
+  material: "ENDER_PEARL"
+  custom_model_data: 0
+block_type: "LUCKY_BLOCK"
+effects:
+  - type: "TELEPORT"
+    radius: 50
+    message: "&dWhoosh! You teleported somewhere random."
+conditions:
+  - player_y: ">=50"
+filters:
+  - world: "world"

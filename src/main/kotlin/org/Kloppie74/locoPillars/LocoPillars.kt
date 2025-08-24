@@ -1,5 +1,6 @@
 package org.Kloppie74.locoPillars
 
+import org.Kloppie74.locoPillars.commands.MemoryCommand
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.game.config.GameConfig
 import org.Kloppie74.locoPillars.game.manager.GameManager
@@ -7,14 +8,50 @@ import org.Kloppie74.locoPillars.game.arena.ArenaManager
 import org.Kloppie74.locoPillars.game.arena.ArenaWorldManager
 import org.Kloppie74.locoPillars.game.template.TemplateManager
 import org.Kloppie74.locoPillars.commands.PillarsCommand
-import org.Kloppie74.locoPillars.game.data.GameState
-import org.Kloppie74.locoPillars.game.instance.GameInstance
+import org.Kloppie74.locoPillars.commands.StatsCommand
 import org.Kloppie74.locoPillars.game.manager.SpawnAreaManager
-import org.Kloppie74.locoPillars.listeners.GameListener
+import org.Kloppie74.locoPillars.game.listeners.GameListener
 import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.database.DatabaseManager
+import org.Kloppie74.locoPillars.listeners.PlayerJoinListener
+import org.Kloppie74.locoPillars.luckyblocks.LuckyBlockEngineIntegration
+import org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksListener
+import org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksMenu
+import org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksUtil
+import org.Kloppie74.locoPillars.utils.Placeholders
+import org.Kloppie74.locoPillars.utils.achievements.AchievementListener
+import org.Kloppie74.locoPillars.utils.achievements.AchievementLoader
+import org.Kloppie74.locoPillars.utils.achievements.AchievementManager
+import org.Kloppie74.locoPillars.utils.achievements.AchievementsCommand
+import org.Kloppie74.locoPillars.utils.chat.ChatManager
+import org.Kloppie74.locoPillars.utils.hotbar.HotbarItemManager
+import org.Kloppie74.locoPillars.utils.hotbar.listeners.ItemHotBarListener
+import org.Kloppie74.locoPillars.utils.hotbar.listeners.SpeedGuiListener
+import org.Kloppie74.locoPillars.utils.spectator.listeners.SpectateListener
+import org.Kloppie74.locoPillars.utils.spectator.SpectatorInteractionHandler
+import org.Kloppie74.locoPillars.utils.spectator.SpectatorInventoryManager
+import org.Kloppie74.locoPillars.utils.tab.TabListener
+import org.Kloppie74.locoPillars.utils.tab.TabUtils
+import org.Kloppie74.locoPillars.utils.tab.TabVisibilityManager
+import org.Kloppie74.locoPillars.utils.tab.registerTablistPacketListener
+import org.Kloppie74.locoPillars.utils.vanish.*
+import org.Kloppie74.locoPillars.utils.vanish.commands.HideMeCommand
+import org.Kloppie74.locoPillars.utils.vanish.commands.HideOthersCommand
+import org.Kloppie74.locoPillars.utils.vanish.commands.ShowOthersCommand
+import org.Kloppie74.locoPillars.utils.vanish.commands.VanishCommand
+import org.bukkit.Bukkit
+import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
+import java.util.*
 
 class LocoPillars : JavaPlugin() {
+    companion object {
+        lateinit var instance: LocoPillars
+            private set
+    }
+    
+    val playerIdCache = mutableMapOf<UUID, String>()
+
     lateinit var configManager: ConfigManager
         private set
     lateinit var gameManager: GameManager
@@ -29,16 +66,46 @@ class LocoPillars : JavaPlugin() {
         private set
     lateinit var configs: List<GameConfig>
         private set
+    lateinit var gameListener: GameListener
+    lateinit var databaseManager: DatabaseManager
+        private set
+
+    lateinit var scoreboardConfig: org.bukkit.configuration.file.FileConfiguration
+    lateinit var scoreboardManager: org.Kloppie74.locoPillars.utils.scoreboards.ScoreboardManager
+
+    lateinit var hotbarItemManager: HotbarItemManager
+    lateinit var itemHotBarListener: ItemHotBarListener
+    lateinit var spectateListener: SpectateListener
+    lateinit var spectatorInventoryManager: SpectatorInventoryManager
+        private set
+    lateinit var spectatorInteractionHandler: SpectatorInteractionHandler
+        private set
+    lateinit var achievementManager: AchievementManager
+        private set
+    lateinit var achievementListener: AchievementListener
+        private set
+
+    lateinit var tabUtils: TabUtils
+    lateinit var tabVisibilityManager: TabVisibilityManager
+
+    lateinit var chatManager: ChatManager
+        private set
+    lateinit var placeholders: Placeholders
+        private set
+
+
 
     override fun onEnable() {
+        instance = this
+
         logger.info("[LocoPillars] ==========================================")
         logger.info("[LocoPillars] PILLARS OF FORTUNE - Starting Up...")
         logger.info("[LocoPillars] ==========================================")
         logger.info("[LocoPillars] Version: ${description.version}")
         logger.info("[LocoPillars] Authors: ${description.authors}")
 
-        // FIXED: Initialize ConfigManager FIRST, before anything else
         try {
+            // 1. CONFIG & DEPENDENCIES
             logger.info("[LocoPillars] Initializing ConfigManager...")
             configManager = ConfigManager(this)
             logger.info("[LocoPillars] ConfigManager initialized successfully")
@@ -47,53 +114,33 @@ class LocoPillars : JavaPlugin() {
                 logger.info("[LocoPillars] DEBUG MODE ENABLED")
                 configManager.logCurrentConfig()
             }
-        } catch (e: Exception) {
-            logger.severe("[LocoPillars] CRITICAL: Failed to initialize ConfigManager: ${e.message}")
-            server.pluginManager.disablePlugin(this)
-            return
-        }
 
-        // Now check dependencies (which uses debugLog that needs configManager)
-        if (!checkDependencies()) {
-            logger.severe("[LocoPillars] Missing required dependencies! Disabling plugin.")
-            server.pluginManager.disablePlugin(this)
-            return
-        }
+            if (!checkDependencies()) {
+                logger.severe("[LocoPillars] Missing required dependencies! Disabling plugin.")
+                server.pluginManager.disablePlugin(this)
+                return
+            }
 
-        try {
-            // Initialize folder structure
+            // 2. FOLDER STRUCTURE
             createFolderStructure()
 
-            // Initialize template manager
-            debugLog("Initializing TemplateManager...")
-            templateManager = TemplateManager(this)
-            debugLog("TemplateManager initialized successfully")
-
-            // Create default templates if none exist
+            // 3. TEMPLATE & ARENA SYSTEM
+            templateManager = TemplateManager(this, configManager)
             if (templateManager.listAvailableTemplates().isEmpty()) {
                 logger.info("[LocoPillars] No templates found, creating default templates...")
                 templateManager.createDefaultTemplates()
             }
 
-            // Initialize managers in correct order
-            debugLog("Initializing ArenaWorldManager...")
-            worldManager = ArenaWorldManager(this)
-            debugLog("ArenaWorldManager initialized successfully")
+            worldManager = ArenaWorldManager(this, configManager)
+            arenaManager = ArenaManager(this, worldManager, configManager)
 
-            debugLog("Initializing ArenaManager...")
-            arenaManager = ArenaManager(this, worldManager)
-            debugLog("ArenaManager initialized successfully")
-
-            debugLog("Initializing GameManager...")
+            // 4. GAME MANAGER & INSTANCES
             gameManager = GameManager(this)
             gameManager.initialize()
-            debugLog("GameManager initialized successfully")
 
-            debugLog("Initializing SpawnAreaManager...")
             spawnAreaManager = SpawnAreaManager(this)
-            debugLog("SpawnAreaManager initialized successfully")
 
-            // Load configurations
+            // 5. GAME CONFIGS & INSTANCE PRELOAD
             logger.info("[LocoPillars] Loading game configurations...")
             configs = GameConfig.loadAll(this)
 
@@ -101,7 +148,6 @@ class LocoPillars : JavaPlugin() {
                 showNoConfigsWarning()
             } else {
                 logger.info("[LocoPillars] Successfully loaded ${configs.size} game configurations")
-
                 if (configManager.debugMode) {
                     configs.forEach { config ->
                         logger.info("[LocoPillars]   - ${config.name}: ${config.getDisplayName()}")
@@ -109,24 +155,134 @@ class LocoPillars : JavaPlugin() {
                         logger.info("[LocoPillars]     Teams: ${config.getMaxTeams()} (${config.getPlayersPerTeam()} per team)")
                     }
                 }
-
-                // Preload arena instances
                 logger.info("[LocoPillars] Starting arena generation process...")
                 arenaManager.preloadInstances(configs, configManager.instancesPerGameType)
-
-                // Initialize game instances
                 logger.info("[LocoPillars] Initializing game instances...")
                 gameManager.preloadInstances(arenaManager)
             }
 
-            // Register commands and listeners
-            debugLog("Registering commands and listeners...")
+            // 6. COMMANDS
             registerCommands()
-            registerListeners()
+            placeholders = Placeholders(this)
 
-            // Log final statistics
+            // 7. SCOREBOARD SYSTEM
+            val scoreboardFile = File(dataFolder, "scoreboards.yml")
+            if (!scoreboardFile.exists()) scoreboardFile.writeText(DEFAULT_SCOREBOARDS_YML)
+            scoreboardConfig = YamlConfiguration.loadConfiguration(scoreboardFile)
+            scoreboardManager = org.Kloppie74.locoPillars.utils.scoreboards.ScoreboardManager(this, scoreboardConfig)
+            scoreboardManager.initialize()
+            val newScoreboard = org.Kloppie74.locoPillars.utils.scoreboards.NewScoreboard(this, scoreboardManager)
+            server.pluginManager.registerEvents(newScoreboard, this)
+            server.scheduler.runTaskTimer(this, Runnable { scoreboardManager.updateAllScoreboards() }, 20L, 20L)
+
+            // 8. HOTBAR & ITEMS SYSTEM
+            val itemsFile = File(dataFolder, "items.yml")
+            if (!itemsFile.exists()) itemsFile.writeText(DEFAULT_ITEMS_YML)
+            val itemsConfig = YamlConfiguration.loadConfiguration(itemsFile)
+            hotbarItemManager = HotbarItemManager(this, itemsConfig)
+
+            // 9. EVENT LISTENERS (LOGISCH OP VOLGORDE VAN GAME FLOW)
+            gameListener = GameListener(this)
+            server.pluginManager.registerEvents(gameListener, this)
+            debugLog("✓ GameListener registered")
+
+            spectateListener = SpectateListener(this, hotbarItemManager)
+            server.pluginManager.registerEvents(spectateListener, this)
+            debugLog("✓ SpectateListener registered")
+
+            itemHotBarListener = ItemHotBarListener(this, hotbarItemManager)
+            server.pluginManager.registerEvents(itemHotBarListener, this)
+            debugLog("✓ ItemHotBarListener registered")
+
+            server.pluginManager.registerEvents(SpeedGuiListener(), this)
+            debugLog("✓ SpeedGuiListener registered")
+
+            spectatorInventoryManager = SpectatorInventoryManager(this, hotbarItemManager)
+            spectatorInteractionHandler = SpectatorInteractionHandler(this, hotbarItemManager)
+
+            server.pluginManager.registerEvents(PlayerJoinListener(this), this)
+
+            // 10. DATABASE (NA GAME SETUP!)
+            databaseManager = DatabaseManager(this, configManager.dbConfig)
+            if (!databaseManager.initialize()) {
+                logger.severe("[LocoPillars] Database initialisatie is mislukt! Plugin wordt uitgeschakeld.")
+                server.pluginManager.disablePlugin(this)
+                return
+            }
+
+            // 11. VANISH SYSTEM
+            val vanishListener = VanishListener(this)
+            VanishManager.initialize(this, vanishListener)
+            server.pluginManager.registerEvents(vanishListener, this)
+            getCommand("vanish")?.setExecutor(VanishCommand(this))
+            getCommand("hideme")?.setExecutor(HideMeCommand())
+            getCommand("hideothers")?.setExecutor(HideOthersCommand())
+            getCommand("showothers")?.setExecutor(ShowOthersCommand())
+            Bukkit.getOnlinePlayers().forEach { vanishListener.updateBossBar(it) }
+
+            // 12. ACHIEVEMENTS SYSTEM
+            achievementManager = AchievementManager(databaseManager)
+            val achievementsFolder = File(dataFolder, "Achievements")
+            if (!achievementsFolder.exists()) achievementsFolder.mkdirs()
+            val achievementLoader = AchievementLoader(this, databaseManager)
+            achievementLoader.loadAchievements(achievementsFolder, achievementManager)
+            achievementListener = AchievementListener(achievementManager, this)
+            server.pluginManager.registerEvents(achievementListener, this)
+
+            val achievementsCommand = AchievementsCommand(achievementManager, this)
+            getCommand("achievements")?.setExecutor(achievementsCommand)
+            server.pluginManager.registerEvents(achievementsCommand, this)
+
+            val statsCommand = StatsCommand(this, achievementsCommand)
+            getCommand("stats")?.setExecutor(statsCommand)
+            server.pluginManager.registerEvents(statsCommand, this)
+
+            logger.info("[LocoPillars] ✓ Achievements system, /achievements and /stats command registered")
+
+            // 13. CHAT SYSTEM
+            chatManager = ChatManager(this)
+            chatManager.initialize()
+            debugLog("✓ Chat system initialized successfully")
+
+            // 14. TAB SYSTEM
+            try {
+                tabUtils = TabUtils(this)
+                tabVisibilityManager = TabVisibilityManager(this)
+                val tabListener = TabListener(this, tabUtils)
+                server.pluginManager.registerEvents(tabListener, this)
+                tabUtils.startTabAutoUpdate()
+                registerTablistPacketListener(this)
+                logger.info("[LocoPillars] ✓ Tab system initialized successfully")
+            } catch (e: Exception) {
+                logger.severe("[LocoPillars] Failed to initialize tab system: ${e.message}")
+                e.printStackTrace()
+            }
+
+            // Engine setup via Integration helper
+            val luckyBlockEngine = LuckyBlockEngineIntegration.initializeEngine(this, configManager)
+            LuckyBlockEngineIntegration.registerEngineListeners(this, luckyBlockEngine)
+
+            LuckyBlocksUtil.setLuckyBlockEngine(luckyBlockEngine)
+
+            val luckyBlocksListener = LuckyBlocksListener(configManager)
+            Bukkit.getPluginManager().registerEvents(luckyBlocksListener, this)
+
+            val engineCommand = LuckyBlockEngineIntegration.createEngineCommand(configManager, luckyBlockEngine)
+            getCommand("luckyblocks")?.setExecutor(engineCommand)
+            getCommand("luckyblocks")?.tabCompleter = engineCommand
+
+            Bukkit.getPluginManager().registerEvents(LuckyBlocksMenu, this)
+
+            // 15. PLACEHOLDERS
+            if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+                placeholders.register()
+                logger.info("[LocoPillars] Placeholders registered with PlaceholderAPI!")
+            } else {
+                logger.warning("[LocoPillars] PlaceholderAPI not found, placeholders will not work.")
+            }
+
+            // 16. STARTUP SUMMARY
             showStartupSummary()
-
         } catch (e: Exception) {
             logger.severe("[LocoPillars] ==========================================")
             logger.severe("[LocoPillars] PLUGIN INITIALIZATION FAILED!")
@@ -134,7 +290,6 @@ class LocoPillars : JavaPlugin() {
             logger.severe("[LocoPillars] Failed to enable plugin: ${e.message}")
             logger.severe("[LocoPillars] Exception type: ${e.javaClass.name}")
             e.printStackTrace()
-
             server.pluginManager.disablePlugin(this)
         }
     }
@@ -189,6 +344,11 @@ class LocoPillars : JavaPlugin() {
         } catch (e: Exception) {
             logger.severe("[LocoPillars] ✗ Error during plugin disable: ${e.message}")
             e.printStackTrace()
+        }
+
+        if (::databaseManager.isInitialized) {
+            databaseManager.shutdown()
+            logger.info("[LocoPillars] DatabaseManager shutdown voltooid")
         }
 
         logger.info("[LocoPillars] ==========================================")
@@ -265,13 +425,17 @@ class LocoPillars : JavaPlugin() {
         } else {
             logger.severe("[LocoPillars] ✗ Failed to register '/pillars' command")
         }
-    }
 
-    private fun registerListeners() {
-        debugLog("Registering event listeners...")
-        val gameListener = GameListener(this)
-        server.pluginManager.registerEvents(gameListener, this)
-        debugLog("✓ GameListener registered")
+        val memoryCommand = getCommand("memory")
+        if (memoryCommand != null) {
+            memoryCommand.setExecutor(MemoryCommand())
+            debugLog("✓ Command '/memory' registered")
+            if (configManager.debugMode) {
+                debugLog("Command aliases: ${memoryCommand.aliases.joinToString(", ")}")
+            }
+        } else {
+            logger.severe("[LocoPillars] ✗ Failed to register '/memory' command")
+        }
     }
 
     private fun showNoConfigsWarning() {
@@ -347,17 +511,12 @@ class LocoPillars : JavaPlugin() {
         logger.info("[LocoPillars] ==========================================")
     }
 
-    // FIXED: Safe debugLog method that checks if configManager is initialized
     private fun debugLog(message: String) {
-        // Use ::configManager.isInitialized to safely check if it's been initialized
         if (::configManager.isInitialized && configManager.debugMode) {
             logger.info("[LocoPillars] $message")
         }
-        // If configManager isn't initialized yet, we simply don't log debug messages
-        // This prevents the UninitializedPropertyAccessException
     }
 
-    // Utility methods for debugging
     fun logMemoryUsage(context: String) {
         if (::configManager.isInitialized && configManager.debugMode) {
             val runtime = Runtime.getRuntime()
@@ -383,3 +542,81 @@ class LocoPillars : JavaPlugin() {
         }
     }
 }
+
+const val DEFAULT_SCOREBOARDS_YML = """
+ScoreBoards:
+  Lobby:
+    Enabled: true
+    Title: "&aPillars &7Lobby"
+    Lines:
+      1: "&7Welkom in de Lobby!"
+      2: "&fGebruik &e/pillars join <gametype> &fom een spel te starten."
+      3: "&fOnline: %online_players%"
+      4: "&fGames: %active_games%"
+  GameLobby:
+    Enabled: true
+    Title: "&eGame Lobby"
+    Lines:
+      1: "&eWachten tot start..."
+      2: "&fGame: %game_name%"
+      3: "&fSpelers: %players% / %max_players%"
+      4: "&fMap: %map_name%"
+  Cage:
+    Enabled: true
+    Title: "&6Cage Phase"
+    Lines:
+      1: "&6Je staat in de cage!"
+      2: "&fGame start over: %cage_timer%"
+      3: "&fTeam: %team_name%"
+  Game:
+    Enabled: true
+    Title: "&cGame Active"
+    Lines:
+      1: "&cGAME ACTIEF!"
+      2: "&fSpelers: %players_left%"
+      3: "&fTimer: %game_timer%"
+      4: "&fMap: %map_name%"
+  Spectate:
+    Enabled: true
+    Title: "&7Spectator Mode"
+    Lines:
+      1: "&7Je bent nu toeschouwer."
+      2: "&fGame: %game_name%"
+      3: "&fSpelers over: %players_left%"
+      4: "&fTimer: %game_timer%"
+"""
+
+const val DEFAULT_ITEMS_YML = """
+items:
+  spectate:
+    1:
+      type: COMPASS
+      name: "&bJoin Random Game"
+      lore:
+        - "&7Click to join a random game"
+      command: "/pillars join random"
+    2:
+      type: FEATHER
+      name: "&eSpectate Speed &7(GUI)"
+      lore:
+        - "&7Select your spectate speed"
+      command: "%speed%"
+  lobby:
+    1:
+      type: CLOCK
+      name: "&aLobby Menu"
+      lore:
+        - "&7Open the lobby menu"
+      command: "/menu"
+    2:
+      type: BOOK
+      name: "&bInfo"
+      lore:
+        - "&7View server info"
+    3:
+      type: COMPASS
+      name: "&bJoin Random Game"
+      lore:
+        - "&7Click to join a random game"
+      command: "/pillars join random"
+"""

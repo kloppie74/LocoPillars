@@ -1,0 +1,27 @@
+id: evoker_curse
+display_name: "Evoker's Curse"
+description: "Receive a cursed wand! Right-click to unleash random spells."
+icon:
+  material: "BLAZE_ROD"
+  custom_model_data: 2
+block_type: "LUCKY_BLOCK"
+rarity: "LEGENDARY"
+effects:
+  - type: "GIVE_ITEM"
+    item:
+      material: "BLAZE_ROD"
+      name: "&cEvoker's Curse"
+      lore:
+        - "&7Right click to cast a random spell!"
+      custom_model_data: 2
+    message: "&cYou received the Evoker's Curse!"
+triggers:
+  - event: "ITEM_RIGHT_CLICK"
+    item_name: "&cEvoker's Curse"
+    effect:
+      type: "CAST_SPELL"
+      spell: ["FANGS", "LEVITATION", "WITHER", "POISON"]
+      radius: 6
+      message: "&cEvoker magic surges!"
+conditions: []
+filters: []

@@ -10,21 +10,25 @@ import com.sk89q.worldedit.math.BlockVector3
 import com.sk89q.worldedit.session.ClipboardHolder
 import org.bukkit.Location
 import org.bukkit.plugin.java.JavaPlugin
+import org.Kloppie74.locoPillars.config.ConfigManager
 import java.io.File
 import java.io.FileInputStream
 
 object SchematicHelper {
 
-    /**
-     * Paste schematic zonder speler-context (algemene gebruik)
-     */
-    fun pasteSchematic(plugin: JavaPlugin, schemFile: File, location: Location): Boolean {
-        plugin.logger.info("[SchematicHelper] Starting schematic paste operation")
-        plugin.logger.info("[SchematicHelper] File: ${schemFile.absolutePath}")
-        plugin.logger.info("[SchematicHelper] Target location: ${location.world?.name} at ${location.blockX}, ${location.blockY}, ${location.blockZ}")
+    private fun debugLog(plugin: JavaPlugin, configManager: ConfigManager, message: String) {
+        if (configManager.debugMode) {
+            plugin.logger.info("[SchematicHelper] $message")
+        }
+    }
+
+    fun pasteSchematic(plugin: JavaPlugin, configManager: ConfigManager, schemFile: File, location: Location): Boolean {
+        debugLog(plugin, configManager, "Starting schematic paste operation")
+        debugLog(plugin, configManager, "File: ${schemFile.absolutePath}")
+        debugLog(plugin, configManager, "Target location: ${location.world?.name} at ${location.blockX}, ${location.blockY}, ${location.blockZ}")
 
         try {
-            if (!validateSchematicFile(plugin, schemFile)) return false
+            if (!validateSchematicFile(plugin, configManager, schemFile)) return false
             val bWorld = location.world ?: run {
                 plugin.logger.severe("[SchematicHelper] Location world is null!")
                 return false
@@ -32,7 +36,7 @@ object SchematicHelper {
 
             val weWorld = BukkitAdapter.adapt(bWorld)
             WorldEdit.getInstance().newEditSession(weWorld).use { editSession ->
-                return pasteSchematicWithEditSession(plugin, schemFile, location, editSession)
+                return pasteSchematicWithEditSession(plugin, configManager, schemFile, location, editSession)
             }
         } catch (e: Exception) {
             plugin.logger.severe("[SchematicHelper] Error during schematic paste: ${e.message}")
@@ -41,17 +45,15 @@ object SchematicHelper {
         }
     }
 
-    /**
-     * Paste met aangeleverde EditSession
-     */
     fun pasteSchematicWithEditSession(
         plugin: JavaPlugin,
+        configManager: ConfigManager,
         schemFile: File,
         location: Location,
         editSession: EditSession
     ): Boolean {
-        plugin.logger.info("[SchematicHelper] Pasting schematic with EditSession: ${schemFile.name}")
-        plugin.logger.info("[SchematicHelper] Target location: ${location.world?.name} at ${location.blockX}, ${location.blockY}, ${location.blockZ}")
+        debugLog(plugin, configManager, "Pasting schematic with EditSession: ${schemFile.name}")
+        debugLog(plugin, configManager, "Target location: ${location.world?.name} at ${location.blockX}, ${location.blockY}, ${location.blockZ}")
 
         try {
             val format = ClipboardFormats.findByFile(schemFile) ?: run {
@@ -59,20 +61,18 @@ object SchematicHelper {
                 return false
             }
 
-            // Read clipboard
             val clipboard: Clipboard = FileInputStream(schemFile).use { inputStream ->
                 format.getReader(inputStream).use { reader -> reader.read() }
             }
 
-            plugin.logger.info("[SchematicHelper] Clipboard loaded:")
-            plugin.logger.info("[SchematicHelper]   - Dimensions: ${clipboard.dimensions}")
-            plugin.logger.info("[SchematicHelper]   - Origin: ${clipboard.origin}")
-            plugin.logger.info("[SchematicHelper]   - Minimum: ${clipboard.minimumPoint}")
-            plugin.logger.info("[SchematicHelper]   - Maximum: ${clipboard.maximumPoint}")
+            debugLog(plugin, configManager, "Clipboard loaded:")
+            debugLog(plugin, configManager, "  - Dimensions: ${clipboard.dimensions}")
+            debugLog(plugin, configManager, "  - Origin: ${clipboard.origin}")
+            debugLog(plugin, configManager, "  - Minimum: ${clipboard.minimumPoint}")
+            debugLog(plugin, configManager, "  - Maximum: ${clipboard.maximumPoint}")
 
-            // 0,0,0 paste point
             val pasteLocation = BlockVector3.at(location.blockX, location.blockY, location.blockZ)
-            plugin.logger.info("[SchematicHelper] Paste location: $pasteLocation")
+            debugLog(plugin, configManager, "Paste location: $pasteLocation")
 
             val operation = ClipboardHolder(clipboard)
                 .createPaste(editSession)
@@ -83,7 +83,7 @@ object SchematicHelper {
             Operations.complete(operation)
             editSession.flushSession()
 
-            plugin.logger.info("[SchematicHelper] ✓ Paste operation completed successfully!")
+            debugLog(plugin, configManager, "✓ Paste operation completed successfully!")
             return true
         } catch (e: Exception) {
             plugin.logger.severe("[SchematicHelper] Error during schematic paste: ${e.message}")
@@ -92,28 +92,25 @@ object SchematicHelper {
         }
     }
 
-    /**
-     * Basis validatie voor schematic bestanden
-     */
-    fun validateSchematicFile(plugin: JavaPlugin, schemFile: File): Boolean {
+    fun validateSchematicFile(plugin: JavaPlugin, configManager: ConfigManager, schemFile: File): Boolean {
         if (!schemFile.exists()) {
-            plugin.logger.warning("[SchematicHelper] File does not exist: ${schemFile.absolutePath}")
+            debugLog(plugin, configManager, "File does not exist: ${schemFile.absolutePath}")
             return false
         }
 
         if (!schemFile.canRead()) {
-            plugin.logger.warning("[SchematicHelper] File is not readable: ${schemFile.absolutePath}")
+            debugLog(plugin, configManager, "File is not readable: ${schemFile.absolutePath}")
             return false
         }
 
         if (schemFile.length() == 0L) {
-            plugin.logger.warning("[SchematicHelper] File is empty: ${schemFile.absolutePath}")
+            debugLog(plugin, configManager, "File is empty: ${schemFile.absolutePath}")
             return false
         }
 
         val format = ClipboardFormats.findByFile(schemFile)
         if (format == null) {
-            plugin.logger.warning("[SchematicHelper] Unknown format for file: ${schemFile.name}")
+            debugLog(plugin, configManager, "Unknown format for file: ${schemFile.name}")
             return false
         }
 

@@ -1,0 +1,18 @@
+id: firework_frenzy
+display_name: "Firework Frenzy"
+description: "Shoots fireworks when broken!"
+rarity: "COMMON"
+icon:
+  material: "FIREWORK_ROCKET"
+  custom_model_data: 0
+block_type: "LUCKY_BLOCK"
+effects:
+  - type: "SUMMON_FIREWORKS"
+    amount: 12
+    colors: ["RED", "BLUE", "GREEN"]
+    power: 2
+    message: "&dFireworks everywhere!"
+conditions:
+  - player_y: ">65"
+filters:
+  - time: "NIGHT"

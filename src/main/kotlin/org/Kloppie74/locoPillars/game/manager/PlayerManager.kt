@@ -42,9 +42,6 @@ class PlayerManager(private val plugin: LocoPillars) {
             player.removePotionEffect(effect.type)
         }
 
-        // Give basic items for lobby
-        player.inventory.addItem(ItemStack(Material.COOKED_BEEF, 32))
-
         plugin.logger.info("[PlayerManager] Player state restored for ${player.name}")
     }
 }

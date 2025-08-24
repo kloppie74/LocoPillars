@@ -1,0 +1,228 @@
+# ==========================================
+# LOCOPILLARS - PILLARS OF FORTUNE CONFIG
+# ==========================================
+# Version: 1.0.0
+
+# Enable debug logging - shows detailed information about plugin operations
+# Set to false for production to improve performance
+debug: false
+
+# Game instance configuration
+game:
+  # Number of game instances to create per game type
+  # Higher values = more concurrent games possible but more memory usage
+  instances-per-type: 10
+  # Distance between arena instances in blocks
+  # Should be larger than your biggest arena
+  instance-distance: 1000
+
+# Spawn configuration (matches ConfigManager exactly)
+Spawn:
+  World: "world"         # Name of your main lobby world
+  X: 0.5                 # X coordinate for lobby spawn
+  Y: 68.0                # Y coordinate for lobby spawn
+  Z: 0.5                 # Z coordinate for lobby spawn
+
+# Database configuration
+database:
+  # Supported types: sqlite, mysql, mariadb, postgresql, h2
+  type: "sqlite"
+  host: "localhost"        # For network databases only (mysql, mariadb, postgresql)
+  port: 3306               # For network databases only
+  database: "locopillars"
+  username: ""             # For network databases only
+  password: ""             # For network databases only
+  useSSL: false
+
+  # Connection pool settings
+  max-pool-size: 10
+  min-pool-size: 5
+  connection-timeout-ms: 30000
+  idle-timeout-ms: 600000
+  max-lifetime-ms: 1800000
+  leak-detection-threshold-ms: 60000
+
+  # Maintenance settings
+  cleanup-enabled: true
+  cleanup-days: 30
+
+  # Performance settings
+  enable-query-logging: false
+  slow-query-threshold-ms: 1000
+
+  # Cache settings
+  cache-size: 1000
+  cache-expiration-minutes: 30
+
+# Performance related settings
+performance:
+  # Maximum number of schematics that can be pasted simultaneously
+  # Lower values = slower startup but less server lag during initialization
+  max-concurrent-schem-pastes: 5
+  # Timeout in milliseconds for schematic pasting operations
+  schem-paste-timeout: 30000
+
+# User interface settings
+ui:
+  # Show progress bar during arena generation instead of detailed logs
+  enable-progress-bar: true
+
+# World management settings
+world:
+  # Automatically save arena worlds periodically
+  auto-save: true
+  # Auto-save interval in ticks (20 ticks = 1 second)
+  auto-save-interval: 6000
+
+# ==========================================
+# CHAT SYSTEM CONFIGURATION
+# ==========================================
+
+chat:
+  # === GENERAL CHAT SETTINGS ===
+  enabled: true
+  cooldown-seconds: 3
+  max-length: 256
+
+  # === CHAT TYPES ===
+  lobby-chat:
+    enabled: true
+
+  game-chat:
+    enabled: true
+
+  spectator-chat:
+    enabled: true
+
+  team-chat:
+    enabled: true
+
+  # === SOCIAL SPY ===
+  social-spy:
+    enabled: true
+
+  # === LOGGING ===
+  logging:
+    enabled: true
+
+  # === PROFANITY FILTER ===
+  profanity-filter:
+    enabled: false
+    words:
+      - "word1"
+      - "word2"
+      - "word3"
+
+  # === CHAT FORMATS ===
+  # Available placeholders:
+  # {player} - Player name
+  # {displayname} - Player display name
+  # {message} - The message content
+  # {team} - Team name (if applicable)
+  # {type} - Chat type
+  # {world} - World name
+  # Color codes: &a, &b, &c, etc.
+
+  formats:
+    # Lobby chat format
+    lobby: "&7[&bLobby&7] &f{player}&7: &f{message}"
+
+    # Game lobby (waiting for game to start)
+    game-lobby: "&7[&eGame&7] &f{player}&7: &f{message}"
+
+    # Spectator chat
+    spectator: "&7[&8Spectator&7] &f{player}&7: &8{message}"
+
+    # Team chat during games
+    team: "&7[&a{team}&7] &f{player}&7: &a{message}"
+
+    # Global game chat
+    global: "&7[&cGlobal&7] &f{player}&7: &f{message}"
+
+    # Social spy format (what staff see)
+    social-spy: "&8[SocialSpy] &7{type} &8» &f{player}&7: &f{message}"
+
+    # Join/leave messages
+    join: "&a{player} &7joined the lobby"
+    leave: "&c{player} &7left the lobby"
+    game-join: "&a{player} &7joined the game"
+    game-leave: "&c{player} &7left the game"
+
+Tab:
+  Enabled: true
+
+  Header:
+    - "&aLocopillars"
+    - "&7Welcome to the server!"
+    - "&eGame: %game_name%"
+  Footer:
+    - "&7Online: %online_players%"
+    - "&eHave fun!"
+
+  Sorting-Groups:
+    Order: Owner,Admin,Mod,Helper,Vip,Default
+    Permissions:
+      Owner: tab.order.owner
+      Admin: tab.order.admin
+      Mod: tab.order.mod
+      Helper: tab.order.helper
+      Vip: tab.order.vip
+      Default: tab.order.default
+
+  Display-Mode: "AUTO"  # AUTO, ALL, GAME, LOBBY
+
+  display-online-player-list-per-gameinstance: true
+
+  Player-Prefix-Suffix:
+    AUTO:
+      Prefix: "&f%luckperms_prefix%"
+      Suffix: "&f"
+    ALL:
+      Prefix: "&f%luckperms_prefix%"
+      Suffix: "&f"
+    GAME:
+      Prefix: "&f%luckperms_prefix%"
+      Suffix: "&f"
+    LOBBY:
+      Prefix: "&f%luckperms_prefix%"
+      Suffix: "&f"
+
+  # Supported placeholders:
+  # %team%, %player_name%, %kills%, %group%, %game_name%, etc.
+
+# ==========================================
+# LUCKYBLOCKS CONFIGURATION
+# ==========================================
+
+Luckyblocks:
+  enabled: true
+
+  block-layout:
+    # List of head-glass combos for LuckyBlocks in the world
+    # Format: Glass=<GLASS_TYPE>,Texture=<BASE64>
+    textures:
+      - "Glass=RED,Texture=eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTNiY2RmMTUzMzRiMTc4Zjk5OGVhZDFiZGU2YWZhODhhM2Q0YTAxYzlkZDJjODY4OWMyZGJhZTJlOTNjOTk3In19fQ==" # Red
+      - "Glass=BLUE,Texture=eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZGM1MzhmODZjODU4OWYyZmMxMzcxOTIyYzAxOTE5MWRkYTIxMjIwMjFjNjM5ZjI4ZGMyNjUwZTJhOTcxYWJkMiJ9fX0=" # Blue
+      - "Glass=GREEN,Texture=eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzIzOWFhZjZhNGZkNDNiZmZjYmYwZWIyOGMxMWQ5MmUzM2UwOWMzNzlmODQyNzcxZWE4OTYyYTk2NzJhZTM0NCJ9fX0=" # Green
+      - "Glass=YELLOW,Texture=eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMWRhZjA5Mjg0NTMwY2U5MmVkMmRmMmE2MmUxYjA1YTExZjE4NzFmODVhZTU1OTA0Mjg0NDIwNmQ2NmMwYjViMCJ9fX0=" # Yellow
+      - "Glass=PINK,Texture=eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzEyMGQ1NzY1ODUxZDhlODlkYzI5YTU2YTYxY2FhYmVhYzdkMjZkOWYzNjQ3ZjQxZmI3NzE1ZWI3OGU0MmU3ZiJ9fX0=" # Pink
+
+  item:
+    material: "PLAYER_HEAD"
+    name: "&6LuckyBlock"
+    lore:
+      - "&7Break for a random effect!"
+      - "&fRarity: {rarity}"
+    texture: ""
+
+  rarity:
+    common:
+      chance: 50
+    uncommon:
+      chance: 30
+    rare:
+      chance: 15
+    epic:
+      chance: 4
+    legendary:
+      chance: 1

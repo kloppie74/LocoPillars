@@ -1,0 +1,18 @@
+id: prime_tnt_boom
+display_name: "Prime TNT Boom"
+description: "Spawns 3 primed TNT at your location!"
+rarity: "COMMON"
+icon:
+  material: "TNT"
+  custom_model_data: 0
+block_type: "LUCKY_BLOCK"
+effects:
+  - type: "SPAWN_PRIME_TNT"
+    amount: 3
+    radius: 2
+    fuse_ticks: 40
+    message: "&cUh oh... TNT!"
+conditions:
+  - player_health: ">=5"
+filters:
+  - has_not: "FLINT_AND_STEEL"
