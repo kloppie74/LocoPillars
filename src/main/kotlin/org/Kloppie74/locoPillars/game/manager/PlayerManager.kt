@@ -9,7 +9,7 @@ import org.Kloppie74.locoPillars.LocoPillars
 class PlayerManager(private val plugin: LocoPillars) {
 
     fun preparePlayerForGame(player: Player) {
-        plugin.logger.info("[PlayerManager] Preparing ${player.name} for game")
+        debugLog("Preparing ${player.name} for game")
 
         player.gameMode = GameMode.SURVIVAL
         player.health = 20.0
@@ -25,11 +25,11 @@ class PlayerManager(private val plugin: LocoPillars) {
             player.removePotionEffect(effect.type)
         }
 
-        plugin.logger.info("[PlayerManager] Player ${player.name} prepared successfully")
+        debugLog("Player ${player.name} prepared successfully")
     }
 
     fun restorePlayerState(player: Player) {
-        plugin.logger.info("[PlayerManager] Restoring state for ${player.name}")
+        debugLog("Restoring state for ${player.name}")
 
         player.gameMode = GameMode.SURVIVAL
         player.health = 20.0
@@ -42,6 +42,12 @@ class PlayerManager(private val plugin: LocoPillars) {
             player.removePotionEffect(effect.type)
         }
 
-        plugin.logger.info("[PlayerManager] Player state restored for ${player.name}")
+        debugLog("Player state restored for ${player.name}")
+    }
+
+    private fun debugLog(message: String) {
+        if (plugin.configManager.debugMode) {
+            plugin.logger.info("[PlayerManager] $message")
+        }
     }
 }

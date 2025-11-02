@@ -19,7 +19,7 @@ import org.Kloppie74.locoPillars.utils.SchematicCageHelper
 import org.Kloppie74.locoPillars.utils.achievements.AchievementListener
 import org.Kloppie74.locoPillars.utils.spectator.listeners.SpectateListener
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import java.io.File
 import java.util.*
 import kotlin.collections.HashMap
@@ -325,6 +325,9 @@ class GameplayManager(
                     val spawnLocation = team.spawns[spawnIndex].toAbsolute(instance.arenaInstance.origin)
                     player.teleport(spawnLocation)
 
+                    // Track team assignment in GameInstance
+                    instance.trackTeamAssignment(playerId, team)
+
                     placeCageAtSpawnLocation(player.uniqueId, spawnLocation)
 
                     setupPlayerForTeam(player, team)
@@ -334,10 +337,18 @@ class GameplayManager(
                     gameListener.setCageProtection(player.uniqueId, true)
 
                     player.sendMessage("${ChatColor.GREEN}You are on team: ${team.name}")
+
+                    debugLog("Player ${player.name} assigned to team ${team.name}")
                 }
             }
 
             teamIndex++
+        }
+
+        debugLog("Team assignment completed. Teams with players:")
+        teams.forEach { team ->
+            val teamPlayers = instance.getPlayersInTeam(team)
+            debugLog("  ${team.name}: ${teamPlayers.size} players")
         }
     }
 
@@ -702,32 +713,27 @@ class GameplayManager(
 
     private fun getWinningPlayers(instance: GameInstance): List<Player> {
         if (instance.players.isEmpty()) return emptyList()
-        // Find the team of the first remaining player
-        val firstPlayer = instance.players.firstOrNull() ?: return emptyList()
-        val playerObj = Bukkit.getPlayer(firstPlayer) ?: return emptyList()
-        val teamName = getTeamName(instance, listOf(playerObj)) ?: return listOf(playerObj)
-        // All remaining players in the same team win
-        val winners = instance.players.mapNotNull { Bukkit.getPlayer(it) }
-            .filter { getTeamName(instance, listOf(it)) == teamName }
-        return winners
+
+        val remainingTeams = instance.getRemainingTeams()
+        if (remainingTeams.size != 1) {
+            // If more than one team or no teams remain, individual winners
+            return instance.players.mapNotNull { Bukkit.getPlayer(it) }
+        }
+
+        // Only one team remains - all players in that team win
+        val winningTeam = remainingTeams.first()
+        return instance.getAlivePlayersInTeam(winningTeam).mapNotNull { Bukkit.getPlayer(it) }
     }
 
     private fun checkOneTeamLeft(instance: GameInstance): Boolean {
-        val teamsLeft = instance.players.mapNotNull { Bukkit.getPlayer(it) }
-            .map { getTeamName(instance, listOf(it)) }
-            .distinct()
-            .filterNotNull()
-        return teamsLeft.size == 1
+        val remainingTeams = instance.getRemainingTeams()
+        return remainingTeams.size == 1
     }
 
     private fun getTeamName(instance: GameInstance, players: List<Player>): String? {
-        val origin = instance.arenaInstance.origin
-        val teams = instance.arenaInstance.config.teams
-        return teams.find { team ->
-            players.all { player ->
-                team.spawns.any { spawn -> player.location.distance(spawn.toAbsolute(origin)) < 2.0 }
-            }
-        }?.name
+        if (players.isEmpty()) return null
+        val firstPlayerTeam = instance.getPlayerTeam(players.first().uniqueId)
+        return firstPlayerTeam?.name
     }
 
     private fun updateGameEndStats(instance: GameInstance) {

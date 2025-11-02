@@ -18,6 +18,7 @@ import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.hotbar.HotbarItemManager
 import org.Kloppie74.locoPillars.utils.hotbar.SpeedGui
 import org.Kloppie74.locoPillars.utils.hotbar.HotbarUtils
+import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 
 class SpectatorInteractionHandler(
     private val plugin: LocoPillars,
@@ -219,11 +220,8 @@ class SpectatorInteractionHandler(
         val player = event.player
         if (isSpectator(player) && !hasSpectatorOverride(player)) {
             event.isCancelled = true
-            object : BukkitRunnable() {
-                override fun run() {
-                    HotbarUtils.setupPlayerHotbar(player, plugin)
-                }
-            }.runTaskLater(plugin, 1L)
+            // Simply queue hotbar update - no scheduled task needed
+            HotbarUtils.setupPlayerHotbar(player, plugin)
         }
     }
 
@@ -263,11 +261,8 @@ class SpectatorInteractionHandler(
     fun onVehicleExit(event: VehicleExitEvent) {
         val player = event.exited as? Player ?: return
         if (isSpectator(player) && !hasSpectatorOverride(player)) {
-            object : BukkitRunnable() {
-                override fun run() {
-                    HotbarUtils.setupPlayerHotbar(player, plugin)
-                }
-            }.runTaskLater(plugin, 1L)
+            // Simply update hotbar - no scheduled task needed
+            HotbarUtils.setupPlayerHotbar(player, plugin)
         }
     }
 
@@ -335,18 +330,17 @@ class SpectatorInteractionHandler(
 
         SPECTATOR_CACHE.remove(player.uniqueId)
 
+        // Handle world change and queue visibility update
         SpectatorUtils.handleWorldChange(player, fromWorld, toWorld, plugin)
+        GlobalVisibilityTicker.queueUpdate(player)
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerSneak(event: PlayerToggleSneakEvent) {
         val player = event.player
         if (isSpectator(player) && event.isSneaking) {
-            object : BukkitRunnable() {
-                override fun run() {
-                    HotbarUtils.setupPlayerHotbar(player, plugin)
-                }
-            }.runTaskLater(plugin, 1L)
+            // Simply update hotbar - no scheduled task needed
+            HotbarUtils.setupPlayerHotbar(player, plugin)
         }
     }
 }

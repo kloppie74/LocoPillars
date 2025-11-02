@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.luckyblocks
+package org.Kloppie74.locoPillars.utils.luckyblocks
 
 import org.bukkit.Material
 import org.bukkit.Location
@@ -8,8 +8,8 @@ import org.bukkit.entity.EntityType
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.meta.SkullMeta
 import org.bukkit.entity.Player
-import org.Kloppie74.locoPillars.config.ConfigManager
-import org.Kloppie74.locoPillars.luckyblocks.engine.LuckyBlockEngine
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyBlockEngine
 import org.Kloppie74.locoPillars.utils.MSG
 import kotlin.random.Random
 import java.util.UUID
@@ -91,7 +91,7 @@ object LuckyBlocksUtil {
         executeConfigEffects(player, location, selectedConfig, engine)
     }
 
-    private fun selectRandomConfigByRarity(configs: List<org.Kloppie74.locoPillars.luckyblocks.engine.LuckyBlockConfig>): org.Kloppie74.locoPillars.luckyblocks.engine.LuckyBlockConfig {
+    private fun selectRandomConfigByRarity(configs: List<org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyBlockConfig>): org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyBlockConfig {
         // Group by rarity
         val rarityGroups = configs.groupBy { it.rarity.uppercase() }
 
@@ -100,7 +100,7 @@ object LuckyBlocksUtil {
             // Access config manager through engine if available
             engine.javaClass.getDeclaredField("configManager").let { field ->
                 field.isAccessible = true
-                val configManager = field.get(engine) as org.Kloppie74.locoPillars.config.ConfigManager
+                val configManager = field.get(engine) as org.Kloppie74.locoPillars.utils.config.ConfigManager
                 configManager.luckyBlockRarityChances
             }
         } ?: mapOf(
@@ -153,7 +153,7 @@ object LuckyBlocksUtil {
     private fun executeConfigEffects(
         player: Player,
         location: Location,
-        config: org.Kloppie74.locoPillars.luckyblocks.engine.LuckyBlockConfig,
+        config: org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyBlockConfig,
         engine: LuckyBlockEngine
     ) {
         player.sendMessage(MSG.chatColors("&6[DEBUG] Checking filters (${config.filters.size})..."))

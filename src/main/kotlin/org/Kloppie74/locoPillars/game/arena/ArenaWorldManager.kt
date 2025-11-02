@@ -1,6 +1,6 @@
 package org.Kloppie74.locoPillars.game.arena
 
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.utils.ProgressTracker
 import org.bukkit.Bukkit
 import org.bukkit.World

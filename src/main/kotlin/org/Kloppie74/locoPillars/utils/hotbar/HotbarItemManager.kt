@@ -67,6 +67,7 @@ class HotbarItemManager(
         plugin.logger.info("[HotbarItemManager] Loaded ${ITEM_CACHE.size} item configurations")
     }
 
+
     /**
      * Loads items for a specific hotbar type
      * Supports ItemsAdder items via "itemsadder-namespace:itemid" (optioneel!)

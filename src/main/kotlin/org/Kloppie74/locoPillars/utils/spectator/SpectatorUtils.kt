@@ -4,7 +4,7 @@ import org.bukkit.entity.Player
 import org.bukkit.GameMode
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.MSG
-import org.Kloppie74.locoPillars.utils.vanish.VanishManager
+import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -29,7 +29,10 @@ object SpectatorUtils {
 
         SpectatorSpeedManager.applyDefaultSpeed(player)
         plugin.hotbarItemManager.givePlayerItems(player)
-        SpectatorVisibilityManager.updateSpectatorVisibility(player, plugin)
+
+        // FIXED: Use non-conflicting priority for spectator updates
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "set_as_spectator")
+
         player.sendMessage(MSG.chatColors("&7You are now a &espectator&7."))
     }
 
@@ -51,7 +54,9 @@ object SpectatorUtils {
 
         SpectatorSpeedManager.resetSpeed(player)
         plugin.hotbarItemManager.givePlayerItems(player)
-        SpectatorVisibilityManager.restoreNormalVisibility(player, plugin)
+
+        // FIXED: Use non-conflicting priority for spectator updates
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "remove_spectator_status")
     }
 
     /**
@@ -66,11 +71,12 @@ object SpectatorUtils {
     }
 
     /**
-     * Handles world change events for spectator logic
+     * FIXED: Handles world change events for spectator logic
      */
     @JvmStatic
     fun handleWorldChange(player: Player, fromWorld: String, toWorld: String, plugin: LocoPillars) {
         val wasSpectator = isSpectator(player, plugin)
+
         if (!fromWorld.startsWith("pillars_") && toWorld.startsWith("pillars_")) {
             setPlayerAsSpectator(player, plugin)
         } else if (fromWorld.startsWith("pillars_") && !toWorld.startsWith("pillars_")) {
@@ -79,6 +85,8 @@ object SpectatorUtils {
             setPlayerAsSpectator(player, plugin)
         } else {
             plugin.hotbarItemManager.givePlayerItems(player)
+            // FIXED: Use non-conflicting priority for world change updates
+            GlobalVisibilityTicker.queueUpdateWithPriority(player, "WORLD_CHANGE", "spectator_world_change")
         }
     }
 

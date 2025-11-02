@@ -10,12 +10,12 @@ import org.bukkit.boss.BossBar
 import org.bukkit.boss.BarColor
 import org.bukkit.boss.BarStyle
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import java.util.*
 
 /**
- * Handles vanish/hideMe/hideOthers bossbar display and visibility.
- * Always displays max 1 bossbar if any of the states are active.
- * The bossbar is live updated on all relevant events and state changes.
+ * Handles vanish/hideMe/hideOthers bossbar display.
+ * All visibility updates are now handled by GlobalVisibilityTicker.
  */
 class VanishListener(private val plugin: LocoPillars) : Listener {
 
@@ -26,8 +26,11 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onPlayerJoin(event: PlayerJoinEvent) {
         VanishManager.loadState(event.player)
-        updateVisibility(event.player)
-        updateBossBar(event.player)
+        // Queue visibility update with slight delay to ensure all systems are ready
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            GlobalVisibilityTicker.queueUpdate(event.player)
+            updateBossBar(event.player)
+        }, 5L)
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -39,55 +42,41 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onPlayerChangedWorld(event: PlayerChangedWorldEvent) {
-        updateVisibility(event.player)
-        updateBossBar(event.player)
+        // Queue update with small delay to let world change complete
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            GlobalVisibilityTicker.queueUpdate(event.player)
+            updateBossBar(event.player)
+        }, 2L)
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onPlayerTeleport(event: PlayerTeleportEvent) {
-        updateVisibility(event.player)
-        updateBossBar(event.player)
+        // Queue update after teleport completes
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            GlobalVisibilityTicker.queueUpdate(event.player)
+            updateBossBar(event.player)
+        }, 1L)
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onPlayerGameModeChange(event: PlayerGameModeChangeEvent) {
-        updateVisibility(event.player)
-        updateBossBar(event.player)
+        // Queue update after game mode change
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            GlobalVisibilityTicker.queueUpdate(event.player)
+            updateBossBar(event.player)
+        }, 1L)
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onPlayerRespawn(event: PlayerRespawnEvent) {
-        updateVisibility(event.player)
+        // Queue update after respawn
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            GlobalVisibilityTicker.queueUpdate(event.player)
             updateBossBar(event.player)
-        }, 5L)
+        }, 2L)
     }
 
-    // ===== VISIBILITY AND BOSSBAR =====
-
-    /**
-     * Handles Bukkit visibility and flight for the player based on vanish state.
-     */
-    private fun updateVisibility(player: Player) {
-        val state = VanishManager.getState(player)
-        if (state.vanished) {
-            for (other in Bukkit.getOnlinePlayers()) {
-                if (other != player && !other.hasPermission("locopillars.vanish.seeothers")) {
-                    other.hidePlayer(plugin, player)
-                }
-            }
-            player.allowFlight = true
-            player.isFlying = true
-        } else {
-            for (other in Bukkit.getOnlinePlayers()) {
-                other.showPlayer(plugin, player)
-            }
-            if (player.gameMode.name != "CREATIVE" && player.gameMode.name != "SPECTATOR") {
-                player.allowFlight = false
-                player.isFlying = false
-            }
-        }
-    }
+    // ===== BOSSBAR MANAGEMENT =====
 
     /**
      * Displays a bossbar if the player is vanished, hidden, or hiding others.

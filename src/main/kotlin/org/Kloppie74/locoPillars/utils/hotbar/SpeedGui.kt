@@ -15,30 +15,41 @@ import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorSpeedManager
 import org.Kloppie74.locoPillars.LocoPillars
 import java.io.File
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+
+data class SpeedSlotConfig(
+    val slot: Int,
+    val speedLevel: Int,
+    val item: ItemStack
+)
 
 object SpeedGui {
     private const val GUI_TITLE_RAW = "&8■ &fSpeed Selection &8■"
     private var GUI_TITLE_COLORED = ""
     private var isConfigLoaded = false
+    private var plugin: LocoPillars? = null
 
     // Configuration values
     private var guiTitle = GUI_TITLE_RAW
     private var borderMaterial = Material.BLACK_STAINED_GLASS_PANE
     private var fillerMaterial = Material.GRAY_STAINED_GLASS_PANE
-    private var speedItem = Material.FEATHER
     private var closeItem = Material.BARRIER
-    private val speedSlots = mutableMapOf<Int, Int>() // slot -> speedLevel
     private var closeSlot = 22
+    private val speedSlots = mutableListOf<SpeedSlotConfig>()
+    private val itemsAdderEnabled by lazy { isItemsAdderPresent() }
 
-    fun initialize(plugin: LocoPillars) {
+    // Track open SpeedGui inventories by player UUID
+    private val openSpeedGuiPlayers: MutableSet<UUID> = Collections.newSetFromMap(ConcurrentHashMap())
+
+    fun initialize(pluginInstance: LocoPillars) {
+        plugin = pluginInstance
         if (isConfigLoaded) return
 
         try {
-            val itemsFile = File(plugin.dataFolder, "items.yml")
+            val itemsFile = File(pluginInstance.dataFolder, "items.yml")
             if (!itemsFile.exists()) {
-                plugin.logger.warning("[SpeedGui] items.yml not found, using defaults")
-                isConfigLoaded = true
-                GUI_TITLE_COLORED = MSG.chatColors(guiTitle)
+                pluginInstance.logger.warning("[SpeedGui] items.yml not found, using defaults")
                 setupDefaults()
                 return
             }
@@ -47,74 +58,183 @@ object SpeedGui {
             val menuSection = config.getConfigurationSection("Menu.Speed")
 
             if (menuSection == null) {
-                plugin.logger.warning("[SpeedGui] Menu.Speed section not found in items.yml, using defaults")
-                isConfigLoaded = true
-                GUI_TITLE_COLORED = MSG.chatColors(guiTitle)
+                pluginInstance.logger.warning("[SpeedGui] Menu.Speed section not found in items.yml, using defaults")
                 setupDefaults()
                 return
             }
 
-            guiTitle = menuSection.getString("Title") ?: GUI_TITLE_RAW
-            GUI_TITLE_COLORED = MSG.chatColors(guiTitle)
-
-            val borderMat = menuSection.getString("Border.Item")
-            if (borderMat != null) {
-                Material.getMaterial(borderMat.uppercase())?.let { borderMaterial = it }
-            }
-
-            val fillerMat = menuSection.getString("Filler.Item")
-            if (fillerMat != null) {
-                Material.getMaterial(fillerMat.uppercase())?.let { fillerMaterial = it }
-            }
-
-            val speedsSection = menuSection.getConfigurationSection("Speeds")
-            if (speedsSection != null) {
-                speedSlots.clear()
-                for (key in speedsSection.getKeys(false)) {
-                    val speedSection = speedsSection.getConfigurationSection(key) ?: continue
-                    val slot = speedSection.getInt("Slot", -1)
-                    val speedLevel = speedSection.getInt("SpeedLevel", key.toIntOrNull() ?: 1)
-                    if (slot >= 0) {
-                        speedSlots[slot] = speedLevel
-                    }
-                    val itemMat = speedSection.getString("Item")
-                    if (itemMat != null) {
-                        Material.getMaterial(itemMat.uppercase())?.let { speedItem = it }
-                    }
-                }
-            }
-
-            val closeSection = menuSection.getConfigurationSection("Close")
-            if (closeSection != null) {
-                closeSlot = closeSection.getInt("Slot", 22)
-                val closeMat = closeSection.getString("Item")
-                if (closeMat != null) {
-                    Material.getMaterial(closeMat.uppercase())?.let { closeItem = it }
-                }
-            }
-
+            loadConfiguration(menuSection, pluginInstance)
             isConfigLoaded = true
-            plugin.logger.info("[SpeedGui] Configuration loaded successfully")
+            pluginInstance.logger.info("[SpeedGui] Configuration loaded successfully with ${speedSlots.size} speed items")
 
         } catch (e: Exception) {
-            plugin.logger.severe("[SpeedGui] Error loading configuration: ${e.message}")
-            isConfigLoaded = true
-            GUI_TITLE_COLORED = MSG.chatColors(guiTitle)
+            pluginInstance.logger.severe("[SpeedGui] Error loading configuration: ${e.message}")
+            e.printStackTrace()
             setupDefaults()
         }
     }
 
-    private fun setupDefaults() {
+    private fun loadConfiguration(menuSection: org.bukkit.configuration.ConfigurationSection, pluginInstance: LocoPillars) {
+        // Load title
+        guiTitle = menuSection.getString("Title") ?: GUI_TITLE_RAW
+        GUI_TITLE_COLORED = MSG.chatColors(guiTitle)
+
+        // Load border material
+        val borderMat = menuSection.getString("Border.Item")
+        if (borderMat != null) {
+            Material.getMaterial(borderMat.uppercase())?.let { borderMaterial = it }
+        }
+
+        // Load filler material
+        val fillerMat = menuSection.getString("Filler.Item")
+        if (fillerMat != null) {
+            Material.getMaterial(fillerMat.uppercase())?.let { fillerMaterial = it }
+        }
+
+        // Load close button
+        val closeSection = menuSection.getConfigurationSection("Close")
+        if (closeSection != null) {
+            closeSlot = closeSection.getInt("Slot", 22)
+            val closeMat = closeSection.getString("Item")
+            if (closeMat != null) {
+                Material.getMaterial(closeMat.uppercase())?.let { closeItem = it }
+            }
+        }
+
+        // Load speed items
         speedSlots.clear()
-        for (i in 1..7) {
-            speedSlots[9 + i] = i // slots 10-16
+        val speedsSection = menuSection.getConfigurationSection("Speeds")
+        if (speedsSection != null) {
+            for (key in speedsSection.getKeys(false)) {
+                val speedSection = speedsSection.getConfigurationSection(key) ?: continue
+
+                val slot = speedSection.getInt("Slot", -1)
+                val speedLevel = speedSection.getInt("SpeedLevel", key.toIntOrNull() ?: 1)
+                val itemConfig = speedSection.getString("Item") ?: continue
+
+                if (slot < 0 || slot >= 27) {
+                    pluginInstance.logger.warning("[SpeedGui] Invalid slot $slot for speed $key, skipping")
+                    continue
+                }
+
+                val itemStack = createItemFromConfig(itemConfig, speedLevel, pluginInstance)
+                if (itemStack != null) {
+                    speedSlots.add(SpeedSlotConfig(slot, speedLevel, itemStack))
+                } else {
+                    pluginInstance.logger.warning("[SpeedGui] Failed to create item for speed $key with config '$itemConfig'")
+                }
+            }
+        }
+
+        // Sort speed slots by slot number for consistent ordering
+        speedSlots.sortBy { it.slot }
+    }
+
+    private fun createItemFromConfig(itemConfig: String, speedLevel: Int, pluginInstance: LocoPillars): ItemStack? {
+        return when {
+            itemConfig.startsWith("itemsadder-", true) -> {
+                createItemsAdderItem(itemConfig, speedLevel, pluginInstance)
+            }
+            else -> {
+                createBukkitItem(itemConfig, speedLevel, pluginInstance)
+            }
         }
     }
 
-    fun open(player: Player) {
-        val plugin = getPluginInstance()
+    private fun createItemsAdderItem(itemConfig: String, speedLevel: Int, pluginInstance: LocoPillars): ItemStack? {
+        if (!itemsAdderEnabled) {
+            pluginInstance.logger.warning("[SpeedGui] ItemsAdder item '$itemConfig' requested, but ItemsAdder is NOT installed!")
+            return createFallbackSpeedItem(speedLevel)
+        }
 
-        if (!SpectatorUtils.isSpectator(player, plugin)) {
+        return try {
+            val classIa = Class.forName("dev.lone.itemsadder.api.CustomStack")
+            val getInstance = classIa.getMethod("getInstance", String::class.java)
+            val id = itemConfig.removePrefix("itemsadder-").trim()
+            val customStack = getInstance.invoke(null, id)
+
+            if (customStack == null) {
+                pluginInstance.logger.warning("[SpeedGui] ItemsAdder item '$id' not found")
+                return createFallbackSpeedItem(speedLevel)
+            }
+
+            val itemStack = classIa.getMethod("getItemStack").invoke(customStack) as ItemStack
+            val stack = itemStack.clone()
+
+            // Apply speed item metadata
+            applySpeedItemMeta(stack, speedLevel, pluginInstance)
+            stack
+
+        } catch (ex: Exception) {
+            pluginInstance.logger.warning("[SpeedGui] ItemsAdder reflection error for '$itemConfig': ${ex.message}")
+            createFallbackSpeedItem(speedLevel)
+        }
+    }
+
+    private fun createBukkitItem(itemConfig: String, speedLevel: Int, pluginInstance: LocoPillars): ItemStack? {
+        val material = Material.getMaterial(itemConfig.uppercase())
+        if (material == null) {
+            pluginInstance.logger.warning("[SpeedGui] Invalid material '$itemConfig' for speed level $speedLevel")
+            return createFallbackSpeedItem(speedLevel)
+        }
+
+        val stack = ItemStack(material)
+        applySpeedItemMeta(stack, speedLevel, pluginInstance)
+        return stack
+    }
+
+    private fun createFallbackSpeedItem(speedLevel: Int): ItemStack {
+        val stack = ItemStack(Material.FEATHER)
+        plugin?.let { applySpeedItemMeta(stack, speedLevel, it) }
+        return stack
+    }
+
+    private fun applySpeedItemMeta(item: ItemStack, speedLevel: Int, pluginInstance: LocoPillars) {
+        val meta = item.itemMeta ?: return
+
+        val speedValue = SpectatorSpeedManager.getSpeedValueForLevel(speedLevel)
+        val displayName = "&bSpeed &f$speedLevel &7(&e${String.format("%.1f", speedValue)}&7)"
+        val lore = listOf(
+            "&7Click to set speed to &e${String.format("%.1f", speedValue)}",
+            "&7Level: &f$speedLevel"
+        )
+
+        meta.setDisplayName(MSG.chatColors(displayName))
+        meta.lore = lore.map { MSG.chatColors(it) }
+
+        // Add NBT data for identification
+        val key = NamespacedKey(pluginInstance, "speedLevel")
+        meta.persistentDataContainer.set(key, PersistentDataType.INTEGER, speedLevel)
+
+        item.itemMeta = meta
+    }
+
+    private fun setupDefaults() {
+        GUI_TITLE_COLORED = MSG.chatColors(guiTitle)
+        speedSlots.clear()
+
+        // Create default speed items (slots 10-16, speed levels 1-7)
+        for (i in 1..7) {
+            val slot = 9 + i
+            val item = ItemStack(Material.FEATHER)
+            plugin?.let { applySpeedItemMeta(item, i, it) }
+            speedSlots.add(SpeedSlotConfig(slot, i, item))
+        }
+
+        isConfigLoaded = true
+    }
+
+    private fun isItemsAdderPresent(): Boolean {
+        return Bukkit.getPluginManager().getPlugin("ItemsAdder") != null
+    }
+
+    fun open(player: Player) {
+        val pluginInstance = plugin ?: run {
+            player.sendMessage(MSG.chatColors("&cPlugin not initialized!"))
+            return
+        }
+
+        if (!SpectatorUtils.isSpectator(player, pluginInstance)) {
             player.sendMessage(MSG.chatColors("&cYou must be spectating to use the speed GUI!"))
             return
         }
@@ -126,33 +246,34 @@ object SpeedGui {
         addCloseButton(inv)
 
         player.openInventory(inv)
+        openSpeedGuiPlayers.add(player.uniqueId)
     }
 
     fun handleClick(event: InventoryClickEvent) {
         val player = event.whoClicked as? Player ?: return
 
-        val title = try {
-            event.view.title()?.let { ChatColor.stripColor(it.toString()) } ?: ""
-        } catch (e: Exception) {
-            @Suppress("DEPRECATION")
-            event.view.title ?: ""
-        }
-
-        if (!isSpeedGui(title)) return
+        if (!hasSpeedGuiOpen(player)) return
 
         event.isCancelled = true
         val clickedSlot = event.rawSlot
         val item = event.currentItem ?: return
 
+        // Handle close button
         if (clickedSlot == closeSlot) {
             player.closeInventory()
+            openSpeedGuiPlayers.remove(player.uniqueId)
             return
         }
 
-        val speedLevel = speedSlots[clickedSlot]
-        if (speedLevel != null && speedLevel in 1..7) {
-            SpectatorSpeedManager.handleSpeedSelection(player, speedLevel)
-            player.closeInventory()
+        // Handle speed selection
+        val speedConfig = speedSlots.find { it.slot == clickedSlot }
+        if (speedConfig != null) {
+            val speedLevel = speedConfig.speedLevel
+            if (speedLevel in 1..7) {
+                SpectatorSpeedManager.handleSpeedSelection(player, speedLevel)
+                player.closeInventory()
+                openSpeedGuiPlayers.remove(player.uniqueId)
+            }
         }
     }
 
@@ -165,19 +286,17 @@ object SpeedGui {
     fun isSpeedGui(title: Any?): Boolean {
         return when (title) {
             is String -> isSpeedGui(title)
-            else -> {
-                val titleString = title?.toString() ?: ""
-                isSpeedGui(titleString)
-            }
+            else -> isSpeedGui(title?.toString() ?: "")
         }
     }
 
     private fun fillBorder(inv: Inventory) {
         val borderItem = createBorderItem()
-        val borderSlots = listOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26)
+        val borderSlots = listOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 17, 18, 19, 20, 21, 23, 24, 25, 26)
 
         for (slot in borderSlots) {
-            if (!speedSlots.containsKey(slot) && slot != closeSlot) {
+            // Don't override speed slots or close slot
+            if (speedSlots.none { it.slot == slot } && slot != closeSlot) {
                 inv.setItem(slot, borderItem)
             }
         }
@@ -186,7 +305,9 @@ object SpeedGui {
     private fun fillEmpty(inv: Inventory) {
         val fillerItem = createFillerItem()
         for (i in 0 until inv.size) {
-            if (inv.getItem(i) == null && !speedSlots.containsKey(i) && i != closeSlot) {
+            if (inv.getItem(i) == null &&
+                speedSlots.none { it.slot == i } &&
+                i != closeSlot) {
                 inv.setItem(i, fillerItem)
             }
         }
@@ -194,12 +315,35 @@ object SpeedGui {
 
     private fun addSpeedItems(inv: Inventory, player: Player) {
         val currentSpeed = SpectatorSpeedManager.getCurrentSpeedLevel(player)
-        for ((slot, speedLevel) in speedSlots) {
-            if (slot >= 0 && slot < inv.size) {
-                val item = createSpeedItem(speedLevel, currentSpeed == speedLevel)
-                inv.setItem(slot, item)
+
+        for (speedConfig in speedSlots) {
+            if (speedConfig.slot >= 0 && speedConfig.slot < inv.size) {
+                val item = speedConfig.item.clone()
+
+                // Update display based on current speed
+                if (speedConfig.speedLevel == currentSpeed) {
+                    updateItemAsSelected(item, speedConfig.speedLevel)
+                }
+
+                inv.setItem(speedConfig.slot, item)
             }
         }
+    }
+
+    private fun updateItemAsSelected(item: ItemStack, speedLevel: Int) {
+        val meta = item.itemMeta ?: return
+
+        val speedValue = SpectatorSpeedManager.getSpeedValueForLevel(speedLevel)
+        val displayName = "&a&lSpeed &f$speedLevel &7(&e${String.format("%.1f", speedValue)}&7) &a✓"
+        val lore = listOf(
+            "&7Current speed level",
+            "&aClick to confirm"
+        )
+
+        meta.setDisplayName(MSG.chatColors(displayName))
+        meta.lore = lore.map { MSG.chatColors(it) }
+
+        item.itemMeta = meta
     }
 
     private fun addCloseButton(inv: Inventory) {
@@ -225,34 +369,6 @@ object SpeedGui {
         return item
     }
 
-    private fun createSpeedItem(speedLevel: Int, isCurrentSpeed: Boolean): ItemStack {
-        val item = ItemStack(speedItem)
-        val meta = item.itemMeta
-
-        val speedValue = SpectatorSpeedManager.getSpeedValueForLevel(speedLevel)
-        val displayName = if (isCurrentSpeed) {
-            "&a&lSpeed &f$speedLevel &7(&e${String.format("%.1f", speedValue)}&7) &a✓"
-        } else {
-            "&bSpeed &f$speedLevel &7(&e${String.format("%.1f", speedValue)}&7)"
-        }
-
-        val lore = if (isCurrentSpeed) {
-            listOf("&7Current speed level", "&aClick to confirm")
-        } else {
-            listOf("&7Click to set speed to &e${String.format("%.1f", speedValue)}", "&7Level: &f$speedLevel")
-        }
-
-        meta?.setDisplayName(MSG.chatColors(displayName))
-        meta?.lore = lore.map { MSG.chatColors(it) }
-
-        val plugin = getPluginInstance()
-        val key = NamespacedKey(plugin, "speedLevel")
-        meta?.persistentDataContainer?.set(key, PersistentDataType.INTEGER, speedLevel)
-
-        item.itemMeta = meta
-        return item
-    }
-
     private fun createCloseItem(): ItemStack {
         val item = ItemStack(closeItem)
         val meta = item.itemMeta
@@ -264,14 +380,11 @@ object SpeedGui {
         return item
     }
 
-    private fun getPluginInstance(): LocoPillars {
-        return Bukkit.getPluginManager().getPlugin("LocoPillars") as LocoPillars
-    }
-
-    fun reload(plugin: LocoPillars) {
+    fun reload(pluginInstance: LocoPillars) {
         isConfigLoaded = false
         speedSlots.clear()
-        initialize(plugin)
+        plugin = pluginInstance
+        initialize(pluginInstance)
     }
 
     fun getGuiTitle(): String {
@@ -279,33 +392,60 @@ object SpeedGui {
     }
 
     fun hasSpeedGuiOpen(player: Player): Boolean {
-        val openInv = player.openInventory.topInventory
-
-        return try {
-            val title = player.openInventory.title()
-            isSpeedGui(title?.toString() ?: "")
-        } catch (e: Exception) {
-            try {
-                @Suppress("DEPRECATION")
-                val title = player.openInventory.title
-                isSpeedGui(title ?: "")
-            } catch (e2: Exception) {
-                openInv.size == 27 && speedSlots.isNotEmpty()
-            }
-        }
+        return openSpeedGuiPlayers.contains(player.uniqueId)
     }
 
     fun closeAllSpeedGuis() {
         Bukkit.getOnlinePlayers().forEach { player ->
             if (hasSpeedGuiOpen(player)) {
                 player.closeInventory()
+                openSpeedGuiPlayers.remove(player.uniqueId)
             }
         }
     }
 
     fun isSpeedGuiInventory(inventory: Inventory): Boolean {
-        return inventory.size == 27 && speedSlots.any { (slot, _) ->
-            inventory.getItem(slot)?.type == speedItem
+        return inventory.size == 27 && speedSlots.any { config ->
+            val item = inventory.getItem(config.slot)
+            item != null && item.type != Material.AIR
         }
+    }
+
+    fun markInventoryClosed(player: Player) {
+        openSpeedGuiPlayers.remove(player.uniqueId)
+    }
+
+    // Debug methods
+    fun getLoadedSpeedSlots(): List<SpeedSlotConfig> {
+        return speedSlots.toList()
+    }
+
+    fun isItemsAdderAvailable(): Boolean {
+        return itemsAdderEnabled
+    }
+
+    fun validateConfiguration(): List<String> {
+        val issues = mutableListOf<String>()
+
+        if (speedSlots.isEmpty()) {
+            issues.add("No speed slots configured")
+        }
+
+        val duplicateSlots = speedSlots.groupBy { it.slot }.filter { it.value.size > 1 }
+        if (duplicateSlots.isNotEmpty()) {
+            issues.add("Duplicate slots found: ${duplicateSlots.keys}")
+        }
+
+        val invalidSlots = speedSlots.filter { it.slot < 0 || it.slot >= 27 }
+        if (invalidSlots.isNotEmpty()) {
+            issues.add("Invalid slots: ${invalidSlots.map { it.slot }}")
+        }
+
+        val invalidSpeedLevels = speedSlots.filter { it.speedLevel < 1 || it.speedLevel > 7 }
+        if (invalidSpeedLevels.isNotEmpty()) {
+            issues.add("Invalid speed levels: ${invalidSpeedLevels.map { it.speedLevel }}")
+        }
+
+        return issues
     }
 }

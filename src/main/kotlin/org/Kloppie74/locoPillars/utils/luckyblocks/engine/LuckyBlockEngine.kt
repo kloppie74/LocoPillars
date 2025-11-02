@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.luckyblocks.engine
+package org.Kloppie74.locoPillars.utils.luckyblocks.engine
 
 import org.bukkit.Bukkit
 import org.bukkit.Location
@@ -10,7 +10,7 @@ import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.NamespacedKey
 import org.bukkit.persistence.PersistentDataType
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.utils.MSG
 import java.io.File
 import java.util.logging.Logger
@@ -187,12 +187,12 @@ class LuckyBlockEngine(
         val player = event.player
 
         // Check if this is a placed LuckyBlock
-        if (org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksUtil.isPlacedLuckyBlock(block.location)) {
+        if (org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksUtil.isPlacedLuckyBlock(block.location)) {
             event.isCancelled = true
 
             // Remove the lucky block from cache and armor stand
-            org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksUtil.removeLuckyBlock(block.location)
-            org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksUtil.removeLuckyBlockArmorStand(block.location)
+            org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksUtil.removeLuckyBlock(block.location)
+            org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksUtil.removeLuckyBlockArmorStand(block.location)
 
             // Remove the block
             block.type = org.bukkit.Material.AIR

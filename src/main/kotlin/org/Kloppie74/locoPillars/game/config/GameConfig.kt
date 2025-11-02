@@ -126,10 +126,10 @@ class GameConfig(
 
     companion object {
         fun loadAll(plugin: JavaPlugin): List<GameConfig> {
-            val folder = File(plugin.dataFolder, "Games")
+            val folder = File(plugin.dataFolder, "Data/Games")
             if (!folder.exists()) {
                 folder.mkdirs()
-                plugin.logger.info("[GameConfig] Created Games folder at: ${folder.absolutePath}")
+                plugin.logger.info("[GameConfig] Created Data/Games folder at: ${folder.absolutePath}")
                 return emptyList()
             }
 
@@ -153,6 +153,14 @@ class GameConfig(
         }
 
         fun loadSingle(plugin: JavaPlugin, configFile: File): GameConfig? {
+            // Optioneel: extra check of file in ./Data/Games ligt
+            val gamesFolder = File(plugin.dataFolder, "Data/Games")
+            val canonicalGamesFolder = gamesFolder.canonicalFile
+            val canonicalFile = configFile.canonicalFile
+            if (!canonicalFile.path.startsWith(canonicalGamesFolder.path)) {
+                plugin.logger.warning("[GameConfig] Warning: config file ${configFile.path} is not in Data/Games!")
+            }
+
             return try {
                 plugin.logger.info("[GameConfig] Loading single config: ${configFile.name}")
                 val yaml = Yaml()

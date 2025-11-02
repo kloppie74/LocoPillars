@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.luckyblocks
+package org.Kloppie74.locoPillars.utils.luckyblocks
 
 import org.bukkit.Bukkit
 import org.bukkit.command.Command
@@ -6,9 +6,9 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
-import org.Kloppie74.locoPillars.config.ConfigManager
-import org.Kloppie74.locoPillars.luckyblocks.engine.LuckyBlockConfig
-import org.Kloppie74.locoPillars.luckyblocks.engine.LuckyBlockEngine
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyBlockConfig
+import org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyBlockEngine
 import org.Kloppie74.locoPillars.utils.MSG
 
 class EngineLuckyBlocksCommand(private val config: ConfigManager, private val engine: LuckyBlockEngine) : CommandExecutor, TabCompleter {

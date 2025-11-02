@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.luckyblocks.engine
+package org.Kloppie74.locoPillars.utils.luckyblocks.engine
 
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler

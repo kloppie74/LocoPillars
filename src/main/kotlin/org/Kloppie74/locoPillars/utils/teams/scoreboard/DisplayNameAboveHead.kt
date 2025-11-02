@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.utils.scoreboards
+package org.Kloppie74.locoPillars.utils.teams.scoreboard
 
 import me.neznamy.tab.api.TabAPI
 import org.bukkit.Bukkit

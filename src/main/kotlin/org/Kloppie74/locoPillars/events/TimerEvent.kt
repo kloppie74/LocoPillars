@@ -116,7 +116,6 @@ class TimerEvent(private val plugin: LocoPillars) {
 
                 when {
                     timeUntilNext <= 0 -> {
-                        plugin.logger.info("[TimerEvent] Item timer triggered for instance ${instance.id}")
                         // Give items to players
                         plugin.gameManager.giveItemsToPlayers(instance)
                         timeUntilNext = itemIntervalSeconds

@@ -1,21 +1,18 @@
 package org.Kloppie74.locoPillars.utils
 
 import com.sk89q.worldedit.WorldEdit
-import com.sk89q.worldedit.EditSession
 import com.sk89q.worldedit.bukkit.BukkitAdapter
-import com.sk89q.worldedit.bukkit.BukkitPlayer
 import com.sk89q.worldedit.extent.clipboard.Clipboard
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats
 import com.sk89q.worldedit.function.operation.Operations
 import com.sk89q.worldedit.math.BlockVector3
 import com.sk89q.worldedit.regions.CuboidRegion
 import com.sk89q.worldedit.session.ClipboardHolder
-import com.sk89q.worldedit.session.SessionManager
 import com.sk89q.worldedit.world.block.BlockTypes
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.plugin.java.JavaPlugin
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import java.io.File
 import java.io.FileInputStream
 import java.util.UUID

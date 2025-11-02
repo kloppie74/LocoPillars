@@ -6,16 +6,12 @@ import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
 import java.util.*
 import com.sk89q.worldedit.bukkit.BukkitAdapter
-import com.sk89q.worldedit.WorldEdit
-import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats
 import com.sk89q.worldedit.math.BlockVector3
-import com.sk89q.worldedit.session.ClipboardHolder
 import com.sk89q.worldguard.WorldGuard
-import com.sk89q.worldguard.bukkit.WorldGuardPlugin
 import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion
 import com.sk89q.worldguard.protection.flags.Flags
 import com.sk89q.worldguard.protection.flags.StateFlag
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.game.config.GameConfig
 import kotlin.random.Random
 
@@ -61,11 +57,15 @@ class ArenaManager(
     }
 
     private fun loadArenaTemplates() {
-        val gamesFolder = File(plugin.dataFolder, "Games")
-        val schemsFolder = File(plugin.dataFolder, "Schems")
+        // Folders now live in Data/Games and Data/Schems
         val dataFolder = File(plugin.dataFolder, "Data")
-        val gameWorldsFolder = File(dataFolder, "GameWorlds")
+        val gamesFolder = File(dataFolder, "Games")
+        val schemsFolder = File(dataFolder, "Schems")
 
+        if (!dataFolder.exists()) {
+            dataFolder.mkdirs()
+            debugLog("Created Data folder at: ${dataFolder.absolutePath}")
+        }
         if (!gamesFolder.exists()) {
             gamesFolder.mkdirs()
             debugLog("Created Games folder at: ${gamesFolder.absolutePath}")
@@ -73,14 +73,6 @@ class ArenaManager(
         if (!schemsFolder.exists()) {
             schemsFolder.mkdirs()
             debugLog("Created Schems folder at: ${schemsFolder.absolutePath}")
-        }
-        if (!dataFolder.exists()) {
-            dataFolder.mkdirs()
-            debugLog("Created Data folder at: ${dataFolder.absolutePath}")
-        }
-        if (!gameWorldsFolder.exists()) {
-            gameWorldsFolder.mkdirs()
-            debugLog("Created GameWorlds folder at: ${gameWorldsFolder.absolutePath}")
         }
 
         debugLog("Scanning for templates...")
@@ -98,6 +90,7 @@ class ArenaManager(
             val schemFolder = File(schemsFolder, name)
             val schemFiles = mutableListOf<File>()
 
+            // First, try Data/Schems/[config-name]/
             if (schemFolder.exists() && schemFolder.isDirectory) {
                 debugLog("Found schematic folder: ${schemFolder.absolutePath}")
                 val folderSchematics = schemFolder.listFiles { f -> f.extension == "schem" } ?: emptyArray()
@@ -113,6 +106,7 @@ class ArenaManager(
                 }
             }
 
+            // If no folder or no valid files, look for single file: Data/Schems/[config-name].schem
             if (schemFiles.isEmpty()) {
                 val singleSchemFile = File(schemsFolder, "$name.schem")
                 debugLog("No folder found, checking single schematic: ${singleSchemFile.absolutePath}")
@@ -179,8 +173,8 @@ class ArenaManager(
         if (templates.isEmpty()) {
             plugin.logger.severe("[ArenaManager] No templates available! Cannot preload instances.")
             plugin.logger.severe("[ArenaManager] Please check that:")
-            plugin.logger.severe("[ArenaManager] 1. .yml config files are in Games/ folder")
-            plugin.logger.severe("[ArenaManager] 2. .schem files are in Schems/ folder or Schems/[config-name]/ folders")
+            plugin.logger.severe("[ArenaManager] 1. .yml config files are in Data/Games/ folder")
+            plugin.logger.severe("[ArenaManager] 2. .schem files are in Data/Schems/ folder or Data/Schems/[config-name]/ folders")
             plugin.logger.severe("[ArenaManager] 3. File names match (without extensions)")
             return
         }
@@ -333,8 +327,7 @@ class ArenaManager(
         region.setFlag(Flags.USE, StateFlag.State.ALLOW)
         region.setFlag(Flags.INTERACT, StateFlag.State.ALLOW)
         region.setFlag(Flags.DAMAGE_ANIMALS, StateFlag.State.ALLOW)
-        region.setFlag(Flags.DENY_MESSAGE, "You cannot leave the arena!")
-        region.setFlag(Flags.GREET_MESSAGE, "Welcome to the arena!")
+        region.setFlag(Flags.DENY_MESSAGE, "&cYou cannot leave the arena!")
         region.setFlag(Flags.SEND_CHAT, StateFlag.State.ALLOW)
         region.setFlag(Flags.RECEIVE_CHAT, StateFlag.State.ALLOW)
 

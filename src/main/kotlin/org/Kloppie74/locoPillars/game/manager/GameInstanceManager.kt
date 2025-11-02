@@ -5,8 +5,7 @@ import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.arena.ArenaManager
 import org.Kloppie74.locoPillars.game.arena.ArenaStatus
 import org.Kloppie74.locoPillars.game.data.GameState
-import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 
 class GameInstanceManager(
     private val plugin: LocoPillars,

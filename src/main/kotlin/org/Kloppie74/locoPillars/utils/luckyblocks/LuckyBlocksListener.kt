@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.luckyblocks
+package org.Kloppie74.locoPillars.utils.luckyblocks
 
 import org.bukkit.Material
 import org.bukkit.block.Block
@@ -10,9 +10,7 @@ import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.inventory.InventoryAction
 import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.event.inventory.InventoryType
-import org.bukkit.inventory.ItemStack
-import org.bukkit.inventory.meta.SkullMeta
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.utils.MSG
 
 class LuckyBlocksListener(private val config: ConfigManager) : Listener {

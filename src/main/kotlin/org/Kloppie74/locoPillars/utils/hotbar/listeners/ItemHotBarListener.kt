@@ -23,6 +23,7 @@ import org.Kloppie74.locoPillars.utils.hotbar.SpeedGui
 import org.Kloppie74.locoPillars.utils.hotbar.HotbarUtils
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorSpeedManager
+import org.bukkit.event.block.Action
 import org.bukkit.event.inventory.ClickType
 import org.bukkit.event.inventory.InventoryAction
 
@@ -99,11 +100,13 @@ class ItemHotBarListener(
         val heldItem = player.inventory.itemInMainHand
 
         // Only handle locked hotbar items
-        if (HotbarUtils.isLockedHotbarItem(heldItem, plugin)) {
-            handleLockedItemInteraction(player, heldItem)
-            event.isCancelled = true
+        if (event.action.equals(Action.RIGHT_CLICK_AIR) || event.action.equals(Action.RIGHT_CLICK_BLOCK) ||
+            event.action.equals(Action.LEFT_CLICK_AIR) || event.action.equals(Action.LEFT_CLICK_BLOCK)) {
+            if (HotbarUtils.isLockedHotbarItem(heldItem, plugin)) {
+                handleLockedItemInteraction(player, heldItem)
+                event.isCancelled = true
+            }
         }
-
         // Let SpectatorInteractionHandler handle spectator restrictions
     }
 
@@ -175,14 +178,19 @@ class ItemHotBarListener(
             return
         }
 
-        if (event.action == InventoryAction.HOTBAR_SWAP || event.action.name.contains("SWAP") || event.click == ClickType.SHIFT_LEFT || event.click == ClickType.SHIFT_RIGHT) {
-            val hotbarItem = player.inventory.getItem(event.hotbarButton)
-            if (HotbarUtils.isLockedHotbarItem(hotbarItem, plugin)) {
-                event.isCancelled = true
-                Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-                    HotbarUtils.setupPlayerHotbar(player, plugin)
-                }, 1L)
-                return
+        // FIX: Check that hotbarButton is valid before accessing inventory
+        if (event.action == InventoryAction.HOTBAR_SWAP || event.action.name.contains("SWAP") ||
+            event.click == ClickType.SHIFT_LEFT || event.click == ClickType.SHIFT_RIGHT) {
+
+            if (event.hotbarButton >= 0 && event.hotbarButton < player.inventory.size) {
+                val hotbarItem = player.inventory.getItem(event.hotbarButton)
+                if (HotbarUtils.isLockedHotbarItem(hotbarItem, plugin)) {
+                    event.isCancelled = true
+                    Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                        HotbarUtils.setupPlayerHotbar(player, plugin)
+                    }, 1L)
+                    return
+                }
             }
         }
     }

@@ -11,8 +11,7 @@ import org.bukkit.entity.Player
 class HideOthersCommand : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         val player = sender as? Player ?: run {
-            sender.sendMessage(
-                MSG.chatColors("&cOnly players can use this command!"))
+            sender.sendMessage(MSG.chatColors("&cOnly players can use this command!"))
             return true
         }
 
@@ -35,9 +34,12 @@ class HideOthersCommand : CommandExecutor {
     }
 
     private fun toggleHideOthers(target: Player, executor: Player?) {
-        val state = VanishManager.getState(target)
-        val newState = !state.hideOthers
+        val currentState = VanishManager.isHideOthers(target)
+        val newState = !currentState
+
+        // Use VanishManager which handles all visibility updates automatically
         VanishManager.setHideOthers(target, newState)
+
         if (newState) {
             target.sendMessage(MSG.chatColors("&aYou are now hiding other players in this world."))
             executor?.sendMessage(MSG.chatColors("&aYou have enabled hideOthers for &6${target.name}."))

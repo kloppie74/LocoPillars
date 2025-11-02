@@ -190,6 +190,82 @@ Tab:
   # Supported placeholders:
   # %team%, %player_name%, %kills%, %group%, %game_name%, etc.
 
+# LocoPillars Scoreboards Configuration
+# This config controls the sidebar scoreboards shown to players
+
+Scoreboards:
+  GlobalEnabled: true
+
+  # Lobby scoreboard (when player is not in any game)
+  Lobby:
+    Enabled: true
+    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Lines:
+      8: ""
+      7: "&fOnline: &a%online_players%"
+      6: "&fActive Games: &c%active_games%"
+      5: ""
+      4: "&eWelcome to the Lobby!"
+      3: "&7Join a game to start playing"
+      2: ""
+      1: "&bplay.locopillars.nl"
+
+  # Game lobby scoreboard (waiting for game to start)
+  GameLobby:
+    Enabled: true
+    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Lines:
+      8: ""
+      7: "&fMap: &a%map_name%"
+      6: "&fPlayers: &e%players%&7/&e%max_players%"
+      5: ""
+      4: "&aWaiting for players..."
+      3: "&7Game will start soon!"
+      2: ""
+      1: "&bplay.locopillars.nl"
+
+  # Cage/Starting phase scoreboard
+  Cage:
+    Enabled: true
+    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Lines:
+      8: ""
+      7: "&fMap: &a%map_name%"
+      6: "&fPlayers: &e%players%"
+      5: ""
+      4: "&cStarting in: &f%cage_timer%s"
+      3: "&7Get ready to build!"
+      2: ""
+      1: "&bplay.locopillars.nl"
+
+  # Active game scoreboard
+  Game:
+    Enabled: true
+    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Lines:
+      8: ""
+      7: "&fMap: &a%map_name%"
+      6: "&fPlayers Left: &c%players_left%"
+      5: ""
+      4: "&fTime Left: &e%game_timer%"
+      3: "&7Build your pillar!"
+      2: ""
+      1: "&bplay.locopillars.nl"
+
+  # Spectator scoreboard (when spectating)
+  Spectate:
+    Enabled: true
+    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Lines:
+      8: ""
+      7: "&fMap: &a%map_name%"
+      6: "&fPlayers Left: &c%players_left%"
+      5: ""
+      4: "&7&oSpectating..."
+      3: "&fTime Left: &e%game_timer%"
+      2: ""
+      1: "&bplay.locopillars.nl"
+
 # ==========================================
 # LUCKYBLOCKS CONFIGURATION
 # ==========================================

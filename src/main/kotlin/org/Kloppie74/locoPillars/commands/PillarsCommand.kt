@@ -6,11 +6,16 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.commands.Editor.MapManager
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.utils.MSG
+import org.Kloppie74.locoPillars.commands.Editor.Menu
 
 class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabCompleter {
+
+    private val adminSubCmds = listOf("menu", "createmap", "editmap", "deletemap", "listmaps")
+    private val adminPerm = "locopillars.pillars.admin"
 
     private val subPermissions = mapOf(
         "join" to "locopillars.pillars.join",
@@ -27,7 +32,47 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
             return true
         }
 
-        // subcmds zonder args = help
+        // --- ADMIN COMMANDS ---
+        if (args.isNotEmpty() && args[0].equals("admin", ignoreCase = true)) {
+            if (!sender.hasPermission(adminPerm)) {
+                sender.sendMessage(MSG.chatColors("&cYou don't have permission to use /pillars admin!"))
+                return true
+            }
+            if (args.size < 2) {
+                sender.sendMessage(MSG.chatColors("&e/pillars admin <menu|createmap|editmap|deletemap|listmaps>"))
+                return true
+            }
+            when (args[1].lowercase()) {
+                "menu" -> {
+                    Menu.openMainMenu(sender)
+                    return true
+                }
+                "createmap" -> {
+                    Menu.openMainMenu(sender) // Let user click "Create Map" in GUI; chat prompt handled by Menu
+                    return true
+                }
+                "editmap" -> {
+                    Menu.openMapSelector(sender, Menu.MapAction.EDIT)
+                    return true
+                }
+                "deletemap" -> {
+                    Menu.openMapSelector(sender, Menu.MapAction.DELETE)
+                    return true
+                }
+                "listmaps" -> {
+                    val maps = MapManager.getAllMapNames()
+                    sender.sendMessage(MSG.chatColors("&eAvailable maps: &7${if (maps.isEmpty()) "none" else maps.joinToString(", ")}"))
+                    return true
+                }
+                else -> {
+                    sender.sendMessage(MSG.chatColors("&cUnknown admin subcommand: ${args[1]}"))
+                    sender.sendMessage(MSG.chatColors("&e/pillars admin <menu|createmap|editmap|deletemap|listmaps>"))
+                    return true
+                }
+            }
+        }
+
+        // --- NORMAL PLAYER COMMANDS ---
         if (args.isEmpty()) {
             showHelp(sender)
             return true
@@ -287,6 +332,17 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (sender !is Player) return emptyList()
+
+        // --- ADMIN TAB-COMPLETE ---
+        if (args.isNotEmpty() && args[0].equals("admin", ignoreCase = true) && sender.hasPermission(adminPerm)) {
+            return when (args.size) {
+                2 -> adminSubCmds.filter { it.startsWith(args[1], ignoreCase = true) }
+                3 -> if (args[1].lowercase() in listOf("editmap", "deletemap")) {
+                    MapManager.getAllMapNames().filter { it.startsWith(args[2], ignoreCase = true) }
+                } else emptyList()
+                else -> emptyList()
+            }
+        }
 
         // Only show subcommands player has permission for
         val availableSubCmds = subPermissions.filter { sender.hasPermission(it.value) }.keys.toList()

@@ -12,6 +12,7 @@ import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.hotbar.HotbarItemManager
 import org.Kloppie74.locoPillars.utils.hotbar.SpeedGui
 import org.Kloppie74.locoPillars.utils.hotbar.HotbarUtils
+import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import java.io.File
 
 class SpectatorInventoryManager(
@@ -114,9 +115,9 @@ Menu:
 
     @EventHandler
     fun onRespawn(event: PlayerRespawnEvent) {
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            HotbarUtils.setupPlayerHotbar(event.player, plugin)
-        }, 5L)
+        // Queue hotbar setup - no scheduled task needed
+        HotbarUtils.setupPlayerHotbar(event.player, plugin)
+        GlobalVisibilityTicker.queueUpdate(event.player)
     }
 
     @EventHandler
@@ -133,9 +134,9 @@ Menu:
         val instance = plugin.gameManager.getPlayerInstance(player)
         if (instance == null && player.world.name.startsWith("pillars_")) {
             event.isCancelled = true
-            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-                HotbarUtils.setupPlayerHotbar(player, plugin)
-            }, 1L)
+            // Queue hotbar setup - no scheduled task needed
+            HotbarUtils.setupPlayerHotbar(player, plugin)
+            GlobalVisibilityTicker.queueUpdate(player)
         }
     }
 
@@ -144,6 +145,7 @@ Menu:
      */
     fun checkAndUpdateInventory(player: Player) {
         HotbarUtils.setupPlayerHotbar(player, plugin)
+        GlobalVisibilityTicker.queueUpdate(player)
     }
 
     /**
@@ -151,6 +153,7 @@ Menu:
      */
     fun giveSpectatorInventory(player: Player) {
         HotbarUtils.setupPlayerHotbar(player, plugin)
+        GlobalVisibilityTicker.queueUpdate(player)
     }
 
     /**

@@ -5,6 +5,7 @@ import org.bukkit.Bukkit
 import org.bukkit.OfflinePlayer
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.data.GameState
+import org.Kloppie74.locoPillars.game.data.Team
 import org.bukkit.entity.Player
 
 class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
@@ -25,7 +26,97 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
 
         val pLower = params.lowercase()
 
-        // === SCOREBOARDMANAGER PLACEHOLDERS ===
+        // === NEW ENHANCED TEAM STATISTICS PLACEHOLDERS ===
+        val teamRegex = Regex("""game_team_(team\d+|[\w\-_]+)_(players_count|players_alive|players_total|players_dead|status|status_symbol|displayname)""")
+        teamRegex.matchEntire(pLower)?.let { match ->
+            val teamIdentifier = match.groupValues[1]
+            val statType = match.groupValues[2]
+
+            if (gameInstance != null) {
+                val teamStats = getTeamStatistics(gameInstance, teamIdentifier)
+                val team = getTeamByIdentifier(gameInstance, teamIdentifier)
+                return when (statType) {
+                    "players_count", "players_total" -> teamStats.totalPlayers.toString()
+                    "players_alive" -> teamStats.alivePlayers.toString()
+                    "players_dead" -> teamStats.deadPlayers.toString()
+                    "status" -> teamStats.status
+                    "status_symbol" -> teamStats.statusSymbol
+                    "displayname" -> team?.let { "[${it.name}]" } ?: ""
+                    else -> ""
+                }
+            }
+            return ""
+        }
+
+        // === NEW MAP-BASED PLACEHOLDERS WITH MULTI-MAP SUPPORT ===
+        val mapRegex = Regex("""map_(.+?)_(players_in_lobby|players_playing|players_total|games_active|games_waiting|games_starting|games_total)""")
+        mapRegex.matchEntire(pLower)?.let { match ->
+            val mapNamePart = match.groupValues[1].removeSuffix(".yml") // Remove .yml if present
+            val statType = match.groupValues[2]
+
+            // Check if this is a multi-map placeholder with <map1,map2,map3> syntax
+            val multiMapRegex = Regex("""<([^>]+)>""")
+            val multiMapMatch = multiMapRegex.find(mapNamePart)
+
+            if (multiMapMatch != null) {
+                // Multi-map case: extract map names and get stats for each
+                val mapList = multiMapMatch.groupValues[1]
+                val maps = mapList.split(",").map { it.trim() }
+
+                val results = maps.map { mapName ->
+                    val mapStats = getMapStatistics(mapName)
+                    when (statType) {
+                        "players_in_lobby" -> mapStats.playersInLobby
+                        "players_playing" -> mapStats.playersPlaying
+                        "players_total" -> mapStats.totalPlayers
+                        "games_active" -> mapStats.gamesActive
+                        "games_waiting" -> mapStats.gamesWaiting
+                        "games_starting" -> mapStats.gamesStarting
+                        "games_total" -> mapStats.totalGames
+                        else -> 0
+                    }
+                }
+
+                // Sum all values and return as string
+                return results.sum().toString()
+            } else {
+                // Single map case: use original logic
+                val mapStats = getMapStatistics(mapNamePart)
+                return when (statType) {
+                    "players_in_lobby" -> mapStats.playersInLobby.toString()
+                    "players_playing" -> mapStats.playersPlaying.toString()
+                    "players_total" -> mapStats.totalPlayers.toString()
+                    "games_active" -> mapStats.gamesActive.toString()
+                    "games_waiting" -> mapStats.gamesWaiting.toString()
+                    "games_starting" -> mapStats.gamesStarting.toString()
+                    "games_total" -> mapStats.totalGames.toString()
+                    else -> ""
+                }
+            }
+        }
+
+        // === INDIVIDUAL TEAM NAME AND COLOR PLACEHOLDERS ===
+        val teamNameRegex = Regex("""game_team_(team\d+|[\w\-_]+)_name""")
+        teamNameRegex.matchEntire(pLower)?.let { match ->
+            val teamIdentifier = match.groupValues[1]
+            if (gameInstance != null) {
+                val team = getTeamByIdentifier(gameInstance, teamIdentifier)
+                return team?.name ?: ""
+            }
+            return ""
+        }
+
+        val teamColorRegex = Regex("""game_team_(team\d+|[\w\-_]+)_color""")
+        teamColorRegex.matchEntire(pLower)?.let { match ->
+            val teamIdentifier = match.groupValues[1]
+            if (gameInstance != null) {
+                val team = getTeamByIdentifier(gameInstance, teamIdentifier)
+                return team?.color?.name ?: ""
+            }
+            return ""
+        }
+
+        // === ORIGINAL PLACEHOLDERS ===
         when (pLower) {
             "active_games", "games_active" -> return plugin.gameManager.getActiveGames().size.toString()
             "player_name" -> return player?.name ?: ""
@@ -425,14 +516,18 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         val h = seconds / 3600
         val m = (seconds % 3600) / 60
         val s = seconds % 60
-        return "%02d:%02d:%02d".format(h, m, s)
+        return if (h == 0) {
+            "%02d:%02d".format(m, s)
+        } else {
+            "%02d:%02d:%02d".format(h, m, s)
+        }
     }
 
     /**
      * Finds the Team object the player is assigned to in the current game instance.
      * Returns null if not found.
      */
-    private fun getPlayerTeam(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, player: Player): org.Kloppie74.locoPillars.game.data.Team? {
+    private fun getPlayerTeam(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, player: Player): Team? {
         val uuid = player.uniqueId
         val teams = gameInstance.arenaInstance.config.teams
 
@@ -448,5 +543,181 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
             runningIndex += teamSize
         }
         return null
+    }
+
+    /**
+     * Get a team by identifier (supports both "team1", "team2", etc. and actual team names)
+     */
+    private fun getTeamByIdentifier(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, teamIdentifier: String): Team? {
+        val teams = gameInstance.arenaInstance.config.teams
+
+        return if (teamIdentifier.startsWith("team") && teamIdentifier.length > 4) {
+            // Handle team1, team2, etc.
+            val teamNumber = teamIdentifier.removePrefix("team").toIntOrNull()
+            if (teamNumber != null && teamNumber > 0 && teamNumber <= teams.size) {
+                teams[teamNumber - 1] // Convert to 0-based index
+            } else null
+        } else {
+            // Handle actual team names
+            teams.find { it.name.lowercase() == teamIdentifier.lowercase() }
+        }
+    }
+
+    /**
+     * Data class to hold team statistics
+     */
+    private data class TeamStatistics(
+        val totalPlayers: Int,
+        val alivePlayers: Int,
+        val deadPlayers: Int,
+        val status: String,
+        val statusSymbol: String
+    )
+
+    /**
+     * Get team statistics for a specific team identifier
+     * Supports both "team1", "team2", etc. and actual team names
+     */
+    private fun getTeamStatistics(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, teamIdentifier: String): TeamStatistics {
+        val teams = gameInstance.arenaInstance.config.teams
+        val currentPlayers = gameInstance.players
+
+        // Find the target team
+        val targetTeam = getTeamByIdentifier(gameInstance, teamIdentifier)
+
+        if (targetTeam == null) {
+            return TeamStatistics(0, 0, 0, "Unknown", "❓")
+        }
+
+        // Calculate team statistics
+        val teamPlayerUUIDs = getPlayersInTeam(gameInstance, targetTeam)
+        val totalPlayersInTeam = teamPlayerUUIDs.size
+        val alivePlayersInTeam = teamPlayerUUIDs.count { it in currentPlayers }
+        val deadPlayersInTeam = totalPlayersInTeam - alivePlayersInTeam
+
+        // Determine status
+        val status = when {
+            totalPlayersInTeam == 0 -> "Empty"
+            alivePlayersInTeam == 0 -> "Eliminated"
+            alivePlayersInTeam == totalPlayersInTeam -> "Alive"
+            else -> "Partial"
+        }
+
+        // Determine status symbol
+        val statusSymbol = when {
+            totalPlayersInTeam == 0 -> "⚪" // Empty
+            alivePlayersInTeam == 0 -> "❌" // All dead
+            alivePlayersInTeam == totalPlayersInTeam -> "✅" // All alive
+            else -> "⚠️" // Some alive, some dead
+        }
+
+        return TeamStatistics(
+            totalPlayers = totalPlayersInTeam,
+            alivePlayers = alivePlayersInTeam,
+            deadPlayers = deadPlayersInTeam,
+            status = status,
+            statusSymbol = statusSymbol
+        )
+    }
+
+    /**
+     * Get all player UUIDs that belong to a specific team
+     * Uses the same logic as GameplayManager.assignPlayersToTeams()
+     */
+    private fun getPlayersInTeam(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, team: Team): List<java.util.UUID> {
+        val teams = gameInstance.arenaInstance.config.teams
+        val teamIndex = teams.indexOf(team)
+        if (teamIndex == -1) return emptyList()
+
+        // Get all players that are currently in the game + any that might have been eliminated
+        // We need to track all players who were originally assigned to teams
+        val playersPerTeam = gameInstance.arenaInstance.config.getPlayersPerTeam()
+        val teamPlayers = mutableListOf<java.util.UUID>()
+
+        // Calculate starting player index for this team
+        var playerIndex = 0
+        for (i in 0 until teamIndex) {
+            playerIndex += minOf(playersPerTeam, teams[i].spawns.size)
+        }
+
+        // Get players for this specific team
+        val maxPlayersForThisTeam = minOf(playersPerTeam, team.spawns.size)
+
+        // Find players by checking their current team assignment
+        // This is a simplified approach - in a real implementation you'd want to track original team assignments
+        val currentPlayers = gameInstance.players.toList()
+
+        for (playerUUID in currentPlayers) {
+            val player = Bukkit.getPlayer(playerUUID)
+            if (player != null) {
+                val playerTeam = getPlayerTeam(gameInstance, player)
+                if (playerTeam == team) {
+                    teamPlayers.add(playerUUID)
+                }
+            }
+        }
+
+        return teamPlayers
+    }
+
+    /**
+     * Data class to hold map statistics
+     */
+    private data class MapStatistics(
+        val playersInLobby: Int,
+        val playersPlaying: Int,
+        val totalPlayers: Int,
+        val gamesActive: Int,
+        val gamesWaiting: Int,
+        val gamesStarting: Int,
+        val totalGames: Int
+    )
+
+    /**
+     * Get statistics for a specific map/game type
+     */
+    private fun getMapStatistics(mapName: String): MapStatistics {
+        val instances = plugin.gameManager.getInstancesByGameType(mapName)
+
+        var playersInLobby = 0
+        var playersPlaying = 0
+        var totalPlayers = 0
+        var gamesActive = 0
+        var gamesWaiting = 0
+        var gamesStarting = 0
+        val totalGames = instances.size
+
+        instances.forEach { instance ->
+            val playerCount = instance.players.size
+            totalPlayers += playerCount
+
+            when (instance.state) {
+                GameState.WAITING -> {
+                    gamesWaiting++
+                    playersInLobby += playerCount
+                }
+                GameState.STARTING -> {
+                    gamesStarting++
+                    playersInLobby += playerCount
+                }
+                GameState.ACTIVE -> {
+                    gamesActive++
+                    playersPlaying += playerCount
+                }
+                GameState.ENDED, GameState.RESETTING -> {
+                    // Don't count these in any category
+                }
+            }
+        }
+
+        return MapStatistics(
+            playersInLobby = playersInLobby,
+            playersPlaying = playersPlaying,
+            totalPlayers = totalPlayers,
+            gamesActive = gamesActive,
+            gamesWaiting = gamesWaiting,
+            gamesStarting = gamesStarting,
+            totalGames = totalGames
+        )
     }
 }

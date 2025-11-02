@@ -34,9 +34,12 @@ class HideMeCommand : CommandExecutor {
     }
 
     private fun toggleHideMe(target: Player, executor: Player?) {
-        val state = VanishManager.getState(target)
-        val newState = !state.hideMe
+        val currentState = VanishManager.isHideMe(target)
+        val newState = !currentState
+
+        // Use VanishManager which handles all visibility updates automatically
         VanishManager.setHideMe(target, newState)
+
         if (newState) {
             target.sendMessage(MSG.chatColors("&aYou are now hidden from other players."))
             executor?.sendMessage(MSG.chatColors("&aYou have hidden &6${target.name} &afrom other players."))

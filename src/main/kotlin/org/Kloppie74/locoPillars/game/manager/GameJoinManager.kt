@@ -97,26 +97,26 @@ class GameJoinManager(
 
         // Only log teleport debug info if debug mode is enabled
         if (plugin.configManager.debugMode) {
-            plugin.logger.info("[GameJoinManager] ===== TELEPORT DEBUG INFO =====")
-            plugin.logger.info("[GameJoinManager] Player: ${player.name}")
-            plugin.logger.info("[GameJoinManager] Game Type: $gameTypeName")
-            plugin.logger.info("[GameJoinManager] Instance ID: ${instance.id}")
-            plugin.logger.info("[GameJoinManager] Arena Origin: ${instance.arenaInstance.origin}")
-            plugin.logger.info("[GameJoinManager]   Origin World: ${instance.arenaInstance.origin.world?.name}")
-            plugin.logger.info("[GameJoinManager]   Origin X: ${instance.arenaInstance.origin.x}")
-            plugin.logger.info("[GameJoinManager]   Origin Y: ${instance.arenaInstance.origin.y}")
-            plugin.logger.info("[GameJoinManager]   Origin Z: ${instance.arenaInstance.origin.z}")
-            plugin.logger.info("[GameJoinManager] Calculated Spawn Area: $spawnArea")
-            plugin.logger.info("[GameJoinManager]   Spawn World: ${spawnArea.world?.name}")
-            plugin.logger.info("[GameJoinManager]   Spawn X: ${spawnArea.x}")
-            plugin.logger.info("[GameJoinManager]   Spawn Y: ${spawnArea.y}")
-            plugin.logger.info("[GameJoinManager]   Spawn Z: ${spawnArea.z}")
-            plugin.logger.info("[GameJoinManager] Player current location before teleport:")
-            plugin.logger.info("[GameJoinManager]   Current World: ${player.world.name}")
-            plugin.logger.info("[GameJoinManager]   Current X: ${player.location.x}")
-            plugin.logger.info("[GameJoinManager]   Current Y: ${player.location.y}")
-            plugin.logger.info("[GameJoinManager]   Current Z: ${player.location.z}")
-            plugin.logger.info("[GameJoinManager] ================================")
+            debugLog("===== TELEPORT DEBUG INFO =====")
+            debugLog("Player: ${player.name}")
+            debugLog("Game Type: $gameTypeName")
+            debugLog("Instance ID: ${instance.id}")
+            debugLog("Arena Origin: ${instance.arenaInstance.origin}")
+            debugLog("  Origin World: ${instance.arenaInstance.origin.world?.name}")
+            debugLog("  Origin X: ${instance.arenaInstance.origin.x}")
+            debugLog("  Origin Y: ${instance.arenaInstance.origin.y}")
+            debugLog("  Origin Z: ${instance.arenaInstance.origin.z}")
+            debugLog("Calculated Spawn Area: $spawnArea")
+            debugLog("  Spawn World: ${spawnArea.world?.name}")
+            debugLog("  Spawn X: ${spawnArea.x}")
+            debugLog("  Spawn Y: ${spawnArea.y}")
+            debugLog("  Spawn Z: ${spawnArea.z}")
+            debugLog("Player current location before teleport:")
+            debugLog("  Current World: ${player.world.name}")
+            debugLog("  Current X: ${player.location.x}")
+            debugLog("  Current Y: ${player.location.y}")
+            debugLog("  Current Z: ${player.location.z}")
+            debugLog("===============================")
         }
 
         if (spawnArea.world == null) {
@@ -139,23 +139,23 @@ class GameJoinManager(
         if (teleportSuccess) {
             debugLog("✓ Teleport SUCCESS")
             if (plugin.configManager.debugMode) {
-                plugin.logger.info("[GameJoinManager] Player location after teleport:")
-                plugin.logger.info("[GameJoinManager]   New World: ${player.world.name}")
-                plugin.logger.info("[GameJoinManager]   New X: ${player.location.x}")
-                plugin.logger.info("[GameJoinManager]   New Y: ${player.location.y}")
-                plugin.logger.info("[GameJoinManager]   New Z: ${player.location.z}")
+                debugLog("Player location after teleport:")
+                debugLog("  New World: ${player.world.name}")
+                debugLog("  New X: ${player.location.x}")
+                debugLog("  New Y: ${player.location.y}")
+                debugLog("  New Z: ${player.location.z}")
 
                 // Log de locatie van de speler nogmaals na 5 seconden alleen in debug mode
                 plugin.server.scheduler.runTaskLater(plugin, Runnable {
                     val refreshedPlayer = plugin.server.getPlayer(player.uniqueId)
                     if (refreshedPlayer != null && refreshedPlayer.isOnline) {
-                        plugin.logger.info("[GameJoinManager] [5sec later] Player location:")
-                        plugin.logger.info("[GameJoinManager]   World: ${refreshedPlayer.world.name}")
-                        plugin.logger.info("[GameJoinManager]   X: ${refreshedPlayer.location.x}")
-                        plugin.logger.info("[GameJoinManager]   Y: ${refreshedPlayer.location.y}")
-                        plugin.logger.info("[GameJoinManager]   Z: ${refreshedPlayer.location.z}")
+                        debugLog("[5sec later] Player location:")
+                        debugLog("  World: ${refreshedPlayer.world.name}")
+                        debugLog("  X: ${refreshedPlayer.location.x}")
+                        debugLog("  Y: ${refreshedPlayer.location.y}")
+                        debugLog("  Z: ${refreshedPlayer.location.z}")
                     } else {
-                        plugin.logger.info("[GameJoinManager] [5sec later] Player ${player.name} is offline or null")
+                        debugLog("[5sec later] Player ${player.name} is offline or null")
                     }
                 }, 100L) // 100 ticks = 5 seconden
             }

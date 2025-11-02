@@ -2,8 +2,7 @@ package org.Kloppie74.locoPillars.game.template
 
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.game.config.GameConfig
-import org.Kloppie74.locoPillars.game.arena.ArenaTemplate
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import java.io.File
 
 class TemplateManager(
@@ -20,14 +19,18 @@ class TemplateManager(
     fun createDefaultTemplates() {
         debugLog("Creating default template structure...")
 
-        val gamesFolder = File(plugin.dataFolder, "Games")
-        val schemsFolder = File(plugin.dataFolder, "Schems")
+        val dataFolder = File(plugin.dataFolder, "Data")
+        val gamesFolder = File(dataFolder, "Games")
+        val schemsFolder = File(dataFolder, "Schems")
 
+        if (!dataFolder.exists()) {
+            dataFolder.mkdirs()
+            debugLog("Created Data folder")
+        }
         if (!gamesFolder.exists()) {
             gamesFolder.mkdirs()
             debugLog("Created Games folder")
         }
-
         if (!schemsFolder.exists()) {
             schemsFolder.mkdirs()
             debugLog("Created Schems folder")
@@ -90,6 +93,7 @@ Make sure the schematic origin point (where you stand when copying) is at the ce
     }
 
     private fun createSoloExampleConfig(): String {
+        // [unchanged]
         return """
 Settings:
   DisplayName: "Solo Example Arena"
@@ -195,6 +199,7 @@ SpawnLocations:
     }
 
     private fun createTeamExampleConfig(): String {
+        // [unchanged]
         return """
 Settings:
   DisplayName: "Team Example Arena"
@@ -344,6 +349,7 @@ SpawnLocations:
     }
 
     private fun createBasicExampleConfig(templateName: String): String {
+        // [unchanged]
         return """
 Settings:
   DisplayName: "$templateName Arena"
@@ -411,8 +417,9 @@ SpawnLocations:
     fun validateTemplate(templateName: String): TemplateValidationResult {
         debugLog("Validating template: $templateName")
 
-        val gamesFolder = File(plugin.dataFolder, "Games")
-        val schemsFolder = File(plugin.dataFolder, "Schems")
+        val dataFolder = File(plugin.dataFolder, "Data")
+        val gamesFolder = File(dataFolder, "Games")
+        val schemsFolder = File(dataFolder, "Schems")
         val configFile = File(gamesFolder, "$templateName.yml")
         val schemFile = File(schemsFolder, "$templateName.schem")
 
@@ -481,7 +488,8 @@ SpawnLocations:
     }
 
     fun listAvailableTemplates(): List<String> {
-        val gamesFolder = File(plugin.dataFolder, "Games")
+        val dataFolder = File(plugin.dataFolder, "Data")
+        val gamesFolder = File(dataFolder, "Games")
         if (!gamesFolder.exists()) return emptyList()
 
         val configFiles = gamesFolder.listFiles { f -> f.extension == "yml" } ?: emptyArray()
@@ -489,8 +497,9 @@ SpawnLocations:
     }
 
     fun getTemplateInfo(templateName: String): TemplateInfo? {
-        val gamesFolder = File(plugin.dataFolder, "Games")
-        val schemsFolder = File(plugin.dataFolder, "Schems")
+        val dataFolder = File(plugin.dataFolder, "Data")
+        val gamesFolder = File(dataFolder, "Games")
+        val schemsFolder = File(dataFolder, "Schems")
         val configFile = File(gamesFolder, "$templateName.yml")
         val schemFile = File(schemsFolder, "$templateName.schem")
 

@@ -199,7 +199,6 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             if (deltaX > buildRange || deltaZ > buildRange || blockLoc.y > maxY) {
                 event.isCancelled = true
                 player.sendMessage("${ChatColor.RED}You cannot break blocks outside the game area!")
-                plugin.logger.info("[GameListener] Player ${player.name} tried to break block outside area: deltaX=$deltaX, deltaZ=$deltaZ, blockY=${blockLoc.y}, maxY=$maxY")
                 return
             }
             if (!instance.arenaInstance.config.canBreakMapBlocks()) {
@@ -208,11 +207,9 @@ class GameListener(private val plugin: LocoPillars) : Listener {
                 if (!isPlayerPlaced) {
                     event.isCancelled = true
                     player.sendMessage("${ChatColor.RED}You can only break blocks that you placed!")
-                    plugin.logger.info("[GameListener] Player ${player.name} tried to break map block at $blockLoc (Can-Break-Map-Blocks: false)")
                     return
                 }
                 playerPlacedBlocksForInstance?.remove(blockLoc)
-                plugin.logger.info("[GameListener] Player ${player.name} broke their own placed block at $blockLoc")
             } else {
                 playerPlacedBlocks[instance.id]?.remove(blockLoc)
             }
@@ -240,13 +237,11 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             if (deltaX > buildRange || deltaZ > buildRange || blockLoc.y > maxY) {
                 event.isCancelled = true
                 player.sendMessage("${ChatColor.RED}You cannot place blocks outside the game area!")
-                plugin.logger.info("[GameListener] Player ${player.name} tried to place block outside area: deltaX=$deltaX, deltaZ=$deltaZ, blockY=${blockLoc.y}, maxY=$maxY")
                 return
             }
             val playerPlacedBlocksForInstance = playerPlacedBlocks.computeIfAbsent(instance.id) { mutableSetOf() }
             playerPlacedBlocksForInstance.add(blockLoc)
-            plugin.logger.info("[GameListener] Player ${player.name} placed block at $blockLoc (tracked)")
-            gameplayManager.handleDamageDealt(player, 0.0) // Example: or custom stat for blocks placed
+            gameplayManager.handleDamageDealt(player, 0.0)
         }
     }
 
@@ -270,12 +265,10 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             val maxY = origin.y + buildHeight
             val currentY = player.location.y
             if (deltaX > buildRange || deltaZ > buildRange || currentY > maxY) {
-                plugin.logger.info("[GameListener] Teleport-REASON: OUTSIDE AREA for ${player.name}: deltaX=$deltaX, deltaZ=$deltaZ, currentY=$currentY, maxY=$maxY")
                 val safeLocation = origin.clone()
                 safeLocation.y = origin.y + 10
                 player.teleport(safeLocation)
                 player.sendMessage("${ChatColor.RED}You cannot go outside the game area!")
-                plugin.logger.info("[GameListener] Player ${player.name} moved outside build area: deltaX=$deltaX, deltaZ=$deltaZ, currentY=$currentY, maxY=$maxY")
             }
         }
     }

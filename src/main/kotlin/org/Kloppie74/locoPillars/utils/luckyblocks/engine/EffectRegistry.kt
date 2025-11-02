@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.luckyblocks.engine
+package org.Kloppie74.locoPillars.utils.luckyblocks.engine
 
 import org.Kloppie74.locoPillars.LocoPillars
 import org.bukkit.*
@@ -1375,8 +1375,18 @@ class SummonAnvilsEffect : LuckyBlockEffect {
 class GiveEffectEffect : LuckyBlockEffect {
     override fun execute(player: Player, location: Location, properties: Map<String, Any?>) {
         val effect = (properties["effect"] as? String ?: "SPEED").uppercase()
-        val duration = (properties["duration"] as? Number)?.toInt() ?: 600
-        val amplifier = (properties["amplifier"] as? Number)?.toInt() ?: 0
+        val durationRaw = properties["duration"]
+        val duration = when (durationRaw) {
+            is Number -> durationRaw.toInt()
+            is String -> durationRaw.toIntOrNull() ?: 600
+            else -> 600
+        }
+        val amplifierRaw = properties["amplifier"]
+        val amplifier = when (amplifierRaw) {
+            is Number -> amplifierRaw.toInt()
+            is String -> amplifierRaw.toIntOrNull() ?: 0
+            else -> 0
+        }
         val message = properties["message"] as? String
 
         try {

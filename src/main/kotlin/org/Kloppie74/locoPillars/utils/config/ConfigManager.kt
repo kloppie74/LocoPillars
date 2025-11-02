@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.config
+package org.Kloppie74.locoPillars.utils.config
 
 import org.Kloppie74.locoPillars.database.DatabaseConfig
 import org.bukkit.configuration.file.FileConfiguration

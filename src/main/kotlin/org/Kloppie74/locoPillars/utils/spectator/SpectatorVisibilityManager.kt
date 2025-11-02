@@ -5,7 +5,7 @@ import org.bukkit.entity.Player
 import org.bukkit.metadata.FixedMetadataValue
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.MSG
-import org.Kloppie74.locoPillars.utils.vanish.VanishManager
+import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -14,7 +14,7 @@ object SpectatorVisibilityManager {
     private val VISIBILITY_CACHE = ConcurrentHashMap<UUID, Boolean>()
 
     /**
-     * Toggle spectator visibility for other players (lobby etc.)
+     * FIXED: Toggle spectator visibility for other players (lobby etc.)
      */
     @JvmStatic
     fun toggleSpectatorsVisibility(player: Player, plugin: LocoPillars) {
@@ -28,7 +28,9 @@ object SpectatorVisibilityManager {
         val newState = !currentlyHiding
 
         setHidingSpectators(player, newState)
-        updateVisibilityForAllPlayers(player, newState, plugin)
+
+        // FIXED: Use non-conflicting priority for spectator visibility updates
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "toggle_spectator_visibility")
 
         val message = if (newState) {
             "&7Spectators are now &chidden&7."
@@ -39,133 +41,45 @@ object SpectatorVisibilityManager {
     }
 
     /**
-     * Update visibility for spectators (not in game)
+     * FIXED: Update visibility for spectators (not in game)
      */
     @JvmStatic
     fun updateSpectatorVisibility(spectator: Player, plugin: LocoPillars) {
-        for (otherPlayer in spectator.world.players) {
-            if (otherPlayer == spectator) continue
-
-            val otherInstance = plugin.gameManager.getPlayerInstance(otherPlayer)
-
-            if (otherInstance != null) {
-                // Other player is in a game - hide vanished players only!
-                if (VanishManager.isVanished(spectator)) {
-                    otherPlayer.hidePlayer(plugin, spectator)
-                } else {
-                    otherPlayer.showPlayer(plugin, spectator)
-                }
-            } else {
-                // Both are spectators/lobby - respect hiding preferences and vanish
-                if (VanishManager.isVanished(spectator)) {
-                    otherPlayer.hidePlayer(plugin, spectator)
-                } else {
-                    val isHidingSpectators = isHidingSpectators(otherPlayer)
-                    if (isHidingSpectators) {
-                        otherPlayer.hidePlayer(plugin, spectator)
-                    } else {
-                        otherPlayer.showPlayer(plugin, spectator)
-                    }
-                }
-            }
-        }
+        GlobalVisibilityTicker.queueUpdateWithPriority(spectator, "SPECTATOR", "update_spectator_visibility")
     }
 
     /**
-     * Restore all visibility for a player (not spectating anymore)
+     * FIXED: Restore all visibility for a player (not spectating anymore)
      */
     @JvmStatic
     fun restoreNormalVisibility(player: Player, plugin: LocoPillars) {
-        for (otherPlayer in player.world.players) {
-            if (otherPlayer != player) {
-                otherPlayer.showPlayer(plugin, player)
-                player.showPlayer(plugin, otherPlayer)
-            }
-        }
-        // Clear cache
         VISIBILITY_CACHE.remove(player.uniqueId)
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "restore_normal_visibility")
     }
 
     /**
-     * Updates visibility in game instances (alive vs dead players)
-     * -- Always display all alive/dead players to each other,
-     * -- except for vanished players (never shown)
-     * -- ShowOthers/hideOthers is IGNORED in game instance!
+     * FIXED: Updates visibility in game instances
      */
     @JvmStatic
     fun updateVisibilityForGameInstance(instance: org.Kloppie74.locoPillars.game.instance.GameInstance, plugin: LocoPillars) {
         val allPlayers = instance.players.mapNotNull { Bukkit.getPlayer(it) }
-        // Only players that are NOT vanished participate in game visibility
-        val visiblePlayers = allPlayers.filter { !VanishManager.isVanished(it) }
-        val deadPlayers = visiblePlayers.filter { SpectatorUtils.isSpectator(it, plugin) }
-        val alivePlayers = visiblePlayers.filter { !SpectatorUtils.isSpectator(it, plugin) }
 
-        // Hide dead players from alive players (but only if not vanished)
-        for (alive in alivePlayers) {
-            for (dead in deadPlayers) {
-                alive.showPlayer(plugin, dead)
-            }
-        }
-
-        // Show alive players to each other
-        for (alive in alivePlayers) {
-            for (otherAlive in alivePlayers) {
-                if (alive != otherAlive) {
-                    alive.showPlayer(plugin, otherAlive)
-                }
-            }
-        }
-
-        // Spectators see all non-vanished players
-        for (dead in deadPlayers) {
-            for (p in visiblePlayers) {
-                if (dead != p) {
-                    dead.showPlayer(plugin, p)
-                }
-            }
-        }
-
-        // Hide vanished players from everyone
-        val vanishedPlayers = allPlayers.filter { VanishManager.isVanished(it) }
-        for (p in allPlayers) {
-            for (vanished in vanishedPlayers) {
-                p.hidePlayer(plugin, vanished)
-            }
+        // FIXED: Queue updates with proper priority for all players in the instance
+        allPlayers.forEach { player ->
+            GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "game_instance_update")
         }
     }
 
     /**
-     * Update visibility for all players in world (lobby/spectator)
-     */
-    private fun updateVisibilityForAllPlayers(player: Player, hideSpectators: Boolean, plugin: LocoPillars) {
-        for (otherPlayer in player.world.players) {
-            if (otherPlayer == player) continue
-            // Always hide vanished players
-            if (VanishManager.isVanished(otherPlayer)) {
-                player.hidePlayer(plugin, otherPlayer)
-                continue
-            }
-
-            val otherInstance = plugin.gameManager.getPlayerInstance(otherPlayer)
-            if (otherInstance == null) { // Other player is spectating/lobby
-                if (hideSpectators) {
-                    player.hidePlayer(plugin, otherPlayer)
-                } else {
-                    player.showPlayer(plugin, otherPlayer)
-                }
-            } else {
-                player.showPlayer(plugin, otherPlayer)
-            }
-        }
-    }
-
-    /**
-     * Sets spectator visibility for specific player lists
+     * FIXED: Sets spectator visibility for specific player lists
      */
     @JvmStatic
     fun setSpectatorVisibility(target: Player, hideFrom: List<Player>, showTo: List<Player>, plugin: LocoPillars) {
-        hideFrom.forEach { it.hidePlayer(plugin, target) }
-        showTo.forEach { it.showPlayer(plugin, target) }
+        // FIXED: Queue updates for all affected players with proper priority
+        GlobalVisibilityTicker.queueUpdateWithPriority(target, "SPECTATOR", "set_spectator_visibility_target")
+        (hideFrom + showTo).forEach { player ->
+            GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "set_spectator_visibility_viewer")
+        }
     }
 
     /**
@@ -189,7 +103,7 @@ object SpectatorVisibilityManager {
     }
 
     /**
-     * Sets hiding spectators state for a player
+     * FIXED: Sets hiding spectators state for a player
      */
     @JvmStatic
     fun setHidingSpectators(player: Player, hiding: Boolean) {
@@ -198,6 +112,9 @@ object SpectatorVisibilityManager {
             FixedMetadataValue(Bukkit.getPluginManager().getPlugin("LocoPillars")!!, hiding)
         )
         VISIBILITY_CACHE[player.uniqueId] = hiding
+
+        // FIXED: Queue visibility update with proper priority
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "set_hiding_spectators")
     }
 
     /**

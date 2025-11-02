@@ -251,8 +251,13 @@ class SpectateListener(
      */
     fun refreshPlayer(player: Player) {
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            HotbarUtils.setupPlayerHotbar(player, plugin)
-            updateVisibilityForPlayer(player)
+            val instance = plugin.gameManager.getPlayerInstance(player)
+            if (instance != null) {
+                updateVisibilityForPlayer(player)
+            } else {
+                HotbarUtils.setupPlayerHotbar(player, plugin)
+                updateVisibilityForPlayer(player)
+            }
         }, 1L)
     }
 }

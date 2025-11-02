@@ -35,20 +35,11 @@ class VanishCommand(private val plugin: LocoPillars) : CommandExecutor {
     }
 
     private fun toggleVanish(target: Player, executor: Player?) {
-        val state = VanishManager.getState(target)
-        val newState = !state.vanished
-        VanishManager.setVanished(target, newState)
+        val currentState = VanishManager.isVanished(target)
+        val newState = !currentState
 
-        // Update Bukkit visibility
-        for (other in Bukkit.getOnlinePlayers()) {
-            if (other != target) {
-                if (newState && !other.hasPermission("locopillars.vanish.seeothers")) {
-                    other.hidePlayer(plugin, target)
-                } else {
-                    other.showPlayer(plugin, target)
-                }
-            }
-        }
+        // Use VanishManager which handles all visibility updates automatically
+        VanishManager.setVanished(target, newState)
 
         if (newState) {
             target.sendMessage(MSG.chatColors("&aYou are now vanished."))
@@ -56,14 +47,6 @@ class VanishCommand(private val plugin: LocoPillars) : CommandExecutor {
         } else {
             target.sendMessage(MSG.chatColors("&cYou are no longer vanished."))
             executor?.sendMessage(MSG.chatColors("&6${target.name} &cis no longer vanished."))
-        }
-        // Flight update
-        if (newState) {
-            target.allowFlight = true
-            target.isFlying = true
-        } else if (target.gameMode.name != "CREATIVE" && target.gameMode.name != "SPECTATOR") {
-            target.allowFlight = false
-            target.isFlying = false
         }
     }
 }

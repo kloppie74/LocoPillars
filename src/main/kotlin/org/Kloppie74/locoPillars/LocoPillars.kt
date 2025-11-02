@@ -1,5 +1,8 @@
 package org.Kloppie74.locoPillars
 
+import com.comphenix.protocol.ProtocolLibrary
+import com.comphenix.protocol.ProtocolManager
+import org.Kloppie74.locoPillars.commands.Editor.Menu
 import org.Kloppie74.locoPillars.commands.MemoryCommand
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.game.config.GameConfig
@@ -11,13 +14,13 @@ import org.Kloppie74.locoPillars.commands.PillarsCommand
 import org.Kloppie74.locoPillars.commands.StatsCommand
 import org.Kloppie74.locoPillars.game.manager.SpawnAreaManager
 import org.Kloppie74.locoPillars.game.listeners.GameListener
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.database.DatabaseManager
-import org.Kloppie74.locoPillars.listeners.PlayerJoinListener
-import org.Kloppie74.locoPillars.luckyblocks.LuckyBlockEngineIntegration
-import org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksListener
-import org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksMenu
-import org.Kloppie74.locoPillars.luckyblocks.LuckyBlocksUtil
+import org.Kloppie74.locoPillars.events.listeners.PlayerJoinListener
+import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlockEngineIntegration
+import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksListener
+import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksMenu
+import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksUtil
 import org.Kloppie74.locoPillars.utils.Placeholders
 import org.Kloppie74.locoPillars.utils.achievements.AchievementListener
 import org.Kloppie74.locoPillars.utils.achievements.AchievementLoader
@@ -30,15 +33,19 @@ import org.Kloppie74.locoPillars.utils.hotbar.listeners.SpeedGuiListener
 import org.Kloppie74.locoPillars.utils.spectator.listeners.SpectateListener
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorInteractionHandler
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorInventoryManager
-import org.Kloppie74.locoPillars.utils.tab.TabListener
-import org.Kloppie74.locoPillars.utils.tab.TabUtils
-import org.Kloppie74.locoPillars.utils.tab.TabVisibilityManager
-import org.Kloppie74.locoPillars.utils.tab.registerTablistPacketListener
+import org.Kloppie74.locoPillars.utils.teams.TabCommand
+import org.Kloppie74.locoPillars.utils.teams.tab.TabVisibilityManager
+import org.Kloppie74.locoPillars.utils.teams.TeamManager
+import org.Kloppie74.locoPillars.utils.teams.TeamsListener
+import org.Kloppie74.locoPillars.utils.teams.scoreboard.ScoreboardManager
+import org.Kloppie74.locoPillars.utils.teams.tab.TabManager
 import org.Kloppie74.locoPillars.utils.vanish.*
 import org.Kloppie74.locoPillars.utils.vanish.commands.HideMeCommand
 import org.Kloppie74.locoPillars.utils.vanish.commands.HideOthersCommand
 import org.Kloppie74.locoPillars.utils.vanish.commands.ShowOthersCommand
 import org.Kloppie74.locoPillars.utils.vanish.commands.VanishCommand
+import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
+import org.Kloppie74.locoPillars.utils.teams.tab.ProtocolLibTabVisibilityManager
 import org.bukkit.Bukkit
 import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
@@ -49,7 +56,7 @@ class LocoPillars : JavaPlugin() {
         lateinit var instance: LocoPillars
             private set
     }
-    
+
     val playerIdCache = mutableMapOf<UUID, String>()
 
     lateinit var configManager: ConfigManager
@@ -70,9 +77,6 @@ class LocoPillars : JavaPlugin() {
     lateinit var databaseManager: DatabaseManager
         private set
 
-    lateinit var scoreboardConfig: org.bukkit.configuration.file.FileConfiguration
-    lateinit var scoreboardManager: org.Kloppie74.locoPillars.utils.scoreboards.ScoreboardManager
-
     lateinit var hotbarItemManager: HotbarItemManager
     lateinit var itemHotBarListener: ItemHotBarListener
     lateinit var spectateListener: SpectateListener
@@ -85,15 +89,23 @@ class LocoPillars : JavaPlugin() {
     lateinit var achievementListener: AchievementListener
         private set
 
-    lateinit var tabUtils: TabUtils
-    lateinit var tabVisibilityManager: TabVisibilityManager
-
     lateinit var chatManager: ChatManager
         private set
     lateinit var placeholders: Placeholders
         private set
 
+    // ProtocolLib vars
+    lateinit var protocolLibTabVisibilityManager: ProtocolLibTabVisibilityManager
+        private set
+    private var protocolManager: ProtocolManager? = null
+    private var protocolLibAvailable = false
 
+    // Team/Tab/Scoreboard
+    lateinit var teamManager: TeamManager
+    lateinit var tabManager: TabManager
+    lateinit var scoreboardManager: ScoreboardManager
+    lateinit var tabVisibilityManager: TabVisibilityManager
+    lateinit var teamsListener: TeamsListener
 
     override fun onEnable() {
         instance = this
@@ -161,27 +173,58 @@ class LocoPillars : JavaPlugin() {
                 gameManager.preloadInstances(arenaManager)
             }
 
-            // 6. COMMANDS
+            // 6. DATABASE (AFTER GAME SETUP!)
+            databaseManager = DatabaseManager(this, configManager.dbConfig)
+            if (!databaseManager.initialize()) {
+                logger.severe("[LocoPillars] Database initialization failed! Disabling plugin.")
+                server.pluginManager.disablePlugin(this)
+                return
+            }
+
+            // 7. COMMANDS
             registerCommands()
             placeholders = Placeholders(this)
 
-            // 7. SCOREBOARD SYSTEM
-            val scoreboardFile = File(dataFolder, "scoreboards.yml")
-            if (!scoreboardFile.exists()) scoreboardFile.writeText(DEFAULT_SCOREBOARDS_YML)
-            scoreboardConfig = YamlConfiguration.loadConfiguration(scoreboardFile)
-            scoreboardManager = org.Kloppie74.locoPillars.utils.scoreboards.ScoreboardManager(this, scoreboardConfig)
-            scoreboardManager.initialize()
-            val newScoreboard = org.Kloppie74.locoPillars.utils.scoreboards.NewScoreboard(this, scoreboardManager)
-            server.pluginManager.registerEvents(newScoreboard, this)
-            server.scheduler.runTaskTimer(this, Runnable { scoreboardManager.updateAllScoreboards() }, 20L, 20L)
+            getServer().pluginManager.registerEvents(Menu, this)
 
-            // 8. HOTBAR & ITEMS SYSTEM
+            if (!setupProtocolLib()) {
+                logger.severe("ProtocolLib is required for proper tab functionality! Disabling tab per-game-instance feature.")
+            }
+
+            // ProtocolLib init: set protocolLibAvailable TRUE if setup succeed
+            if (protocolManager != null) {
+                protocolLibAvailable = true // <-- BELANGRIJK! Mark ProtocolLib als beschikbaar
+                protocolLibTabVisibilityManager = ProtocolLibTabVisibilityManager(this)
+                logger.info("ProtocolLib TabVisibilityManager enabled - using packet-based tab control")
+            } else {
+                protocolLibAvailable = false
+                tabVisibilityManager = TabVisibilityManager(this)
+                logger.warning("Using legacy TabVisibilityManager - ProtocolLib not available")
+            }
+
+            GlobalVisibilityTicker.initialize(this)
+
+            // 8. VANISH SYSTEM
+            val vanishListener = VanishListener(this)
+            VanishManager.initialize(this, vanishListener)
+            server.pluginManager.registerEvents(vanishListener, this)
+            getCommand("vanish")?.setExecutor(VanishCommand(this))
+            getCommand("hideme")?.setExecutor(HideMeCommand())
+            getCommand("hideothers")?.setExecutor(HideOthersCommand())
+            getCommand("showothers")?.setExecutor(ShowOthersCommand())
+            Bukkit.getOnlinePlayers().forEach { vanishListener.updateBossBar(it) }
+
+            // 9. UNIFIED TEAMS SYSTEM
+            enableTeamsFunction()
+            logger.info("[LocoPillars] ✓ Unified Teams system initialized successfully")
+
+            // 10. HOTBAR & ITEMS SYSTEM
             val itemsFile = File(dataFolder, "items.yml")
             if (!itemsFile.exists()) itemsFile.writeText(DEFAULT_ITEMS_YML)
             val itemsConfig = YamlConfiguration.loadConfiguration(itemsFile)
             hotbarItemManager = HotbarItemManager(this, itemsConfig)
 
-            // 9. EVENT LISTENERS (LOGISCH OP VOLGORDE VAN GAME FLOW)
+            // 11. EVENT LISTENERS
             gameListener = GameListener(this)
             server.pluginManager.registerEvents(gameListener, this)
             debugLog("✓ GameListener registered")
@@ -199,26 +242,7 @@ class LocoPillars : JavaPlugin() {
 
             spectatorInventoryManager = SpectatorInventoryManager(this, hotbarItemManager)
             spectatorInteractionHandler = SpectatorInteractionHandler(this, hotbarItemManager)
-
             server.pluginManager.registerEvents(PlayerJoinListener(this), this)
-
-            // 10. DATABASE (NA GAME SETUP!)
-            databaseManager = DatabaseManager(this, configManager.dbConfig)
-            if (!databaseManager.initialize()) {
-                logger.severe("[LocoPillars] Database initialisatie is mislukt! Plugin wordt uitgeschakeld.")
-                server.pluginManager.disablePlugin(this)
-                return
-            }
-
-            // 11. VANISH SYSTEM
-            val vanishListener = VanishListener(this)
-            VanishManager.initialize(this, vanishListener)
-            server.pluginManager.registerEvents(vanishListener, this)
-            getCommand("vanish")?.setExecutor(VanishCommand(this))
-            getCommand("hideme")?.setExecutor(HideMeCommand())
-            getCommand("hideothers")?.setExecutor(HideOthersCommand())
-            getCommand("showothers")?.setExecutor(ShowOthersCommand())
-            Bukkit.getOnlinePlayers().forEach { vanishListener.updateBossBar(it) }
 
             // 12. ACHIEVEMENTS SYSTEM
             achievementManager = AchievementManager(databaseManager)
@@ -244,24 +268,9 @@ class LocoPillars : JavaPlugin() {
             chatManager.initialize()
             debugLog("✓ Chat system initialized successfully")
 
-            // 14. TAB SYSTEM
-            try {
-                tabUtils = TabUtils(this)
-                tabVisibilityManager = TabVisibilityManager(this)
-                val tabListener = TabListener(this, tabUtils)
-                server.pluginManager.registerEvents(tabListener, this)
-                tabUtils.startTabAutoUpdate()
-                registerTablistPacketListener(this)
-                logger.info("[LocoPillars] ✓ Tab system initialized successfully")
-            } catch (e: Exception) {
-                logger.severe("[LocoPillars] Failed to initialize tab system: ${e.message}")
-                e.printStackTrace()
-            }
-
-            // Engine setup via Integration helper
+            // 14. LUCKY BLOCKS SYSTEM
             val luckyBlockEngine = LuckyBlockEngineIntegration.initializeEngine(this, configManager)
             LuckyBlockEngineIntegration.registerEngineListeners(this, luckyBlockEngine)
-
             LuckyBlocksUtil.setLuckyBlockEngine(luckyBlockEngine)
 
             val luckyBlocksListener = LuckyBlocksListener(configManager)
@@ -292,6 +301,78 @@ class LocoPillars : JavaPlugin() {
             e.printStackTrace()
             server.pluginManager.disablePlugin(this)
         }
+    }
+
+    private fun setupProtocolLib(): Boolean {
+        return try {
+            val protocolLibPlugin = server.pluginManager.getPlugin("ProtocolLib")
+            if (protocolLibPlugin == null || !protocolLibPlugin.isEnabled) {
+                logger.warning("ProtocolLib plugin not found or not enabled!")
+                protocolLibAvailable = false
+                return false
+            }
+
+            protocolManager = ProtocolLibrary.getProtocolManager()
+            protocolLibAvailable = true // <-- MARK AS AVAILABLE!
+            logger.info("ProtocolLib integration successful - version: ${protocolLibPlugin.description.version}")
+            true
+        } catch (e: Exception) {
+            protocolLibAvailable = false
+            logger.severe("Failed to initialize ProtocolLib: ${e.message}")
+            false
+        }
+    }
+
+    fun isProtocolLibAvailable(): Boolean = protocolLibAvailable && ::protocolLibTabVisibilityManager.isInitialized
+
+    fun getProtocolLibTabManager(): ProtocolLibTabVisibilityManager? {
+        return if (isProtocolLibAvailable()) protocolLibTabVisibilityManager else null
+    }
+
+    fun getProtocolLibTabStats(): Map<String, Any>? {
+        return getProtocolLibTabManager()?.getVisibilityStats()
+    }
+
+    fun reloadTabSystems() {
+        try {
+            tabManager.reload()
+
+            if (isProtocolLibAvailable()) {
+                protocolLibTabVisibilityManager.cleanup()
+                protocolLibTabVisibilityManager = ProtocolLibTabVisibilityManager(this)
+                protocolLibTabVisibilityManager.forceUpdateAllPlayers()
+            }
+
+            GlobalVisibilityTicker.queueGlobalUpdate()
+        } catch (e: Exception) {
+            logger.warning("Error reloading tab systems: ${e.message}")
+        }
+    }
+
+    fun enableTeamsFunction() {
+        teamManager = TeamManager(this)
+        tabManager = TabManager(this)
+        scoreboardManager = ScoreboardManager(this)
+        tabVisibilityManager = TabVisibilityManager(this)
+        teamsListener = TeamsListener(this)
+
+        server.pluginManager.registerEvents(teamsListener, this)
+        getCommand("tab")?.let {
+            val tabCmd = TabCommand(this)
+            it.setExecutor(tabCmd)
+            it.tabCompleter = tabCmd
+        }
+
+        tabManager.enable()
+        scoreboardManager.enable()
+
+        if (tabManager.displayPerGameInstance) {
+            tabVisibilityManager.updateTabVisibilityForAllPlayers()
+        }
+
+        teamManager.forceRefreshAllTeams()
+        tabManager.forceUpdateAllPlayers()
+        scoreboardManager.forceUpdateAllPlayers()
     }
 
     override fun onDisable() {

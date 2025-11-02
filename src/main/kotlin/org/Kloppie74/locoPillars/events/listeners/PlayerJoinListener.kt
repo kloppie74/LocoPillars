@@ -1,4 +1,4 @@
-package org.Kloppie74.locoPillars.listeners
+package org.Kloppie74.locoPillars.events.listeners
 
 import org.bukkit.event.Listener
 import org.bukkit.event.EventHandler

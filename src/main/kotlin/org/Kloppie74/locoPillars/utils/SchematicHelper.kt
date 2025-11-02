@@ -3,16 +3,21 @@ package org.Kloppie74.locoPillars.utils
 import com.sk89q.worldedit.WorldEdit
 import com.sk89q.worldedit.EditSession
 import com.sk89q.worldedit.bukkit.BukkitAdapter
+import com.sk89q.worldedit.extent.clipboard.BlockArrayClipboard
 import com.sk89q.worldedit.extent.clipboard.Clipboard
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardWriter
+import com.sk89q.worldedit.function.operation.ForwardExtentCopy
 import com.sk89q.worldedit.function.operation.Operations
 import com.sk89q.worldedit.math.BlockVector3
+import com.sk89q.worldedit.regions.CuboidRegion
 import com.sk89q.worldedit.session.ClipboardHolder
 import org.bukkit.Location
 import org.bukkit.plugin.java.JavaPlugin
-import org.Kloppie74.locoPillars.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 
 object SchematicHelper {
 
@@ -36,8 +41,27 @@ object SchematicHelper {
 
             val weWorld = BukkitAdapter.adapt(bWorld)
             WorldEdit.getInstance().newEditSession(weWorld).use { editSession ->
-                return pasteSchematicWithEditSession(plugin, configManager, schemFile, location, editSession)
+                val format = ClipboardFormats.findByFile(schemFile) ?: run {
+                    plugin.logger.severe("[SchematicHelper] Could not determine format for: ${schemFile.name}")
+                    return false
+                }
+
+                FileInputStream(schemFile).use { inputStream ->
+                    format.getReader(inputStream).use { reader ->
+                        val clipboard = reader.read()
+                        val operation = ClipboardHolder(clipboard)
+                            .createPaste(editSession)
+                            .to(BlockVector3.at(location.blockX, location.blockY, location.blockZ))
+                            .ignoreAirBlocks(false)
+                            .build()
+
+                        Operations.complete(operation)
+                    }
+                }
             }
+
+            debugLog(plugin, configManager, "✓ Paste operation completed successfully!")
+            return true
         } catch (e: Exception) {
             plugin.logger.severe("[SchematicHelper] Error during schematic paste: ${e.message}")
             e.printStackTrace()
@@ -45,48 +69,46 @@ object SchematicHelper {
         }
     }
 
-    fun pasteSchematicWithEditSession(
-        plugin: JavaPlugin,
-        configManager: ConfigManager,
-        schemFile: File,
-        location: Location,
-        editSession: EditSession
-    ): Boolean {
-        debugLog(plugin, configManager, "Pasting schematic with EditSession: ${schemFile.name}")
-        debugLog(plugin, configManager, "Target location: ${location.world?.name} at ${location.blockX}, ${location.blockY}, ${location.blockZ}")
+    fun saveSchematic(plugin: JavaPlugin, configManager: ConfigManager, pos1: Location, pos2: Location, schemFile: File): Boolean {
+        debugLog(plugin, configManager, "Starting schematic save operation")
+        debugLog(plugin, configManager, "File: ${schemFile.absolutePath}")
+        debugLog(plugin, configManager, "Positions: Pos1(${pos1.blockX}, ${pos1.blockY}, ${pos1.blockZ}), Pos2(${pos2.blockX}, ${pos2.blockY}, ${pos2.blockZ})")
 
         try {
-            val format = ClipboardFormats.findByFile(schemFile) ?: run {
-                plugin.logger.severe("[SchematicHelper] Could not determine format for: ${schemFile.name}")
+            val bWorld = pos1.world ?: run {
+                plugin.logger.severe("[SchematicHelper] World is null!")
                 return false
             }
 
-            val clipboard: Clipboard = FileInputStream(schemFile).use { inputStream ->
-                format.getReader(inputStream).use { reader -> reader.read() }
+            val weWorld = BukkitAdapter.adapt(bWorld)
+            val min = BlockVector3.at(pos1.blockX, pos1.blockY, pos1.blockZ)
+            val max = BlockVector3.at(pos2.blockX, pos2.blockY, pos2.blockZ)
+            val region = CuboidRegion(min, max)
+            val clipboard = BlockArrayClipboard(region)
+
+            WorldEdit.getInstance().newEditSession(weWorld).use { editSession ->
+                val copyOperation = ForwardExtentCopy(
+                    editSession, region, clipboard, region.minimumPoint
+                )
+                copyOperation.isCopyingEntities = true
+                Operations.complete(copyOperation)
             }
 
-            debugLog(plugin, configManager, "Clipboard loaded:")
-            debugLog(plugin, configManager, "  - Dimensions: ${clipboard.dimensions}")
-            debugLog(plugin, configManager, "  - Origin: ${clipboard.origin}")
-            debugLog(plugin, configManager, "  - Minimum: ${clipboard.minimumPoint}")
-            debugLog(plugin, configManager, "  - Maximum: ${clipboard.maximumPoint}")
+            val format = ClipboardFormats.findByAlias("sponge") ?: run {
+                plugin.logger.severe("[SchematicHelper] Sponge format not found!")
+                return false
+            }
 
-            val pasteLocation = BlockVector3.at(location.blockX, location.blockY, location.blockZ)
-            debugLog(plugin, configManager, "Paste location: $pasteLocation")
+            FileOutputStream(schemFile).use { outputStream ->
+                format.getWriter(outputStream).use { writer ->
+                    writer.write(clipboard)
+                }
+            }
 
-            val operation = ClipboardHolder(clipboard)
-                .createPaste(editSession)
-                .to(pasteLocation)
-                .ignoreAirBlocks(false)
-                .build()
-
-            Operations.complete(operation)
-            editSession.flushSession()
-
-            debugLog(plugin, configManager, "✓ Paste operation completed successfully!")
+            debugLog(plugin, configManager, "✓ Schematic saved successfully to ${schemFile.absolutePath}")
             return true
         } catch (e: Exception) {
-            plugin.logger.severe("[SchematicHelper] Error during schematic paste: ${e.message}")
+            plugin.logger.severe("[SchematicHelper] Error during schematic save: ${e.message}")
             e.printStackTrace()
             return false
         }
@@ -115,5 +137,28 @@ object SchematicHelper {
         }
 
         return true
+    }
+
+    fun loadSchematic(plugin: JavaPlugin, configManager: ConfigManager, schemFile: File): Clipboard? {
+        debugLog(plugin, configManager, "Loading schematic from file: ${schemFile.absolutePath}")
+
+        try {
+            val format = ClipboardFormats.findByFile(schemFile) ?: run {
+                plugin.logger.severe("[SchematicHelper] Could not determine format for: ${schemFile.name}")
+                return null
+            }
+
+            FileInputStream(schemFile).use { inputStream ->
+                format.getReader(inputStream).use { reader ->
+                    val clipboard = reader.read()
+                    debugLog(plugin, configManager, "✓ Schematic loaded successfully!")
+                    return clipboard
+                }
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe("[SchematicHelper] Error during schematic load: ${e.message}")
+            e.printStackTrace()
+            return null
+        }
     }
 }
