@@ -11,6 +11,8 @@ import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.database.dao.PlayerDAO
+import org.Kloppie74.locoPillars.database.dao.VanishDAO
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.utils.vanish.VanishManager
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
@@ -199,16 +201,40 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun shouldDeferToOtherSystems(viewer: Player, target: Player): Boolean {
         try {
-            // Check vanish system
-            val viewerVanishState = VanishManager.getState(viewer)
-            val targetVanishState = VanishManager.getState(target)
+            // Get player IDs for database lookups
+            val viewerPlayerId = PlayerDAO.getPlayerId(viewer.name)
+            val targetPlayerId = PlayerDAO.getPlayerId(target.name)
 
-            if (targetVanishState.vanished || targetVanishState.hideMe ||
-                viewerVanishState.hideOthers || viewerVanishState.showOthers.isNotEmpty() ||
-                viewerVanishState.vanished || viewerVanishState.hideMe ||
-                targetVanishState.hideOthers || targetVanishState.showOthers.isNotEmpty()
-            ) {
-                debugLog("Vanish system active for ${viewer.name} or ${target.name} - deferring")
+            if (viewerPlayerId == null || targetPlayerId == null) {
+                debugLog("Could not find player IDs for ${viewer.name} or ${target.name} - deferring")
+                return true
+            }
+
+            // Check vanish system using DAO
+            val viewerVanishState = try {
+                VanishDAO.load(viewer.uniqueId)
+            } catch (e: Exception) {
+                debugLog("Error loading vanish state for ${viewer.name}: ${e.message}")
+                null
+            }
+
+            val targetVanishState = try {
+                VanishDAO.load(target.uniqueId)
+            } catch (e: Exception) {
+                debugLog("Error loading vanish state for ${target.name}: ${e.message}")
+                null
+            }
+
+            // If vanish system is active for either player, defer
+            if (viewerVanishState != null && (viewerVanishState.vanished || viewerVanishState.hideMe ||
+                        viewerVanishState.hideOthers || viewerVanishState.showOthers.isNotEmpty())) {
+                debugLog("Vanish system active for viewer ${viewer.name} - deferring")
+                return true
+            }
+
+            if (targetVanishState != null && (targetVanishState.vanished || targetVanishState.hideMe ||
+                        targetVanishState.hideOthers || targetVanishState.showOthers.isNotEmpty())) {
+                debugLog("Vanish system active for target ${target.name} - deferring")
                 return true
             }
 

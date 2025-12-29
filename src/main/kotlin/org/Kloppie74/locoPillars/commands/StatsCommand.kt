@@ -12,6 +12,9 @@ import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.database.dao.AchievementDAO
+import org.Kloppie74.locoPillars.database.dao.PlayerDAO
+import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.achievements.AchievementsCommand
 import org.bukkit.Bukkit
@@ -59,79 +62,79 @@ class StatsCommand(
 
     // =================== MAIN STATS GUI ===================
     fun openStatsGUI(player: Player) {
-        val db = plugin.databaseManager
-        val playersTable = db.playersTable
-        val statsTable = db.statsTable
+        try {
+            val dbPlayerId = PlayerDAO.getPlayerId(player.name)
+            if (dbPlayerId == null) {
+                player.sendMessage(MSG.chatColors("&cNo statistics found! Play some games first."))
+                return
+            }
 
-        if (!playersTable.playerExists(player.name)) {
-            player.sendMessage(MSG.chatColors("&cNo statistics found! Play some games first."))
-            return
+            // Ensure stats exist
+            if (StatsDAO.findById(dbPlayerId) == null) {
+                StatsDAO.create(dbPlayerId)
+            }
+
+            val inv = plugin.server.createInventory(player, 54, MSG.chatColors("$STATS_MAIN_TITLE${player.displayName}"))
+            activeMenus[player] = MenuType.MAIN_STATS
+
+            fillBorders(inv)
+
+            val gameStats = GameStatsData(
+                gamesPlayed = StatsDAO.getIntStat(dbPlayerId, "games_played"),
+                gamesWon = StatsDAO.getIntStat(dbPlayerId, "games_won"),
+                gamesLost = StatsDAO.getIntStat(dbPlayerId, "games_lost"),
+                gamesQuit = StatsDAO.getIntStat(dbPlayerId, "games_quit")
+            )
+
+            val combatStats = CombatStatsData(
+                kills = StatsDAO.getIntStat(dbPlayerId, "total_kills"),
+                deaths = StatsDAO.getIntStat(dbPlayerId, "total_deaths"),
+                assists = StatsDAO.getIntStat(dbPlayerId, "total_assists"),
+                bestKillstreak = StatsDAO.getIntStat(dbPlayerId, "best_killstreak"),
+                currentKillstreak = StatsDAO.getIntStat(dbPlayerId, "current_killstreak")
+            )
+
+            val progressStats = ProgressStatsData(
+                level = StatsDAO.getIntStat(dbPlayerId, "level"),
+                experience = StatsDAO.getIntStat(dbPlayerId, "experience"),
+                coins = StatsDAO.getIntStat(dbPlayerId, "coins"),
+                playtime = StatsDAO.getLongStat(dbPlayerId, "total_playtime")
+            )
+
+            val buildingStats = BuildingStatsData(
+                pillarsDestroyed = StatsDAO.getIntStat(dbPlayerId, "pillars_destroyed"),
+                blocksPlaced = StatsDAO.getIntStat(dbPlayerId, "blocks_placed"),
+                blocksDestroyed = StatsDAO.getIntStat(dbPlayerId, "blocks_broken"),
+                distanceMoved = StatsDAO.getDoubleStat(dbPlayerId, "total_distance_moved")
+            )
+
+            val streakStats = StreakStatsData(
+                currentWinStreak = StatsDAO.getIntStat(dbPlayerId, "current_win_streak"),
+                bestWinStreak = StatsDAO.getIntStat(dbPlayerId, "best_win_streak"),
+                longestGame = StatsDAO.getIntStat(dbPlayerId, "longest_game_time").toLong(),
+                fastestWin = StatsDAO.getIntStat(dbPlayerId, "fastest_win_time").let { if (it > 0) it.toLong() else null }
+            )
+
+            // Main stat displays
+            createOverviewStats(inv, 10, gameStats, combatStats, progressStats)
+            createPerformanceStats(inv, 12, gameStats, combatStats)
+            createProgressStats(inv, 14, progressStats)
+            createBuildingStats(inv, 16, buildingStats)
+
+            createStreakStats(inv, 28, streakStats)
+            createTimeStats(inv, 30, progressStats, streakStats)
+            createRankingStats(inv, 32, dbPlayerId, gameStats, combatStats)
+            createAchievementPreview(inv, 34, dbPlayerId)
+
+            createNavigationButtons(inv)
+
+            player.openInventory(inv)
+
+        } catch (e: Exception) {
+            plugin.logger.severe("Error opening stats GUI for ${player.name}: ${e.message}")
+            e.printStackTrace()
+            player.sendMessage(MSG.chatColors("&cFailed to load statistics. Please try again later."))
         }
-
-        val dbPlayerId = playersTable.getPlayerId(player.name)
-        if (dbPlayerId == null) {
-            player.sendMessage(MSG.chatColors("&cPlayer not found in database!"))
-            return
-        }
-
-        statsTable.createPlayerStats(dbPlayerId)
-        val gamesPlayed = statsTable.getGamesPlayed(dbPlayerId)
-
-        val inv = plugin.server.createInventory(player, 54, MSG.chatColors("$STATS_MAIN_TITLE${player.displayName}"))
-        activeMenus[player] = MenuType.MAIN_STATS
-
-        fillBorders(inv)
-
-        val gameStats = GameStatsData(
-            gamesPlayed = gamesPlayed,
-            gamesWon = statsTable.getGamesWon(dbPlayerId),
-            gamesLost = statsTable.getGamesLost(dbPlayerId),
-            gamesQuit = statsTable.getGamesQuit(dbPlayerId)
-        )
-
-        val combatStats = CombatStatsData(
-            kills = statsTable.getTotalKills(dbPlayerId),
-            deaths = statsTable.getTotalDeaths(dbPlayerId),
-            assists = statsTable.getTotalAssists(dbPlayerId),
-            bestKillstreak = statsTable.getBestKillstreak(dbPlayerId),
-            currentKillstreak = statsTable.getCurrentKillstreak(dbPlayerId)
-        )
-
-        val progressStats = ProgressStatsData(
-            level = statsTable.getPlayerLevel(dbPlayerId),
-            experience = statsTable.getPlayerExperience(dbPlayerId),
-            coins = statsTable.getPlayerCoins(dbPlayerId),
-            playtime = statsTable.getTotalPlayTime(dbPlayerId)
-        )
-
-        val buildingStats = BuildingStatsData(
-            pillarsDestroyed = statsTable.getPillarsDestroyed(dbPlayerId),
-            blocksPlaced = statsTable.getBlocksPlaced(dbPlayerId),
-            blocksDestroyed = statsTable.getBlocksBroken(dbPlayerId),
-            distanceMoved = statsTable.getTotalDistanceMoved(dbPlayerId)
-        )
-
-        val streakStats = StreakStatsData(
-            currentWinStreak = statsTable.getCurrentWinStreak(dbPlayerId),
-            bestWinStreak = statsTable.getBestWinStreak(dbPlayerId),
-            longestGame = statsTable.getLongestGame(dbPlayerId),
-            fastestWin = statsTable.getFastestWin(dbPlayerId)
-        )
-
-        // Main stat displays
-        createOverviewStats(inv, 10, gameStats, combatStats, progressStats)
-        createPerformanceStats(inv, 12, gameStats, combatStats)
-        createProgressStats(inv, 14, progressStats)
-        createBuildingStats(inv, 16, buildingStats)
-
-        createStreakStats(inv, 28, streakStats)
-        createTimeStats(inv, 30, progressStats, streakStats)
-        createRankingStats(inv, 32, dbPlayerId, gameStats, combatStats)
-        createAchievementPreview(inv, 34, dbPlayerId)
-
-        createNavigationButtons(inv)
-
-        player.openInventory(inv)
     }
 
     private fun openAchievementsGUIWithDelay(player: Player) {
@@ -326,14 +329,13 @@ class StatsCommand(
         fillBorders(inv)
 
         try {
-            val dbPlayerId = plugin.databaseManager.playersTable.getPlayerId(player.name)
+            val dbPlayerId = PlayerDAO.getPlayerId(player.name)
             if (dbPlayerId == null) {
                 player.sendMessage(MSG.chatColors("&cPlayer not found in database!"))
                 return
             }
 
-            val statsTable = plugin.databaseManager.statsTable
-            val historyItems = createGameHistoryItems(dbPlayerId, statsTable)
+            val historyItems = createGameHistoryItems(dbPlayerId)
 
             var slot = 10
             historyItems.forEach { item ->
@@ -346,6 +348,7 @@ class StatsCommand(
 
         } catch (e: Exception) {
             plugin.logger.warning("Failed to load game history for ${player.name}: ${e.message}")
+            e.printStackTrace()
             player.sendMessage(MSG.chatColors("&cFailed to load game history. Please try again later."))
         }
 
@@ -630,9 +633,8 @@ class StatsCommand(
 
     private fun createAchievementPreview(inv: Inventory, slot: Int, playerId: String) {
         try {
-            val achievementsTable = plugin.databaseManager.achievementsTable
-            val unlocked = achievementsTable.getPlayerAchievements(playerId).size
-            val totalAchievements = achievementsTable.getAllAchievements().size
+            val unlocked = AchievementDAO.getPlayerAchievements(playerId).size
+            val totalAchievements = AchievementDAO.getAllDefinitions().size
             val completionRate = if (totalAchievements > 0) (unlocked * 100.0 / totalAchievements) else 0.0
 
             val preview = ItemStack(Material.NETHER_STAR).apply {
@@ -649,6 +651,7 @@ class StatsCommand(
             }
             inv.setItem(slot, preview)
         } catch (e: Exception) {
+            plugin.logger.warning("Error creating achievement preview: ${e.message}")
             val fallback = ItemStack(Material.BOOK).apply {
                 itemMeta = itemMeta?.apply {
                     setDisplayName(MSG.chatColors("&7Achievements"))
@@ -785,48 +788,56 @@ class StatsCommand(
 
     // =================== GAME HISTORY METHODS ===================
 
-    private fun createGameHistoryItems(playerId: String, statsTable: Any): List<ItemStack> {
+    private fun createGameHistoryItems(playerId: String): List<ItemStack> {
         // Create summary items for game history
         val items = mutableListOf<ItemStack>()
 
-        // Recent performance summary
-        items.add(ItemStack(Material.BOOK).apply {
-            itemMeta = itemMeta?.apply {
-                setDisplayName(MSG.chatColors("&b📊 Recent Performance"))
-                lore = listOf(
-                    "",
-                    MSG.chatColors("&7Performance over last 10 games"),
-                    MSG.chatColors("&8Data would be shown here"),
-                    ""
-                )
-            }
-        })
+        try {
+            val playerStats = StatsDAO.findById(playerId)
 
-        // Win/Loss trends
-        items.add(ItemStack(Material.MAP).apply {
-            itemMeta = itemMeta?.apply {
-                setDisplayName(MSG.chatColors("&a📈 Win/Loss Trends"))
-                lore = listOf(
-                    "",
-                    MSG.chatColors("&7Trends and patterns"),
-                    MSG.chatColors("&7in your game results"),
-                    ""
-                )
-            }
-        })
+            // Recent performance summary
+            items.add(ItemStack(Material.BOOK).apply {
+                itemMeta = itemMeta?.apply {
+                    setDisplayName(MSG.chatColors("&b📊 Recent Performance"))
+                    lore = listOf(
+                        "",
+                        MSG.chatColors("&7Games: &f${playerStats?.gamesPlayed ?: 0}"),
+                        MSG.chatColors("&7Wins: &a${playerStats?.gamesWon ?: 0}"),
+                        MSG.chatColors("&7Losses: &c${playerStats?.gamesLost ?: 0}"),
+                        ""
+                    )
+                }
+            })
 
-        // Best performances
-        items.add(ItemStack(Material.GOLD_INGOT).apply {
-            itemMeta = itemMeta?.apply {
-                setDisplayName(MSG.chatColors("&6🏆 Best Performances"))
-                lore = listOf(
-                    "",
-                    MSG.chatColors("&7Your top game results"),
-                    MSG.chatColors("&7and achievements"),
-                    ""
-                )
-            }
-        })
+            // Win/Loss trends
+            items.add(ItemStack(Material.MAP).apply {
+                itemMeta = itemMeta?.apply {
+                    setDisplayName(MSG.chatColors("&a📈 Win/Loss Trends"))
+                    lore = listOf(
+                        "",
+                        MSG.chatColors("&7Current Streak: &a${playerStats?.currentWinStreak ?: 0}"),
+                        MSG.chatColors("&7Best Streak: &6${playerStats?.bestWinStreak ?: 0}"),
+                        ""
+                    )
+                }
+            })
+
+            // Best performances
+            items.add(ItemStack(Material.GOLD_INGOT).apply {
+                itemMeta = itemMeta?.apply {
+                    setDisplayName(MSG.chatColors("&6🏆 Best Performances"))
+                    lore = listOf(
+                        "",
+                        MSG.chatColors("&7Best Killstreak: &c${playerStats?.bestKillstreak ?: 0}"),
+                        MSG.chatColors("&7Fastest Win: &a${playerStats?.fastestWinTime?.let { formatTime(it.toLong()) } ?: "N/A"}"),
+                        ""
+                    )
+                }
+            })
+
+        } catch (e: Exception) {
+            plugin.logger.warning("Error creating game history items: ${e.message}")
+        }
 
         return items
     }
@@ -866,32 +877,32 @@ class StatsCommand(
     // =================== CALCULATION METHODS ===================
 
     private fun calculateWinsRank(wins: Int): Int {
-        // Simplified ranking calculation
         try {
-            val totalPlayers = plugin.databaseManager.statsTable.getTotalPlayersWithMinGames(1)
+            val totalPlayers = PlayerDAO.getTotalPlayersCount()
             return max(1, totalPlayers / max(1, wins))
         } catch (e: Exception) {
+            plugin.logger.warning("Error calculating wins rank: ${e.message}")
             return 1
         }
     }
 
     private fun calculateKDRRank(kills: Int, deaths: Int): Int {
-        // Simplified K/D ranking calculation
         try {
-            val totalPlayers = plugin.databaseManager.statsTable.getTotalPlayersWithMinDeaths(1)
+            val totalPlayers = PlayerDAO.getTotalPlayersCount()
             val kdr = if (deaths > 0) kills.toDouble() / deaths else kills.toDouble()
             return max(1, (totalPlayers * (1.0 - min(kdr / 10.0, 0.9))).toInt())
         } catch (e: Exception) {
+            plugin.logger.warning("Error calculating KDR rank: ${e.message}")
             return 1
         }
     }
 
     private fun calculateGamesRank(games: Int): Int {
-        // Simplified games played ranking
         try {
-            val totalPlayers = plugin.databaseManager.statsTable.getTotalPlayersWithMinGames(1)
+            val totalPlayers = PlayerDAO.getTotalPlayersCount()
             return max(1, totalPlayers / max(1, games / 10))
         } catch (e: Exception) {
+            plugin.logger.warning("Error calculating games rank: ${e.message}")
             return 1
         }
     }

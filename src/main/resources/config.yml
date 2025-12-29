@@ -25,8 +25,8 @@ Spawn:
 
 # Database configuration
 database:
-  # Supported types: sqlite, mysql, mariadb, postgresql, h2
-  type: "sqlite"
+  # Supported types: mysql, mariadb, postgresql, h2
+  type: "h2"
   host: "localhost"        # For network databases only (mysql, mariadb, postgresql)
   port: 3306               # For network databases only
   database: "locopillars"
@@ -190,81 +190,95 @@ Tab:
   # Supported placeholders:
   # %team%, %player_name%, %kills%, %group%, %game_name%, etc.
 
+
 # LocoPillars Scoreboards Configuration
 # This config controls the sidebar scoreboards shown to players
 
 Scoreboards:
   GlobalEnabled: true
 
-  # Lobby scoreboard (when player is not in any game)
   Lobby:
     Enabled: true
-    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Title: "&#FF7300&lLocoMc"
     Lines:
-      8: ""
-      7: "&fOnline: &a%online_players%"
-      6: "&fActive Games: &c%active_games%"
-      5: ""
-      4: "&eWelcome to the Lobby!"
-      3: "&7Join a game to start playing"
-      2: ""
-      1: "&bplay.locopillars.nl"
+      13: "&f"
+      12: "&b✦ &fWelcome to &6Pillars&f %locopillars_player_name%!"
+      11: "&f   &fOnline players: &a%server_online%"
+      10: "&f"
+      9: "&fRank: &f%luckperms_prefix%"
+      8: "&fCoins: &6%playerpoints_points%"
+      7: "&f"
+      6: "&fLevel: &b%locopillars_db_level%"
+      5: "&fExperience: &e%locopillars_db_experience%"
+      5: "&fGames won: &d%locopillars_db_games_won%"
+      4: "&fAchievements: &a%locopillars_achievement_total_completed_percent%% completed"
+      2: "&f"
+      1: "&fPlay.LocoMc.net"
 
-  # Game lobby scoreboard (waiting for game to start)
   GameLobby:
     Enabled: true
-    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Title: "&#FF7300&lLocoMc"
     Lines:
-      8: ""
-      7: "&fMap: &a%map_name%"
-      6: "&fPlayers: &e%players%&7/&e%max_players%"
-      5: ""
-      4: "&aWaiting for players..."
-      3: "&7Game will start soon!"
-      2: ""
-      1: "&bplay.locopillars.nl"
+      9: "&f"
+      8: "埆 &eWaiting for game to start..."
+      7: "&f"
+      6: "&fGame: &b%locopillars_game_name%"
+      5: "&fPlayers: &a%locopillars_game_players_in_game% &7/ &c%locopillars_game_players_max%"
+      4: "&fMap: &e%locopillars_game_map_name%"
+      3: "&f"
+      2: "&fMinimum Players: &c%locopillars_game_players_min%"
+      1: "&f"
 
-  # Cage/Starting phase scoreboard
   Cage:
     Enabled: true
-    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Title: "&#FF7300&lLocoMc"
     Lines:
-      8: ""
-      7: "&fMap: &a%map_name%"
-      6: "&fPlayers: &e%players%"
-      5: ""
-      4: "&cStarting in: &f%cage_timer%s"
-      3: "&7Get ready to build!"
-      2: ""
-      1: "&bplay.locopillars.nl"
+      9: "&f"
+      8: "埆 &eGame starts in: &e%locopillars_game_lobby_timer%"
+      7: "&f"
+      6: "&fGame: &b%locopillars_game_name%"
+      5: "&fPlayers: &a%locopillars_game_players_in_game% &7/ &c%locopillars_game_players_max%"
+      4: "&fMap: &e%locopillars_game_map_name%"
+      3: "&f"
+      2: "&fMinimum Players: &c%locopillars_game_players_min%"
+      1: "&f"
 
-  # Active game scoreboard
   Game:
     Enabled: true
-    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Title: "&#FF7300&lLocoMc"
     Lines:
-      8: ""
-      7: "&fMap: &a%map_name%"
-      6: "&fPlayers Left: &c%players_left%"
-      5: ""
-      4: "&fTime Left: &e%game_timer%"
-      3: "&7Build your pillar!"
-      2: ""
-      1: "&bplay.locopillars.nl"
+      if8: "TEAM_AMOUNT >= 8 LINE=[&f%locopillars_game_team_team8_displayname%: %locopillars_game_team_team8_status_symbol% &7(&a%locopillars_game_team_team8_players_alive%&7/&f%locopillars_game_team_team8_players_total%&7)]"
+      if7: "TEAM_AMOUNT >= 7 LINE=[&f%locopillars_game_team_team7_displayname%: %locopillars_game_team_team7_status_symbol% &7(&a%locopillars_game_team_team7_players_alive%&7/&f%locopillars_game_team_team7_players_total%&7)]"
+      if6: "TEAM_AMOUNT >= 6 LINE=[&f%locopillars_game_team_team6_displayname%: %locopillars_game_team_team6_status_symbol% &7(&a%locopillars_game_team_team6_players_alive%&7/&f%locopillars_game_team_team6_players_total%&7)]"
+      if5: "TEAM_AMOUNT >= 5 LINE=[&f%locopillars_game_team_team5_displayname%: %locopillars_game_team_team5_status_symbol% &7(&a%locopillars_game_team_team5_players_alive%&7/&f%locopillars_game_team_team5_players_total%&7)]"
+      if4: "TEAM_AMOUNT >= 4 LINE=[&f%locopillars_game_team_team4_displayname%: %locopillars_game_team_team4_status_symbol% &7(&a%locopillars_game_team_team4_players_alive%&7/&f%locopillars_game_team_team4_players_total%&7)]"
+      if3: "TEAM_AMOUNT >= 3 LINE=[&f%locopillars_game_team_team3_displayname%: %locopillars_game_team_team3_status_symbol% &7(&a%locopillars_game_team_team3_players_alive%&7/&f%locopillars_game_team_team3_players_total%&7)]"
+      if2: "TEAM_AMOUNT >= 2 LINE=[&f%locopillars_game_team_team2_displayname%: %locopillars_game_team_team2_status_symbol% &7(&a%locopillars_game_team_team2_players_alive%&7/&f%locopillars_game_team_team2_players_total%&7)]"
+      if1: "TEAM_AMOUNT >= 2 LINE=[&f%locopillars_game_team_team1_displayname%: %locopillars_game_team_team1_status_symbol% &7(&a%locopillars_game_team_team1_players_alive%&7/&f%locopillars_game_team_team1_players_total%&7)]"
+      6: "霅  &c&lGAME ACTIVE!"
+      5: "&f"
+      4: "&fTimer: &e%locopillars_game_timer%"
+      3: "&fItem Timer: &e%locopillars_game_items_timer%"
+      2: "&fTeam: &d%locopillars_team_name%"
+      1: "&f"
 
-  # Spectator scoreboard (when spectating)
   Spectate:
     Enabled: true
-    Title: "&6&l🏛 LOCO PILLARS &6&l🏛"
+    Title: "&#FF7300&lLocoMc"
     Lines:
-      8: ""
-      7: "&fMap: &a%map_name%"
-      6: "&fPlayers Left: &c%players_left%"
-      5: ""
-      4: "&7&oSpectating..."
-      3: "&fTime Left: &e%game_timer%"
-      2: ""
-      1: "&bplay.locopillars.nl"
+      if8: "TEAM_AMOUNT >= 8 LINE=[&f%locopillars_game_team_team8_displayname%: %locopillars_game_team_team8_status_symbol% &7(&a%locopillars_game_team_team8_players_alive%&7/&f%locopillars_game_team_team8_players_total%&7)]"
+      if7: "TEAM_AMOUNT >= 7 LINE=[&f%locopillars_game_team_team7_displayname%: %locopillars_game_team_team7_status_symbol% &7(&a%locopillars_game_team_team7_players_alive%&7/&f%locopillars_game_team_team7_players_total%&7)]"
+      if6: "TEAM_AMOUNT >= 6 LINE=[&f%locopillars_game_team_team6_displayname%: %locopillars_game_team_team6_status_symbol% &7(&a%locopillars_game_team_team6_players_alive%&7/&f%locopillars_game_team_team6_players_total%&7)]"
+      if5: "TEAM_AMOUNT >= 5 LINE=[&f%locopillars_game_team_team5_displayname%: %locopillars_game_team_team5_status_symbol% &7(&a%locopillars_game_team_team5_players_alive%&7/&f%locopillars_game_team_team5_players_total%&7)]"
+      if4: "TEAM_AMOUNT >= 4 LINE=[&f%locopillars_game_team_team4_displayname%: %locopillars_game_team_team4_status_symbol% &7(&a%locopillars_game_team_team4_players_alive%&7/&f%locopillars_game_team_team4_players_total%&7)]"
+      if3: "TEAM_AMOUNT >= 3 LINE=[&f%locopillars_game_team_team3_displayname%: %locopillars_game_team_team3_status_symbol% &7(&a%locopillars_game_team_team3_players_alive%&7/&f%locopillars_game_team_team3_players_total%&7)]"
+      if2: "TEAM_AMOUNT >= 2 LINE=[&f%locopillars_game_team_team2_displayname%: %locopillars_game_team_team2_status_symbol% &7(&a%locopillars_game_team_team2_players_alive%&7/&f%locopillars_game_team_team2_players_total%&7)]"
+      if1: "TEAM_AMOUNT >= 2 LINE=[&f%locopillars_game_team_team1_displayname%: %locopillars_game_team_team1_status_symbol% &7(&a%locopillars_game_team_team1_players_alive%&7/&f%locopillars_game_team_team1_players_total%&7)]"
+      5: "觷 &7You are now spectating."
+      4: "&f"
+      3: "&fTimer: &e%locopillars_game_timer%"
+      2: "&fItem Timer: &e%locopillars_game_items_timer%"
+      1: "&f"
 
 # ==========================================
 # LUCKYBLOCKS CONFIGURATION

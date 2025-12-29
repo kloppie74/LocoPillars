@@ -9,11 +9,15 @@ import org.bukkit.entity.Player
 import org.bukkit.event.inventory.CraftItemEvent
 import org.bukkit.event.player.PlayerPickupItemEvent
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 
 /**
  * Listener for achievement triggers.
- * Only reads and writes achievement progress via AchievementsTable.
- * Also provides public methods for game logic triggers (like WIN_GAME etc).
+ *
+ * CHANGELOG (v2.2):
+ * - Fixed player_id lookup to use PlayerDAO instead of UUID.toString()
+ * - Now correctly increments achievement progress
+ * - Uses database INTEGER player_id instead of UUID string
  */
 class AchievementListener(
     private val manager: AchievementManager,
@@ -28,10 +32,17 @@ class AchievementListener(
      * Each achievement tracks its own progress, stored in AchievementsTable.
      */
     private fun update(trigger: AchievementTrigger, player: Player, increment: Int = 1) {
-        val playerId = player.uniqueId.toString()
+        // ✅ FIX: Get INTEGER player_id from database instead of UUID string
+        val playerId = PlayerDAO.getPlayerId(player.name)
+        if (playerId == null) {
+            plugin.logger.warning("[AchievementListener] ✗ Could not find playerId for ${player.name}")
+            return
+        }
+
         val relevantAchievements = manager.getAllAchievements().filter {
             it.requirementType == trigger.name && it.isActive
         }
+
         for (achievement in relevantAchievements) {
             val oldProgress = manager.getAchievementProgress(playerId, achievement)
             val newProgress = oldProgress + increment
@@ -54,7 +65,7 @@ class AchievementListener(
     @EventHandler
     fun onPlayerMove(event: PlayerMoveEvent) {
         val player = event.player
-        val playerId = player.uniqueId.toString()
+        val playerId = player.uniqueId.toString() // For tracking, not database!
         val curBlock = Triple(player.location.blockX, player.location.blockY, player.location.blockZ)
         val lastBlock = lastBlockCoords[playerId]
         var distance = 0

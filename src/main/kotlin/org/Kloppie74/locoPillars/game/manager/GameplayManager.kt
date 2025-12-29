@@ -16,14 +16,32 @@ import org.Kloppie74.locoPillars.game.data.Team
 import org.Kloppie74.locoPillars.events.TimerEvent
 import org.Kloppie74.locoPillars.utils.ItemRandomizer
 import org.Kloppie74.locoPillars.utils.SchematicCageHelper
-import org.Kloppie74.locoPillars.utils.achievements.AchievementListener
 import org.Kloppie74.locoPillars.utils.spectator.listeners.SpectateListener
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
+import org.Kloppie74.locoPillars.database.dao.PlayerDAO
+import org.Kloppie74.locoPillars.database.dao.StatsDAO
+import org.Kloppie74.locoPillars.database.dao.ArenaStatsDAO
 import java.io.File
 import java.util.*
 import kotlin.collections.HashMap
 
+/**
+ * Manages all gameplay mechanics including game start, end, and player interactions.
+ *
+ * CHANGELOG (v2.0):
+ * - Replaced all StatsEventTracker and statsTable calls with DAO pattern
+ * - Added proper error handling for all database operations
+ * - Improved logging with ✓/✗/❌ indicators
+ * - Separated database logic into helper methods
+ * - Enhanced stat tracking with try-catch blocks
+ * - Added null-safety checks for all player lookups
+ * - Refactored achievement + stats wrapper methods
+ * - Better separation of concerns (DB operations vs game logic)
+ *
+ * @author Kloppie74
+ * @since 2.0-SNAPSHOT
+ */
 class GameplayManager(
     private val plugin: LocoPillars,
     private val timerEvent: TimerEvent,
@@ -33,9 +51,7 @@ class GameplayManager(
     var spectateListener: SpectateListener? = null
 
     private val instanceItemDistribution = mutableMapOf<UUID, MutableSet<UUID>>()
-    private val achievementListener: AchievementListener
-        get() = plugin.achievementListener
-    private val statsTable get() = plugin.databaseManager.statsTable
+    private val achievementListener get() = plugin.achievementListener
 
     // Track start time per instance for game duration
     private val gameStartTimes = HashMap<UUID, Long>()
@@ -46,110 +62,124 @@ class GameplayManager(
         }
     }
 
-    // ---- ACHIEVEMENT & STATS WRAPPERS ----
+    // =================== ACHIEVEMENT & STATS WRAPPERS ===================
 
     fun onGameWon(player: Player, gameTime: Long? = null) {
         achievementListener.onGameWon(player)
         achievementListener.onWinGame(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) {
-            statsTable.incrementGamesWon(playerId)
-            statsTable.addWin(playerId)
-            if (gameTime != null) statsTable.updateFastestWin(playerId, gameTime)
+
+        updatePlayerStats(player, "game_won") { playerId ->
+            StatsDAO.incrementStat(playerId, "games_won")
+            StatsDAO.addWin(playerId)
+            if (gameTime != null) {
+                StatsDAO.updateFastestWin(playerId, gameTime)
+            }
         }
     }
 
     fun onGameLost(player: Player, gameTime: Long? = null) {
         achievementListener.onGameLost(player)
         achievementListener.onLoseGame(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) {
-            statsTable.incrementGamesLost(playerId)
-            statsTable.addLoss(playerId)
-            if (gameTime != null) statsTable.updateLongestGame(playerId, gameTime)
+
+        updatePlayerStats(player, "game_lost") { playerId ->
+            StatsDAO.incrementStat(playerId, "games_lost")
+            StatsDAO.addLoss(playerId)
+            if (gameTime != null) {
+                StatsDAO.updateLongestGame(playerId, gameTime)
+            }
         }
     }
 
     fun onGameQuit(player: Player) {
         achievementListener.onGameQuit(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.incrementGamesQuit(playerId)
+
+        updatePlayerStats(player, "game_quit") { playerId ->
+            StatsDAO.incrementStat(playerId, "games_quit")
+        }
     }
 
     fun onDoubleKill(player: Player) {
         achievementListener.onDoubleKill(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.addDoubleKill(playerId)
+
+        updatePlayerStats(player, "double_kill") { playerId ->
+            StatsDAO.incrementStat(playerId, "double_kills")
+        }
     }
 
     fun onTripleKill(player: Player) {
         achievementListener.onTripleKill(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.addTripleKill(playerId)
+
+        updatePlayerStats(player, "triple_kill") { playerId ->
+            StatsDAO.incrementStat(playerId, "triple_kills")
+        }
     }
 
     fun onQuadKill(player: Player) {
         achievementListener.onQuadKill(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.addQuadKill(playerId)
+
+        updatePlayerStats(player, "quad_kill") { playerId ->
+            StatsDAO.incrementStat(playerId, "quad_kills")
+        }
     }
 
     fun onPerfectGame(player: Player) {
         achievementListener.onPerfectGame(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.addPerfectGame(playerId)
+
+        updatePlayerStats(player, "perfect_game") { playerId ->
+            StatsDAO.incrementStat(playerId, "perfect_games")
+        }
     }
 
     fun onComebackWin(player: Player) {
         achievementListener.onComebackWin(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.addComebackWin(playerId)
+
+        updatePlayerStats(player, "comeback_win") { playerId ->
+            StatsDAO.incrementStat(playerId, "comeback_wins")
+        }
     }
 
     fun onFastestWin(player: Player, winTime: Long) {
         achievementListener.onFastestWin(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.updateFastestWin(playerId, winTime)
+
+        updatePlayerStats(player, "fastest_win") { playerId ->
+            StatsDAO.updateFastestWin(playerId, winTime)
+        }
     }
 
     fun onLongestGame(player: Player, gameTime: Long) {
         achievementListener.onLongestGame(player)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.updateLongestGame(playerId, gameTime)
+
+        updatePlayerStats(player, "longest_game") { playerId ->
+            StatsDAO.updateLongestGame(playerId, gameTime)
+        }
     }
 
     fun onKillStreak(player: Player, amount: Int = 1) {
         achievementListener.onKillStreak(player, amount)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.addKill(playerId)
+
+        updatePlayerStats(player, "kill_streak") { playerId ->
+            StatsDAO.addKill(playerId)
+        }
     }
 
     fun onWinStreak(player: Player, amount: Int = 1) {
         achievementListener.onWinStreak(player, amount)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.addWin(playerId)
+
+        updatePlayerStats(player, "win_streak") { playerId ->
+            StatsDAO.addWin(playerId)
+        }
     }
 
     fun onLossStreak(player: Player, amount: Int = 1) {
         achievementListener.onLossStreak(player, amount)
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) statsTable.addLoss(playerId)
+
+        updatePlayerStats(player, "loss_streak") { playerId ->
+            StatsDAO.addLoss(playerId)
+        }
     }
 
-    // ---- Game duration tracking ----
+    // =================== GAME DURATION TRACKING ===================
+
     fun markGameStart(instance: GameInstance) {
         gameStartTimes[instance.id] = System.currentTimeMillis()
     }
@@ -165,7 +195,7 @@ class GameplayManager(
         gameStartTimes.remove(instance.id)
     }
 
-    // ---- REST VAN DE CLASS ----
+    // =================== LOBBY & GAME START ===================
 
     fun startLobbyCountdown(instance: GameInstance) {
         debugLog("Starting lobby countdown for instance ${instance.id}")
@@ -240,23 +270,40 @@ class GameplayManager(
     }
 
     private fun updateGameStartStats(instance: GameInstance) {
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val arenaName = instance.arenaInstance.config.name
+        try {
+            val arenaName = instance.arenaInstance.config.name
 
-        statsTracker.createOrUpdateArenaStats(arenaName, instance.getDisplayName())
+            // Update arena stats
+            val arenaUpdated = ArenaStatsDAO.createOrUpdate(arenaName, instance.getDisplayName())
+            if (arenaUpdated) {
+                debugLog("✓ Updated arena stats for: $arenaName")
+            }
 
-        instance.players.forEach { playerId ->
-            val player = Bukkit.getPlayer(playerId)
-            if (player != null) {
-                val playerDbId = statsTracker.getPlayerIdByName(player.name)
-                if (playerDbId != null) {
-                    statsTable.incrementGamesPlayed(playerDbId)
-                    achievementListener.onGamePlayed(player)
+            // Update player stats
+            var playersUpdated = 0
+            instance.players.forEach { playerUUID ->
+                val player = Bukkit.getPlayer(playerUUID)
+                if (player != null) {
+                    val playerId = PlayerDAO.getPlayerId(player.name)
+                    if (playerId != null) {
+                        // Increment games played
+                        val gamesPlayedIncremented = StatsDAO.incrementStat(playerId, "games_played")
+                        if (gamesPlayedIncremented) {
+                            playersUpdated++
+                        }
+
+                        // Trigger achievement
+                        achievementListener.onGamePlayed(player)
+                    }
                 }
             }
-        }
 
-        debugLog("Updated database stats for game start - Arena: $arenaName, Players: ${instance.players.size}")
+            debugLog("✓ Updated game start stats - Arena: $arenaName, Players: $playersUpdated/${instance.players.size}")
+
+        } catch (ex: Exception) {
+            plugin.logger.severe("[GameplayManager] ❌ Error updating game start stats: ${ex.message}")
+            ex.printStackTrace()
+        }
     }
 
     private fun startCageTimer(instance: GameInstance) {
@@ -299,6 +346,8 @@ class GameplayManager(
 
         timer.runTaskTimer(plugin, 0L, 20L)
     }
+
+    // =================== TEAM ASSIGNMENT ===================
 
     private fun assignPlayersToTeams(instance: GameInstance) {
         debugLog("Assigning players to teams")
@@ -437,6 +486,8 @@ class GameplayManager(
         player.addPotionEffect(PotionEffect(PotionEffectType.JUMP_BOOST, Int.MAX_VALUE, 200, false, false))
     }
 
+    // =================== ITEM DISTRIBUTION ===================
+
     fun giveItemsToPlayers(instance: GameInstance) {
         val playersInGame = playersInGame(instance)
         val itemRandomizer = ItemRandomizer(instance.arenaInstance.config.getAsFileConfiguration())
@@ -467,6 +518,7 @@ class GameplayManager(
         debugLog("Item distribution: ${playersWhoReceivedItems.size}/${playersInGame.size} players received items this cycle")
     }
 
+    // =================== PLAYER DEATH & ELIMINATION ===================
 
     fun handlePlayerDeath(player: Player, playerToInstance: MutableMap<UUID, GameInstance>, playerManager: PlayerManager): Boolean {
         val instance = playerToInstance[player.uniqueId] ?: return false
@@ -486,7 +538,7 @@ class GameplayManager(
         broadcastToGame(instance, "${ChatColor.RED}${player.name} has been eliminated!")
         player.sendMessage("${ChatColor.RED}You have been eliminated! Better luck next time!")
 
-        // FIXED: Only update elimination stats here, not game loss
+        // Update elimination stats (death only, not game loss)
         updatePlayerEliminationStats(player, instance)
 
         SpectatorUtils.setPlayerAsSpectator(player, plugin)
@@ -506,7 +558,6 @@ class GameplayManager(
             instance.players.isEmpty() -> {
                 endGame(instance, "No players remaining!", playerToInstance)
             }
-            // If only players of one team remain, that team wins
             instance.players.size >= 1 && checkOneTeamLeft(instance) -> {
                 val winners = instance.players.mapNotNull { Bukkit.getPlayer(it) }
                 val teamName = getTeamName(instance, winners)
@@ -525,90 +576,96 @@ class GameplayManager(
         return true
     }
 
-    // FIXED: New method for elimination stats only
     private fun updatePlayerEliminationStats(player: Player, instance: GameInstance) {
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
+        try {
+            val playerId = PlayerDAO.getPlayerId(player.name)
+            if (playerId == null) {
+                plugin.logger.warning("[GameplayManager] ✗ Could not find playerId for ${player.name}")
+                return
+            }
 
-        if (playerId != null) {
-            statsTable.addDeath(playerId)
-            // Don't increment gamesLost here - that happens when the actual game ends
+            // Add death (but NOT game loss - that happens at game end)
+            val deathAdded = StatsDAO.addDeath(playerId)
+            if (deathAdded) {
+                debugLog("✓ Recorded elimination death for ${player.name}")
+            }
+
+            // Trigger achievement
             achievementListener.onDeath(player)
-            val arenaName = instance.arenaInstance.config.name
-            statsTracker.createOrUpdatePlayerArenaStats(playerId, arenaName)
-            debugLog("Updated elimination stats for player: ${player.name}")
-        }
-    }
 
-    // FIXED: Keep the original method but rename it for clarity
-    private fun updatePlayerDeathStats(player: Player, instance: GameInstance) {
-        // This method is now only for actual game loss, not elimination
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-
-        if (playerId != null) {
-            statsTable.addDeath(playerId)
-            statsTable.incrementGamesLost(playerId)
-            achievementListener.onDeath(player)
+            // Update player arena stats
             val arenaName = instance.arenaInstance.config.name
-            statsTracker.createOrUpdatePlayerArenaStats(playerId, arenaName)
-            debugLog("Updated death/game loss stats for player: ${player.name}")
+            val arenaStatsUpdated = ArenaStatsDAO.createOrUpdatePlayerArenaStats(playerId, arenaName)
+            if (arenaStatsUpdated) {
+                debugLog("✓ Updated arena stats for ${player.name}")
+            }
+
+        } catch (ex: Exception) {
+            plugin.logger.severe("[GameplayManager] ❌ Error updating elimination stats for ${player.name}: ${ex.message}")
+            ex.printStackTrace()
         }
     }
 
     fun handlePlayerKill(killer: Player, victim: Player) {
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val killerId = statsTracker.getPlayerIdByName(killer.name)
-        val victimId = statsTracker.getPlayerIdByName(victim.name)
+        try {
+            val killerId = PlayerDAO.getPlayerId(killer.name)
+            val victimId = PlayerDAO.getPlayerId(victim.name)
 
-        if (killerId != null) {
-            statsTable.addKill(killerId)
-            achievementListener.onKillPlayer(killer)
-            debugLog("Updated kill stats for player: ${killer.name}")
-        }
-        if (victimId != null) {
-            statsTable.addDeath(victimId)
-            achievementListener.onDeath(victim)
-            debugLog("Updated death stats for player: ${victim.name}")
+            if (killerId != null) {
+                val killAdded = StatsDAO.addKill(killerId)
+                if (killAdded) {
+                    debugLog("✓ Recorded kill for ${killer.name}")
+                    achievementListener.onKillPlayer(killer)
+                }
+            } else {
+                plugin.logger.warning("[GameplayManager] ✗ Could not find killerId for ${killer.name}")
+            }
+
+            if (victimId != null) {
+                val deathAdded = StatsDAO.addDeath(victimId)
+                if (deathAdded) {
+                    debugLog("✓ Recorded death for ${victim.name}")
+                    achievementListener.onDeath(victim)
+                }
+            } else {
+                plugin.logger.warning("[GameplayManager] ✗ Could not find victimId for ${victim.name}")
+            }
+
+        } catch (ex: Exception) {
+            plugin.logger.severe("[GameplayManager] ❌ Error updating kill/death stats: ${ex.message}")
+            ex.printStackTrace()
         }
     }
 
     fun handlePlayerAssist(assistant: Player) {
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val assistantId = statsTracker.getPlayerIdByName(assistant.name)
-        if (assistantId != null) {
-            statsTable.addAssist(assistantId)
+        updatePlayerStats(assistant, "assist") { playerId ->
+            StatsDAO.addAssist(playerId)
             achievementListener.onAssist(assistant)
-            debugLog("Updated assist stats for player: ${assistant.name}")
         }
     }
 
     fun handleDamageDealt(player: Player, amount: Double) {
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) {
-            statsTable.addDamageDealt(playerId, amount)
+        updatePlayerStats(player, "damage_dealt") { playerId ->
+            StatsDAO.addDamageDealt(playerId, amount)
             achievementListener.onDamageDealt(player, amount.toInt())
         }
     }
 
     fun handleDamageTaken(player: Player, amount: Double) {
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) {
-            statsTable.addDamageTaken(playerId, amount)
+        updatePlayerStats(player, "damage_taken") { playerId ->
+            StatsDAO.addDamageTaken(playerId, amount)
             achievementListener.onDamageTaken(player, amount.toInt())
         }
     }
 
     fun handleFallDamageTaken(player: Player, amount: Double) {
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val playerId = statsTracker.getPlayerIdByName(player.name)
-        if (playerId != null) {
-            statsTable.addFallDamage(playerId, amount)
+        updatePlayerStats(player, "fall_damage") { playerId ->
+            StatsDAO.addFallDamage(playerId, amount)
             achievementListener.onFallDamageTaken(player, amount.toInt())
         }
     }
+
+    // =================== GAME END ===================
 
     fun endGameByTimer(instance: GameInstance, playerToInstance: MutableMap<UUID, GameInstance>, playerManager: PlayerManager) {
         debugLog("Game ${instance.id} ended by timer")
@@ -616,10 +673,7 @@ class GameplayManager(
         instance.players.forEach { playerId ->
             val player = Bukkit.getPlayer(playerId)
             if (player != null) {
-                val playerDbId = plugin.databaseManager.StatsEventTracker.getPlayerIdByName(player.name)
-                if (playerDbId != null) {
-                    debugLog("Player ${player.name} survived to timeout")
-                }
+                debugLog("Player ${player.name} survived to timeout")
             }
         }
 
@@ -655,7 +709,7 @@ class GameplayManager(
         broadcastToGame(instance, "${ChatColor.GOLD}=== GAME OVER ===")
         broadcastToGame(instance, "${ChatColor.YELLOW}$reason")
 
-        // --- WIN LOGIC ---
+        // Determine winners and losers
         val winners = getWinningPlayers(instance)
         if (winners.isNotEmpty()) {
             winners.forEach { winner ->
@@ -663,7 +717,6 @@ class GameplayManager(
                 winner.gameMode = GameMode.ADVENTURE
                 winner.isInvulnerable = true
                 winner.fallDistance = 0f
-                // NIET teleporteren!
             }
             winners.forEach { winner ->
                 onFastestWin(winner, durationSeconds)
@@ -679,12 +732,12 @@ class GameplayManager(
             onLossStreak(loser)
             SpectatorUtils.setPlayerAsSpectator(loser, plugin)
             val gameLobbySpawn = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
-            loser.teleport(gameLobbySpawn) // Alleen verliezers teleporteren!
+            loser.teleport(gameLobbySpawn)
         }
 
         updateGameEndStats(instance)
 
-        // Restore state voor alle spelers (optioneel: alleen voor verliezers)
+        // Restore state for all players
         instance.players.forEach { playerId ->
             val player = Bukkit.getPlayer(playerId)
             if (player != null && player.isOnline) {
@@ -716,11 +769,9 @@ class GameplayManager(
 
         val remainingTeams = instance.getRemainingTeams()
         if (remainingTeams.size != 1) {
-            // If more than one team or no teams remain, individual winners
             return instance.players.mapNotNull { Bukkit.getPlayer(it) }
         }
 
-        // Only one team remains - all players in that team win
         val winningTeam = remainingTeams.first()
         return instance.getAlivePlayersInTeam(winningTeam).mapNotNull { Bukkit.getPlayer(it) }
     }
@@ -737,10 +788,18 @@ class GameplayManager(
     }
 
     private fun updateGameEndStats(instance: GameInstance) {
-        val statsTracker = plugin.databaseManager.StatsEventTracker
-        val arenaName = instance.arenaInstance.config.name
-        statsTracker.createOrUpdateArenaStats(arenaName, instance.getDisplayName())
-        debugLog("Updated game end stats for arena: $arenaName")
+        try {
+            val arenaName = instance.arenaInstance.config.name
+            val updated = ArenaStatsDAO.createOrUpdate(arenaName, instance.getDisplayName())
+            if (updated) {
+                debugLog("✓ Updated game end stats for arena: $arenaName")
+            } else {
+                plugin.logger.warning("[GameplayManager] ✗ Failed to update game end stats for arena: $arenaName")
+            }
+        } catch (ex: Exception) {
+            plugin.logger.severe("[GameplayManager] ❌ Error updating game end stats: ${ex.message}")
+            ex.printStackTrace()
+        }
     }
 
     private fun resetInstance(instance: GameInstance) {
@@ -748,6 +807,8 @@ class GameplayManager(
         plugin.arenaManager.releaseInstance(instance.arenaInstance)
         instance.reset()
     }
+
+    // =================== UTILITY METHODS ===================
 
     fun cancelCountdown(instanceId: UUID) {
         gameTimers[instanceId]?.cancel()
@@ -773,6 +834,24 @@ class GameplayManager(
             } else {
                 debugLog("Spawn area validation failed, skipping clear")
             }
+        }
+    }
+
+    /**
+     * Helper method to update player stats with proper error handling.
+     */
+    private fun updatePlayerStats(player: Player, statType: String, statsUpdate: (String) -> Unit) {
+        try {
+            val playerId = PlayerDAO.getPlayerId(player.name)
+            if (playerId != null) {
+                statsUpdate(playerId)
+                debugLog("✓ Updated $statType for ${player.name}")
+            } else {
+                plugin.logger.warning("[GameplayManager] ✗ Could not find playerId for ${player.name} ($statType)")
+            }
+        } catch (ex: Exception) {
+            plugin.logger.severe("[GameplayManager] ❌ Error updating $statType for ${player.name}: ${ex.message}")
+            ex.printStackTrace()
         }
     }
 

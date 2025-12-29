@@ -1,6 +1,7 @@
 package org.Kloppie74.locoPillars.utils
 
 import net.md_5.bungee.api.ChatColor
+import java.lang.StringBuilder
 
 object MSG {
 

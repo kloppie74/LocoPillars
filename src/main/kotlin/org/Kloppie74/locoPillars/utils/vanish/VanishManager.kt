@@ -1,8 +1,8 @@
 package org.Kloppie74.locoPillars.utils.vanish
 
 import org.Kloppie74.locoPillars.LocoPillars
-import org.Kloppie74.locoPillars.database.tables.VanishTable
-import org.Kloppie74.locoPillars.database.tables.VanishState
+import org.Kloppie74.locoPillars.database.dao.VanishDAO
+import org.Kloppie74.locoPillars.database.models.VanishState
 import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import org.bukkit.entity.Player
 import org.bukkit.Bukkit
@@ -10,175 +10,340 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * FIXED VERSION - Prevents race conditions with other visibility systems
+ * VanishManager - Manages vanish, hideMe, and hideOthers functionality.
+ *
+ * CHANGELOG (v2.0):
+ * - Replaced VanishTable with VanishDAO for all database operations
+ * - Removed direct table access, uses DAO pattern throughout
+ * - Added proper error handling for all database operations
+ * - Improved null-safety checks
+ * - Better logging with ✓/✗/❌ indicators
+ * - Cache now uses VanishState from database.models package
+ * - All state modifications now use DAO methods
+ * - Added comprehensive error recovery
+ *
+ * @author Kloppie74
+ * @since 2.0-SNAPSHOT
  */
 object VanishManager {
     private val stateCache = ConcurrentHashMap<UUID, VanishState>()
-    private lateinit var vanishTable: VanishTable
     private var vanishListener: VanishListener? = null
     private lateinit var plugin: LocoPillars
 
     fun initialize(plugin: LocoPillars, listener: VanishListener) {
         this.plugin = plugin
-        vanishTable = VanishTable(plugin.databaseManager)
-        vanishTable.createTable()
         vanishListener = listener
-
-        plugin.logger.info("[VANISH DEBUG] VanishManager initialized")
+        plugin.logger.info("[VanishManager] ✓ VanishManager initialized with DAO pattern")
     }
 
-    fun loadState(player: Player) {
-        val dbState = vanishTable.loadState(player.uniqueId) ?: VanishState(false, false, false, mutableSetOf())
-        stateCache[player.uniqueId] = dbState
+    // =================== STATE LOADING & CACHING ===================
 
-        plugin.logger.info("[VANISH DEBUG] Loaded state for ${player.name}: vanished=${dbState.vanished}, hideMe=${dbState.hideMe}, hideOthers=${dbState.hideOthers}")
+    fun loadState(player: Player) {
+        try {
+            val dbState = VanishDAO.load(player.uniqueId) ?: VanishState(
+                playerId = player.uniqueId.toString(),
+                vanished = false,
+                hideMe = false,
+                hideOthers = false,
+                showOthers = mutableSetOf()
+            )
+            stateCache[player.uniqueId] = dbState
+
+            plugin.logger.info("[VanishManager] ✓ Loaded state for ${player.name}: vanished=${dbState.vanished}, hideMe=${dbState.hideMe}, hideOthers=${dbState.hideOthers}")
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error loading state for ${player.name}: ${e.message}")
+            e.printStackTrace()
+
+            // Create default state on error
+            val defaultState = VanishState(
+                playerId = player.uniqueId.toString(),
+                vanished = false,
+                hideMe = false,
+                hideOthers = false,
+                showOthers = mutableSetOf()
+            )
+            stateCache[player.uniqueId] = defaultState
+        }
     }
 
     fun getState(player: Player): VanishState {
         return stateCache.getOrPut(player.uniqueId) {
-            val state = vanishTable.loadState(player.uniqueId) ?: VanishState(false, false, false, mutableSetOf())
-            plugin.logger.info("[VANISH DEBUG] Created new state for ${player.name}: vanished=${state.vanished}, hideMe=${state.hideMe}, hideOthers=${state.hideOthers}")
-            state
+            try {
+                val state = VanishDAO.load(player.uniqueId) ?: VanishState(
+                    playerId = player.uniqueId.toString(),
+                    vanished = false,
+                    hideMe = false,
+                    hideOthers = false,
+                    showOthers = mutableSetOf()
+                )
+                plugin.logger.info("[VanishManager] ✓ Created new cached state for ${player.name}")
+                state
+            } catch (e: Exception) {
+                plugin.logger.severe("[VanishManager] ❌ Error getting state for ${player.name}: ${e.message}")
+                VanishState(
+                    playerId = player.uniqueId.toString(),
+                    vanished = false,
+                    hideMe = false,
+                    hideOthers = false,
+                    showOthers = mutableSetOf()
+                )
+            }
         }
     }
 
     fun saveState(player: Player) {
-        val state = stateCache[player.uniqueId] ?: return
-        vanishTable.saveState(player.uniqueId, state)
+        try {
+            val state = stateCache[player.uniqueId] ?: return
+            val saved = VanishDAO.save(player.uniqueId, state)
 
-        plugin.logger.info("[VANISH DEBUG] Saved state for ${player.name}: vanished=${state.vanished}, hideMe=${state.hideMe}, hideOthers=${state.hideOthers}")
+            if (saved) {
+                plugin.logger.info("[VanishManager] ✓ Saved state for ${player.name}: vanished=${state.vanished}, hideMe=${state.hideMe}, hideOthers=${state.hideOthers}")
+            } else {
+                plugin.logger.warning("[VanishManager] ✗ Failed to save state for ${player.name}")
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error saving state for ${player.name}: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
+    // =================== VANISH STATE MODIFICATIONS ===================
+
     fun setVanished(player: Player, vanished: Boolean) {
-        val state = getState(player)
-        val oldVanished = state.vanished
-        state.vanished = vanished
-        stateCache[player.uniqueId] = state
-        saveState(player)
+        try {
+            val state = getState(player)
+            val oldVanished = state.vanished
+            state.vanished = vanished
+            stateCache[player.uniqueId] = state
 
-        plugin.logger.info("[VANISH DEBUG] ${player.name} vanish changed: $oldVanished -> $vanished")
-
-        // CRITICAL FIX: Mark vanish priority WHILE vanished
-        if (vanished) {
-            GlobalVisibilityTicker.markPlayerAsVanishPriority(player)
-        } else {
-            GlobalVisibilityTicker.clearVanishPriorityFlag(player)
-        }
-
-        GlobalVisibilityTicker.clearPlayerFromQueue(player)
-        applyVanishVisibilityDirectWithPriority(player)
-
-        vanishListener?.updateBossBar(player)
-
-        // Queue updates for other players
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            Bukkit.getOnlinePlayers().forEach { otherPlayer ->
-                if (otherPlayer != player) {
-                    GlobalVisibilityTicker.queueUpdateWithPriority(otherPlayer, "VANISH_UPDATE")
-                }
+            // Save to database
+            val saved = VanishDAO.save(player.uniqueId, state)
+            if (!saved) {
+                plugin.logger.warning("[VanishManager] ✗ Failed to save vanished state for ${player.name}")
             }
-        }, 2L)
+
+            plugin.logger.info("[VanishManager] ✓ ${player.name} vanish changed: $oldVanished -> $vanished")
+
+            // Mark vanish priority while vanished
+            if (vanished) {
+                GlobalVisibilityTicker.markPlayerAsVanishPriority(player)
+            } else {
+                GlobalVisibilityTicker.clearVanishPriorityFlag(player)
+            }
+
+            GlobalVisibilityTicker.clearPlayerFromQueue(player)
+            applyVanishVisibilityDirectWithPriority(player)
+
+            vanishListener?.updateBossBar(player)
+
+            // Queue updates for other players
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                Bukkit.getOnlinePlayers().forEach { otherPlayer ->
+                    if (otherPlayer != player) {
+                        GlobalVisibilityTicker.queueUpdateWithPriority(otherPlayer, "VANISH_UPDATE", "vanish_state_changed")
+                    }
+                }
+            }, 2L)
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error setting vanished for ${player.name}: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     fun setHideMe(player: Player, hideMe: Boolean) {
-        val state = getState(player)
-        val oldHideMe = state.hideMe
-        state.hideMe = hideMe
-        stateCache[player.uniqueId] = state
-        saveState(player)
+        try {
+            val state = getState(player)
+            val oldHideMe = state.hideMe
+            state.hideMe = hideMe
+            stateCache[player.uniqueId] = state
 
-        plugin.logger.info("[VANISH DEBUG] ${player.name} hideMe changed: $oldHideMe -> $hideMe")
-
-        // CRITICAL FIX: Clear any pending updates
-        GlobalVisibilityTicker.clearPlayerFromQueue(player)
-
-        applyVanishVisibilityDirectWithPriority(player)
-        vanishListener?.updateBossBar(player)
-
-        // Queue updates for other players
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            Bukkit.getOnlinePlayers().forEach { otherPlayer ->
-                if (otherPlayer != player) {
-                    GlobalVisibilityTicker.queueUpdateWithPriority(otherPlayer, "VANISH_UPDATE")
-                }
+            // Save to database
+            val saved = VanishDAO.save(player.uniqueId, state)
+            if (!saved) {
+                plugin.logger.warning("[VanishManager] ✗ Failed to save hideMe state for ${player.name}")
             }
-        }, 2L)
+
+            plugin.logger.info("[VanishManager] ✓ ${player.name} hideMe changed: $oldHideMe -> $hideMe")
+
+            GlobalVisibilityTicker.clearPlayerFromQueue(player)
+            applyVanishVisibilityDirectWithPriority(player)
+            vanishListener?.updateBossBar(player)
+
+            // Queue updates for other players
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                Bukkit.getOnlinePlayers().forEach { otherPlayer ->
+                    if (otherPlayer != player) {
+                        GlobalVisibilityTicker.queueUpdateWithPriority(otherPlayer, "VANISH_UPDATE", "hide_me_changed")
+                    }
+                }
+            }, 2L)
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error setting hideMe for ${player.name}: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     fun setHideOthers(player: Player, hideOthers: Boolean) {
-        val state = getState(player)
-        val oldHideOthers = state.hideOthers
-        state.hideOthers = hideOthers
-        stateCache[player.uniqueId] = state
-        saveState(player)
+        try {
+            val state = getState(player)
+            val oldHideOthers = state.hideOthers
+            state.hideOthers = hideOthers
+            stateCache[player.uniqueId] = state
 
-        plugin.logger.info("[VANISH DEBUG] ${player.name} hideOthers changed: $oldHideOthers -> $hideOthers")
+            // Save to database
+            val saved = VanishDAO.save(player.uniqueId, state)
+            if (!saved) {
+                plugin.logger.warning("[VanishManager] ✗ Failed to save hideOthers state for ${player.name}")
+            }
 
-        // CRITICAL FIX: Clear any pending updates
-        GlobalVisibilityTicker.clearPlayerFromQueue(player)
+            plugin.logger.info("[VanishManager] ✓ ${player.name} hideOthers changed: $oldHideOthers -> $hideOthers")
 
-        applyVanishVisibilityDirectWithPriority(player)
-        vanishListener?.updateBossBar(player)
+            GlobalVisibilityTicker.clearPlayerFromQueue(player)
+            applyVanishVisibilityDirectWithPriority(player)
+            vanishListener?.updateBossBar(player)
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error setting hideOthers for ${player.name}: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
+    // =================== SHOW OTHERS MANAGEMENT ===================
+
+    fun setShowOthers(player: Player, showOthers: Set<UUID>) {
+        try {
+            val state = getState(player)
+            state.showOthers = showOthers.toMutableSet()
+            stateCache[player.uniqueId] = state
+
+            // Save to database
+            val saved = VanishDAO.save(player.uniqueId, state)
+            if (!saved) {
+                plugin.logger.warning("[VanishManager] ✗ Failed to save showOthers for ${player.name}")
+            }
+
+            plugin.logger.info("[VanishManager] ✓ ${player.name} showOthers set to: ${showOthers.size} players")
+
+            GlobalVisibilityTicker.clearPlayerFromQueue(player)
+            applyVanishVisibilityDirectWithPriority(player)
+            vanishListener?.updateBossBar(player)
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error setting showOthers for ${player.name}: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    fun addShowOther(player: Player, target: Player) {
+        try {
+            val added = VanishDAO.addShowOther(player.uniqueId, target.uniqueId)
+            if (added) {
+                // Update cache
+                val state = getState(player)
+                state.showOthers.add(target.uniqueId)
+                stateCache[player.uniqueId] = state
+
+                plugin.logger.info("[VanishManager] ✓ ${player.name} added ${target.name} to showOthers")
+
+                GlobalVisibilityTicker.clearPlayerFromQueue(player)
+                applyVanishVisibilityDirectWithPriority(player)
+                vanishListener?.updateBossBar(player)
+            } else {
+                plugin.logger.warning("[VanishManager] ✗ Failed to add ${target.name} to showOthers for ${player.name}")
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error adding showOther for ${player.name}: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    fun removeShowOther(player: Player, target: Player) {
+        try {
+            val removed = VanishDAO.removeShowOther(player.uniqueId, target.uniqueId)
+            if (removed) {
+                // Update cache
+                val state = getState(player)
+                state.showOthers.remove(target.uniqueId)
+                stateCache[player.uniqueId] = state
+
+                plugin.logger.info("[VanishManager] ✓ ${player.name} removed ${target.name} from showOthers")
+
+                GlobalVisibilityTicker.clearPlayerFromQueue(player)
+                applyVanishVisibilityDirectWithPriority(player)
+                vanishListener?.updateBossBar(player)
+            } else {
+                plugin.logger.warning("[VanishManager] ✗ Failed to remove ${target.name} from showOthers for ${player.name}")
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error removing showOther for ${player.name}: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    // =================== VISIBILITY APPLICATION ===================
+
     /**
-     * FIXED: Direct visibility application with priority flag to prevent override
+     * Direct visibility application with priority flag to prevent override.
      */
     private fun applyVanishVisibilityDirectWithPriority(player: Player) {
-        val playerState = getState(player)
+        try {
+            val playerState = getState(player)
 
-        plugin.logger.info("[VANISH DEBUG] Applying PRIORITY visibility for ${player.name}")
+            plugin.logger.info("[VanishManager] Applying PRIORITY visibility for ${player.name}")
 
-        // Mark this as a high-priority vanish operation
-        GlobalVisibilityTicker.markPlayerAsVanishPriority(player)
+            // Mark this as a high-priority vanish operation
+            GlobalVisibilityTicker.markPlayerAsVanishPriority(player)
 
-        Bukkit.getOnlinePlayers().forEach { otherPlayer ->
-            if (otherPlayer == player) return@forEach
+            Bukkit.getOnlinePlayers().forEach { otherPlayer ->
+                if (otherPlayer == player) return@forEach
 
-            val otherState = getState(otherPlayer)
+                val otherState = getState(otherPlayer)
 
-            val playerShouldSeeOther = shouldPlayerSeePlayerDirect(player, otherPlayer, playerState, otherState)
-            val otherShouldSeePlayer = shouldPlayerSeePlayerDirect(otherPlayer, player, otherState, playerState)
+                val playerShouldSeeOther = shouldPlayerSeePlayerDirect(player, otherPlayer, playerState, otherState)
+                val otherShouldSeePlayer = shouldPlayerSeePlayerDirect(otherPlayer, player, otherState, playerState)
 
-            try {
-                if (playerShouldSeeOther) {
-                    player.showPlayer(plugin, otherPlayer)
-                } else {
-                    player.hidePlayer(plugin, otherPlayer)
+                try {
+                    if (playerShouldSeeOther) {
+                        player.showPlayer(plugin, otherPlayer)
+                    } else {
+                        player.hidePlayer(plugin, otherPlayer)
+                    }
+
+                    if (otherShouldSeePlayer) {
+                        otherPlayer.showPlayer(plugin, player)
+                    } else {
+                        otherPlayer.hidePlayer(plugin, player)
+                    }
+
+                    // Debug log for important changes
+                    if (!otherShouldSeePlayer || !playerShouldSeeOther) {
+                        plugin.logger.info("[VanishManager] PRIORITY: ${player.name} <-> ${otherPlayer.name}: ${player.name} sees ${otherPlayer.name}=$playerShouldSeeOther, ${otherPlayer.name} sees ${player.name}=$otherShouldSeePlayer")
+                    }
+
+                } catch (e: Exception) {
+                    plugin.logger.warning("[VanishManager] ✗ Error applying priority visibility: ${e.message}")
                 }
-
-                if (otherShouldSeePlayer) {
-                    otherPlayer.showPlayer(plugin, player)
-                } else {
-                    otherPlayer.hidePlayer(plugin, player)
-                }
-
-                // DEBUG LOG for important changes
-                if (!otherShouldSeePlayer || !playerShouldSeeOther) {
-                    plugin.logger.info("[VANISH DEBUG] PRIORITY: ${player.name} <-> ${otherPlayer.name}: ${player.name} sees ${otherPlayer.name}=$playerShouldSeeOther, ${otherPlayer.name} sees ${player.name}=$otherShouldSeePlayer")
-                }
-
-            } catch (e: Exception) {
-                plugin.logger.warning("[VANISH DEBUG] Error applying priority visibility: ${e.message}")
             }
-        }
 
-        // Handle flight
-        if (playerState.vanished) {
-            player.allowFlight = true
-            if (!player.isFlying) {
-                player.isFlying = true
+            // Handle flight for vanished players
+            if (playerState.vanished) {
+                player.allowFlight = true
+                if (!player.isFlying) {
+                    player.isFlying = true
+                }
             }
-        }
 
-        // Clear the priority flag after a delay
-        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            GlobalVisibilityTicker.clearVanishPriorityFlag(player)
-        }, 10L)
+            // Clear the priority flag after a delay
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                GlobalVisibilityTicker.clearVanishPriorityFlag(player)
+            }, 10L)
+
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error in applyVanishVisibilityDirectWithPriority: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     /**
-     * Direct visibility check - no other system interference
+     * Direct visibility check - no other system interference.
      */
     private fun shouldPlayerSeePlayerDirect(viewer: Player, target: Player, viewerState: VanishState, targetState: VanishState): Boolean {
         // If target is vanished or hideMe, viewer should not see them
@@ -199,46 +364,8 @@ object VanishManager {
         return true
     }
 
-    fun setShowOthers(player: Player, showOthers: Set<UUID>) {
-        val state = getState(player)
-        state.showOthers = showOthers.toMutableSet()
-        stateCache[player.uniqueId] = state
-        saveState(player)
+    // =================== PUBLIC GETTERS ===================
 
-        plugin.logger.info("[VANISH DEBUG] ${player.name} showOthers set to: ${showOthers.size} players")
-
-        GlobalVisibilityTicker.clearPlayerFromQueue(player)
-        applyVanishVisibilityDirectWithPriority(player)
-        vanishListener?.updateBossBar(player)
-    }
-
-    fun addShowOther(player: Player, target: Player) {
-        val state = getState(player)
-        state.showOthers.add(target.uniqueId)
-        stateCache[player.uniqueId] = state
-        saveState(player)
-
-        plugin.logger.info("[VANISH DEBUG] ${player.name} added ${target.name} to showOthers")
-
-        GlobalVisibilityTicker.clearPlayerFromQueue(player)
-        applyVanishVisibilityDirectWithPriority(player)
-        vanishListener?.updateBossBar(player)
-    }
-
-    fun removeShowOther(player: Player, target: Player) {
-        val state = getState(player)
-        state.showOthers.remove(target.uniqueId)
-        stateCache[player.uniqueId] = state
-        saveState(player)
-
-        plugin.logger.info("[VANISH DEBUG] ${player.name} removed ${target.name} from showOthers")
-
-        GlobalVisibilityTicker.clearPlayerFromQueue(player)
-        applyVanishVisibilityDirectWithPriority(player)
-        vanishListener?.updateBossBar(player)
-    }
-
-    // Public getters
     fun isVanished(player: Player): Boolean = getState(player).vanished
     fun isHideMe(player: Player): Boolean = getState(player).hideMe
     fun isHideOthers(player: Player): Boolean = getState(player).hideOthers
@@ -255,36 +382,59 @@ object VanishManager {
         return shouldPlayerSeePlayerDirect(viewer, target, viewerState, targetState)
     }
 
+    // =================== FORCE UPDATE METHODS ===================
+
     /**
-     * FIXED: Now uses priority system
+     * Force update all visibility with priority system.
      */
     fun forceUpdateAllVisibility() {
-        plugin.logger.info("[VANISH DEBUG] forceUpdateAllVisibility() called - APPLYING PRIORITY")
-        Bukkit.getOnlinePlayers().forEach { player ->
-            GlobalVisibilityTicker.clearPlayerFromQueue(player)
-            applyVanishVisibilityDirectWithPriority(player)
+        try {
+            plugin.logger.info("[VanishManager] ✓ forceUpdateAllVisibility() called - APPLYING PRIORITY")
+            Bukkit.getOnlinePlayers().forEach { player ->
+                GlobalVisibilityTicker.clearPlayerFromQueue(player)
+                applyVanishVisibilityDirectWithPriority(player)
+            }
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error in forceUpdateAllVisibility: ${e.message}")
+            e.printStackTrace()
         }
     }
 
     /**
-     * FIXED: Now uses priority system
+     * Queue visibility update with priority system.
      */
     fun queueVisibilityUpdate(player: Player) {
-        plugin.logger.info("[VANISH DEBUG] queueVisibilityUpdate() called for ${player.name} - APPLYING PRIORITY")
-        GlobalVisibilityTicker.clearPlayerFromQueue(player)
-        applyVanishVisibilityDirectWithPriority(player)
+        try {
+            plugin.logger.info("[VanishManager] ✓ queueVisibilityUpdate() called for ${player.name} - APPLYING PRIORITY")
+            GlobalVisibilityTicker.clearPlayerFromQueue(player)
+            applyVanishVisibilityDirectWithPriority(player)
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error in queueVisibilityUpdate for ${player.name}: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
+    // =================== CACHE MANAGEMENT ===================
+
     fun clearCache(player: Player) {
-        plugin.logger.info("[VANISH DEBUG] Clearing cache for ${player.name}")
-        stateCache.remove(player.uniqueId)
-        GlobalVisibilityTicker.clearPlayerFromQueue(player)
-        vanishListener?.removeBossBar(player)
+        try {
+            plugin.logger.info("[VanishManager] ✓ Clearing cache for ${player.name}")
+            stateCache.remove(player.uniqueId)
+            GlobalVisibilityTicker.clearPlayerFromQueue(player)
+            vanishListener?.removeBossBar(player)
+        } catch (e: Exception) {
+            plugin.logger.warning("[VanishManager] ✗ Error clearing cache for ${player.name}: ${e.message}")
+        }
     }
 
     fun clearAllCache() {
-        plugin.logger.info("[VANISH DEBUG] Clearing all cache")
-        stateCache.clear()
-        GlobalVisibilityTicker.clearAllCaches()
+        try {
+            plugin.logger.info("[VanishManager] ✓ Clearing all cache")
+            stateCache.clear()
+            GlobalVisibilityTicker.clearAllCaches()
+        } catch (e: Exception) {
+            plugin.logger.severe("[VanishManager] ❌ Error clearing all cache: ${e.message}")
+            e.printStackTrace()
+        }
     }
 }

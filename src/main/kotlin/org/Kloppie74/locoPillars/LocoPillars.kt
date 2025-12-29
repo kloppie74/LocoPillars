@@ -74,8 +74,6 @@ class LocoPillars : JavaPlugin() {
     lateinit var configs: List<GameConfig>
         private set
     lateinit var gameListener: GameListener
-    lateinit var databaseManager: DatabaseManager
-        private set
 
     lateinit var hotbarItemManager: HotbarItemManager
     lateinit var itemHotBarListener: ItemHotBarListener
@@ -174,9 +172,12 @@ class LocoPillars : JavaPlugin() {
             }
 
             // 6. DATABASE (AFTER GAME SETUP!)
-            databaseManager = DatabaseManager(this, configManager.dbConfig)
-            if (!databaseManager.initialize()) {
-                logger.severe("[LocoPillars] Database initialization failed! Disabling plugin.")
+            try {
+                DatabaseManager.initialize(this, configManager.dbConfig)
+                logger.info("[LocoPillars] ✓ DatabaseManager initialized successfully")
+            } catch (e: Exception) {
+                logger.severe("[LocoPillars] ❌ Database initialization failed! ${e.message}")
+                e.printStackTrace()
                 server.pluginManager.disablePlugin(this)
                 return
             }
@@ -245,10 +246,10 @@ class LocoPillars : JavaPlugin() {
             server.pluginManager.registerEvents(PlayerJoinListener(this), this)
 
             // 12. ACHIEVEMENTS SYSTEM
-            achievementManager = AchievementManager(databaseManager)
+            achievementManager = AchievementManager()
             val achievementsFolder = File(dataFolder, "Achievements")
             if (!achievementsFolder.exists()) achievementsFolder.mkdirs()
-            val achievementLoader = AchievementLoader(this, databaseManager)
+            val achievementLoader = AchievementLoader(this)
             achievementLoader.loadAchievements(achievementsFolder, achievementManager)
             achievementListener = AchievementListener(achievementManager, this)
             server.pluginManager.registerEvents(achievementListener, this)
@@ -427,9 +428,13 @@ class LocoPillars : JavaPlugin() {
             e.printStackTrace()
         }
 
-        if (::databaseManager.isInitialized) {
-            databaseManager.shutdown()
-            logger.info("[LocoPillars] DatabaseManager shutdown voltooid")
+        // ✅ Database shutdown (GEEN check meer op lateinit)
+        try {
+            DatabaseManager.close()
+            logger.info("[LocoPillars] ✓ DatabaseManager shutdown completed")
+        } catch (e: Exception) {
+            logger.severe("[LocoPillars] ❌ Error during database shutdown: ${e.message}")
+            e.printStackTrace()
         }
 
         logger.info("[LocoPillars] ==========================================")
@@ -441,10 +446,7 @@ class LocoPillars : JavaPlugin() {
         debugLog("Creating plugin folder structure...")
 
         val foldersToCreate = listOf(
-            File(dataFolder, "Games"),
-            File(dataFolder, "Schems"),
-            File(dataFolder, "Data"),
-            File(dataFolder, "Data/GameWorlds")
+            File(dataFolder, "Data")
         )
 
         foldersToCreate.forEach { folder ->
@@ -624,80 +626,97 @@ class LocoPillars : JavaPlugin() {
     }
 }
 
-const val DEFAULT_SCOREBOARDS_YML = """
-ScoreBoards:
-  Lobby:
-    Enabled: true
-    Title: "&aPillars &7Lobby"
-    Lines:
-      1: "&7Welkom in de Lobby!"
-      2: "&fGebruik &e/pillars join <gametype> &fom een spel te starten."
-      3: "&fOnline: %online_players%"
-      4: "&fGames: %active_games%"
-  GameLobby:
-    Enabled: true
-    Title: "&eGame Lobby"
-    Lines:
-      1: "&eWachten tot start..."
-      2: "&fGame: %game_name%"
-      3: "&fSpelers: %players% / %max_players%"
-      4: "&fMap: %map_name%"
-  Cage:
-    Enabled: true
-    Title: "&6Cage Phase"
-    Lines:
-      1: "&6Je staat in de cage!"
-      2: "&fGame start over: %cage_timer%"
-      3: "&fTeam: %team_name%"
-  Game:
-    Enabled: true
-    Title: "&cGame Active"
-    Lines:
-      1: "&cGAME ACTIEF!"
-      2: "&fSpelers: %players_left%"
-      3: "&fTimer: %game_timer%"
-      4: "&fMap: %map_name%"
-  Spectate:
-    Enabled: true
-    Title: "&7Spectator Mode"
-    Lines:
-      1: "&7Je bent nu toeschouwer."
-      2: "&fGame: %game_name%"
-      3: "&fSpelers over: %players_left%"
-      4: "&fTimer: %game_timer%"
-"""
-
 const val DEFAULT_ITEMS_YML = """
 items:
   spectate:
     1:
-      type: COMPASS
+      type: itemsadder-locomc:pack_joinrandomgame
       name: "&bJoin Random Game"
       lore:
         - "&7Click to join a random game"
       command: "/pillars join random"
+      slot: 4
     2:
-      type: FEATHER
+      type: itemsadder-locomc:pack_changespeed
       name: "&eSpectate Speed &7(GUI)"
       lore:
         - "&7Select your spectate speed"
       command: "%speed%"
+      slot: 6
   lobby:
     1:
-      type: CLOCK
-      name: "&aLobby Menu"
+      type: itemsadder-locomc:pack_accountsettings
+      name: "&aAccount Settings"
       lore:
-        - "&7Open the lobby menu"
-      command: "/menu"
+        - "&7Open the account settings menu"
+      command: "/settings"
+      slot: 4
     2:
-      type: BOOK
-      name: "&bInfo"
+      type: itemsadder-locomc:pack_playerstats
+      name: "&e&lPlayer Statistics"
       lore:
-        - "&7View server info"
+        - "&7View your player statistics"
+      slot: 6
+      command: "/stats"
     3:
-      type: COMPASS
+      type: itemsadder-locomc:pack_joinrandomgame
       name: "&bJoin Random Game"
       lore:
         - "&7Click to join a random game"
       command: "/pillars join random"
+      slot: 8
+  game_lobby:
+    1:
+      type: itemsadder-locomc:pack_leavegame
+      name: "&cLeave Game"
+      lore:
+        - "&7Click to leave this game and return to the lobby"
+      command: "/pillars leave"
+      slot: 4
+    2:
+      type: itemsadder-locomc:pack_vote
+      name: "&eVote for Event"
+      lore:
+        - "&7Vote for a special event in this game!"
+      command: "/pillars vote"
+      slot: 6
+Menu:
+  Speed:
+    Title: "&8■ &fSpeed Selection &8■"
+    Border:
+      Item: BLACK_STAINED_GLASS_PANE
+    Filler:
+      Item: GRAY_STAINED_GLASS_PANE
+    Speeds:
+      1:
+        Slot: 10
+        SpeedLevel: 1
+        Item: itemsadder-locomc:pack_speed1
+      2:
+        Slot: 11
+        SpeedLevel: 2
+        Item: itemsadder-locomc:pack_speed2
+      3:
+        Slot: 12
+        SpeedLevel: 3
+        Item: itemsadder-locomc:pack_speed3
+      4:
+        Slot: 13
+        SpeedLevel: 4
+        Item: itemsadder-locomc:pack_speed4
+      5:
+        Slot: 14
+        SpeedLevel: 5
+        Item: itemsadder-locomc:pack_speed5
+      6:
+        Slot: 15
+        SpeedLevel: 6
+        Item: itemsadder-locomc:pack_speed6
+      7:
+        Slot: 16
+        SpeedLevel: 7
+        Item: itemsadder-locomc:pack_speed7
+    Close:
+      Slot: 22
+      Item: BARRIER
 """

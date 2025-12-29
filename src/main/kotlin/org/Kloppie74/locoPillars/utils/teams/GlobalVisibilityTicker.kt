@@ -1,6 +1,7 @@
 package org.Kloppie74.locoPillars.utils.teams
 
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.database.dao.VanishDAO
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorVisibilityManager
 import org.Kloppie74.locoPillars.utils.vanish.VanishManager
@@ -414,8 +415,25 @@ object GlobalVisibilityTicker {
      */
     private fun checkVanishRules(viewer: Player, target: Player): Boolean? {
         try {
-            val viewerState = VanishManager.getState(viewer)
-            val targetState = VanishManager.getState(target)
+            // Load vanish states using DAO
+            val viewerState = try {
+                VanishDAO.load(viewer.uniqueId)
+            } catch (e: Exception) {
+                plugin.logger.warning("[GlobalVisibilityTicker] Error loading vanish state for ${viewer.name}: ${e.message}")
+                null
+            }
+
+            val targetState = try {
+                VanishDAO.load(target.uniqueId)
+            } catch (e: Exception) {
+                plugin.logger.warning("[GlobalVisibilityTicker] Error loading vanish state for ${target.name}: ${e.message}")
+                null
+            }
+
+            // If we couldn't load states, no vanish rules apply
+            if (viewerState == null || targetState == null) {
+                return null
+            }
 
             // If target is vanished or hideMe
             if (targetState.vanished || targetState.hideMe) {
@@ -438,6 +456,7 @@ object GlobalVisibilityTicker {
             return null
         }
     }
+
 
     /**
      * Check spectator system rules (MEDIUM PRIORITY)
@@ -487,16 +506,24 @@ object GlobalVisibilityTicker {
     private fun applyWorldVisibility(viewer: Player, target: Player, shouldSee: Boolean?) {
         if (shouldSee == null) return
 
-        // DO NOT override vanish priority: if target is vanished, always keep hidden from viewer
-        val targetState = VanishManager.getState(target)
-        if (targetState.vanished && !viewer.hasPermission("locopillars.vanish.seeothers")) {
-            if (viewer.canSee(target)) {
-                viewer.hidePlayer(plugin, target)
-            }
-            return
-        }
-
         try {
+            // DO NOT override vanish priority: if target is vanished, always keep hidden from viewer
+            val targetState = try {
+                VanishDAO.load(target.uniqueId)
+            } catch (e: Exception) {
+                plugin.logger.warning("[GlobalVisibilityTicker] Error loading vanish state for ${target.name}: ${e.message}")
+                null
+            }
+
+            // Check if target is vanished and viewer doesn't have permission to see vanished players
+            if (targetState != null && targetState.vanished && !viewer.hasPermission("locopillars.vanish.seeothers")) {
+                if (viewer.canSee(target)) {
+                    viewer.hidePlayer(plugin, target)
+                }
+                return
+            }
+
+            // Apply the requested visibility
             val canCurrentlySee = viewer.canSee(target)
             if (shouldSee && !canCurrentlySee) {
                 viewer.showPlayer(plugin, target)
@@ -513,9 +540,15 @@ object GlobalVisibilityTicker {
      */
     private fun updateFlightStatusForVanish(player: Player) {
         try {
-            val vanishState = VanishManager.getState(player)
+            val vanishState = try {
+                VanishDAO.load(player.uniqueId)
+            } catch (e: Exception) {
+                plugin.logger.warning("[GlobalVisibilityTicker] Error loading vanish state for ${player.name}: ${e.message}")
+                return
+            }
 
-            if (vanishState.vanished) {
+            // Only update flight if we successfully loaded vanish state
+            if (vanishState != null && vanishState.vanished) {
                 player.allowFlight = true
                 if (!player.isFlying) {
                     player.isFlying = true

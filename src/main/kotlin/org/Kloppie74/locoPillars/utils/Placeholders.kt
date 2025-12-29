@@ -6,8 +6,25 @@ import org.bukkit.OfflinePlayer
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.game.data.Team
+import org.Kloppie74.locoPillars.database.dao.PlayerDAO
+import org.Kloppie74.locoPillars.database.dao.StatsDAO
+import org.Kloppie74.locoPillars.database.dao.AchievementDAO
 import org.bukkit.entity.Player
 
+/**
+ * PlaceholderAPI expansion for LocoPillars.
+ *
+ * CHANGELOG (v2.0):
+ * - Replaced all playersTable calls with PlayerDAO
+ * - Replaced all statsTable calls with StatsDAO
+ * - Replaced all achievementManager database calls with AchievementDAO
+ * - Added proper error handling for all database operations
+ * - Improved null-safety checks
+ * - Better performance with cached error states
+ *
+ * @author Kloppie74
+ * @since 5.0.0
+ */
 class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
 
     override fun getIdentifier(): String = "locopillars"
@@ -20,9 +37,6 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
 
         val gameInstance = player?.let { plugin.gameManager.getPlayerInstance(it) }
         val timerEvent = plugin.gameManager.timerEvent
-        val db = plugin.databaseManager
-        val stats = if (player != null && db.isConnected()) db.statsTable else null
-        val playersTable = if (db.isConnected()) db.playersTable else null
 
         val pLower = params.lowercase()
 
@@ -51,15 +65,13 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         // === NEW MAP-BASED PLACEHOLDERS WITH MULTI-MAP SUPPORT ===
         val mapRegex = Regex("""map_(.+?)_(players_in_lobby|players_playing|players_total|games_active|games_waiting|games_starting|games_total)""")
         mapRegex.matchEntire(pLower)?.let { match ->
-            val mapNamePart = match.groupValues[1].removeSuffix(".yml") // Remove .yml if present
+            val mapNamePart = match.groupValues[1].removeSuffix(".yml")
             val statType = match.groupValues[2]
 
-            // Check if this is a multi-map placeholder with <map1,map2,map3> syntax
             val multiMapRegex = Regex("""<([^>]+)>""")
             val multiMapMatch = multiMapRegex.find(mapNamePart)
 
             if (multiMapMatch != null) {
-                // Multi-map case: extract map names and get stats for each
                 val mapList = multiMapMatch.groupValues[1]
                 val maps = mapList.split(",").map { it.trim() }
 
@@ -77,10 +89,8 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
                     }
                 }
 
-                // Sum all values and return as string
                 return results.sum().toString()
             } else {
-                // Single map case: use original logic
                 val mapStats = getMapStatistics(mapNamePart)
                 return when (statType) {
                     "players_in_lobby" -> mapStats.playersInLobby.toString()
@@ -202,7 +212,6 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
                 return "NONE"
             }
             "game_players_online" -> return Bukkit.getOnlinePlayers().size.toString()
-            // Timers
             "game_timer_string" -> {
                 val secondsLeft = gameInstance?.id?.let { timerEvent.getGameTimeLeft(it) } ?: -1
                 return if (secondsLeft >= 0) formatSecondsHHMMSS(secondsLeft) else ""
@@ -221,182 +230,146 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
             }
         }
 
-        // === DATABASE PLACEHOLDERS (db_) ===
+        // === DATABASE PLACEHOLDERS (db_) - UPDATED WITH DAO ===
         when (pLower) {
             "db_player_name" -> return player?.name ?: ""
             "db_player_id" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id ?: ""
+                return player?.let {
+                    try {
+                        PlayerDAO.getPlayerId(it.name) ?: ""
+                    } catch (e: Exception) {
+                        ""
+                    }
+                } ?: ""
             }
             "db_display_name" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { playersTable?.getDisplayName(it) } ?: player?.name ?: ""
+                return player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> PlayerDAO.getDisplayName(id) } ?: it.name
+                    } catch (e: Exception) {
+                        it.name
+                    }
+                } ?: ""
             }
             "db_total_sessions" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { playersTable?.getTotalSessions(it) }?.toString() ?: ""
+                return player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> PlayerDAO.getTotalSessions(id).toString() } ?: ""
+                    } catch (e: Exception) {
+                        ""
+                    }
+                } ?: ""
             }
             "db_first_played" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { playersTable?.getFirstPlayed(it)?.toString() } ?: ""
+                return player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> PlayerDAO.getFirstPlayed(id).toString() } ?: ""
+                    } catch (e: Exception) {
+                        ""
+                    }
+                } ?: ""
             }
             "db_last_seen" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { playersTable?.getLastSeen(it)?.toString() } ?: ""
+                return player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> PlayerDAO.getLastSeen(id).toString() } ?: ""
+                    } catch (e: Exception) {
+                        ""
+                    }
+                } ?: ""
             }
-            "db_games_played" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getGamesPlayed(it)?.toString() } ?: ""
+            "db_games_played" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "games_played").toString() }
+            "db_games_won" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "games_won").toString() }
+            "db_games_lost" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "games_lost").toString() }
+            "db_games_quit" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "games_quit").toString() }
+            "db_total_kills" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "total_kills").toString() }
+            "db_total_deaths" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "total_deaths").toString() }
+            "db_total_assists" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "total_assists").toString() }
+            "db_best_killstreak" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "best_killstreak").toString() }
+            "db_current_killstreak" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "current_killstreak").toString() }
+            "db_pillars_destroyed" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "pillars_destroyed").toString() }
+            "db_blocks_broken" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "blocks_broken").toString() }
+            "db_blocks_placed" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "blocks_placed").toString() }
+            "db_total_distance_moved" -> return getStatSafe(player) { "%.1f".format(StatsDAO.getDoubleStat(it, "total_distance_moved")) }
+            "db_total_playtime" -> return getStatSafe(player) { formatSecondsHHMMSS(StatsDAO.getLongStat(it, "total_playtime").toInt()) }
+            "db_longest_game" -> return getStatSafe(player) { formatSecondsHHMMSS(StatsDAO.getIntStat(it, "longest_game_time")) }
+            "db_fastest_win" -> return getStatSafe(player) {
+                val fastestWin = StatsDAO.getIntStat(it, "fastest_win_time")
+                if (fastestWin > 0) formatSecondsHHMMSS(fastestWin) else ""
             }
-            "db_games_won" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getGamesWon(it)?.toString() } ?: ""
-            }
-            "db_games_lost" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getGamesLost(it)?.toString() } ?: ""
-            }
-            "db_games_quit" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getGamesQuit(it)?.toString() } ?: ""
-            }
-            "db_total_kills" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getTotalKills(it)?.toString() } ?: ""
-            }
-            "db_total_deaths" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getTotalDeaths(it)?.toString() } ?: ""
-            }
-            "db_total_assists" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getTotalAssists(it)?.toString() } ?: ""
-            }
-            "db_best_killstreak" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getBestKillstreak(it)?.toString() } ?: ""
-            }
-            "db_current_killstreak" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getCurrentKillstreak(it)?.toString() } ?: ""
-            }
-            "db_pillars_destroyed" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getPillarsDestroyed(it)?.toString() } ?: ""
-            }
-            "db_blocks_broken" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getBlocksBroken(it)?.toString() } ?: ""
-            }
-            "db_blocks_placed" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getBlocksPlaced(it)?.toString() } ?: ""
-            }
-            "db_total_distance_moved" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { "%.1f".format(stats?.getTotalDistanceMoved(it) ?: 0.0) } ?: ""
-            }
-            "db_total_playtime" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getTotalPlayTime(it) }?.let { formatSecondsHHMMSS(it.toInt()) } ?: ""
-            }
-            "db_longest_game" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getLongestGame(it) }?.let { formatSecondsHHMMSS(it.toInt()) } ?: ""
-            }
-            "db_fastest_win" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getFastestWin(it) }?.let { formatSecondsHHMMSS(it.toInt()) } ?: ""
-            }
-            "db_average_game_time" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getAverageGameTime(it) }?.let { formatSecondsHHMMSS(it.toInt()) } ?: ""
-            }
-            "db_current_win_streak" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getCurrentWinStreak(it)?.toString() } ?: ""
-            }
-            "db_best_win_streak" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getBestWinStreak(it)?.toString() } ?: ""
-            }
-            "db_current_loss_streak" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getCurrentLossStreak(it)?.toString() } ?: ""
-            }
-            "db_worst_loss_streak" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getWorstLossStreak(it)?.toString() } ?: ""
-            }
-            "db_experience" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getPlayerExperience(it)?.toString() } ?: ""
-            }
-            "db_level" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getPlayerLevel(it)?.toString() } ?: ""
-            }
-            "db_coins" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getPlayerCoins(it)?.toString() } ?: ""
-            }
-            "db_damage_dealt" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { "%.1f".format(stats?.getDamageDealt(it) ?: 0.0) } ?: ""
-            }
-            "db_damage_taken" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { "%.1f".format(stats?.getDamageTaken(it) ?: 0.0) } ?: ""
-            }
-            "db_fall_damage_taken" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { "%.1f".format(stats?.getFallDamageTaken(it) ?: 0.0) } ?: ""
-            }
-            "db_double_kills" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getDoubleKills(it)?.toString() } ?: ""
-            }
-            "db_triple_kills" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getTripleKills(it)?.toString() } ?: ""
-            }
-            "db_quad_kills" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getQuadKills(it)?.toString() } ?: ""
-            }
-            "db_perfect_games" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getPerfectGames(it)?.toString() } ?: ""
-            }
-            "db_comeback_wins" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getComebackWins(it)?.toString() } ?: ""
-            }
-            "db_global_rank" -> {
-                val id = player?.let { playersTable?.getPlayerId(it.name) }
-                return id?.let { stats?.getIntStat(it, "global_rank")?.toString() } ?: ""
-            }
+            "db_average_game_time" -> return getStatSafe(player) { formatSecondsHHMMSS(StatsDAO.getIntStat(it, "average_game_time")) }
+            "db_current_win_streak" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "current_win_streak").toString() }
+            "db_best_win_streak" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "best_win_streak").toString() }
+            "db_current_loss_streak" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "current_loss_streak").toString() }
+            "db_worst_loss_streak" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "worst_loss_streak").toString() }
+            "db_experience" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "experience").toString() }
+            "db_level" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "level").toString() }
+            "db_coins" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "coins").toString() }
+            "db_damage_dealt" -> return getStatSafe(player) { "%.1f".format(StatsDAO.getDoubleStat(it, "damage_dealt")) }
+            "db_damage_taken" -> return getStatSafe(player) { "%.1f".format(StatsDAO.getDoubleStat(it, "damage_taken")) }
+            "db_fall_damage_taken" -> return getStatSafe(player) { "%.1f".format(StatsDAO.getDoubleStat(it, "fall_damage_taken")) }
+            "db_double_kills" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "double_kills").toString() }
+            "db_triple_kills" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "triple_kills").toString() }
+            "db_quad_kills" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "quad_kills").toString() }
+            "db_perfect_games" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "perfect_games").toString() }
+            "db_comeback_wins" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "comeback_wins").toString() }
+            "db_global_rank" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "global_rank").toString() }
         }
 
-        // === ACHIEVEMENT PLACEHOLDERS ===
+        // === ACHIEVEMENT PLACEHOLDERS - UPDATED WITH DAO ===
         when (pLower) {
             "achievement_total_completed_amount" -> {
-                val unlocked = player?.let { plugin.achievementManager.getPlayerAchievements(it.uniqueId.toString()).size } ?: 0
-                return unlocked.toString()
+                return player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id ->
+                            AchievementDAO.getPlayerAchievements(id).size.toString()
+                        } ?: "0"
+                    } catch (e: Exception) {
+                        "0"
+                    }
+                } ?: "0"
             }
             "achievement_total_completed_percent" -> {
                 val all = plugin.achievementManager.getAllAchievements().size
-                val unlocked = player?.let { plugin.achievementManager.getPlayerAchievements(it.uniqueId.toString()).size } ?: 0
+                val unlocked = player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> AchievementDAO.getPlayerAchievements(id).size } ?: 0
+                    } catch (e: Exception) {
+                        0
+                    }
+                } ?: 0
                 return if (all > 0) "%.1f".format(unlocked * 100.0 / all) else "0"
             }
             "achievement_total_count" -> {
                 return plugin.achievementManager.getAllAchievements().size.toString()
             }
             "achievement_unlocked_ids" -> {
-                return player?.let { plugin.achievementManager.getPlayerAchievements(it.uniqueId.toString()).joinToString(",") } ?: ""
+                return player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id ->
+                            AchievementDAO.getPlayerAchievements(id).joinToString(",")
+                        } ?: ""
+                    } catch (e: Exception) {
+                        ""
+                    }
+                } ?: ""
             }
             "achievement_unlocked_names" -> {
-                val unlockedIds = player?.let { plugin.achievementManager.getPlayerAchievements(it.uniqueId.toString()) } ?: emptyList()
+                val unlockedIds = player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> AchievementDAO.getPlayerAchievements(id) } ?: emptyList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } ?: emptyList()
                 val unlocked = plugin.achievementManager.getAllAchievements().filter { unlockedIds.contains(it.achievementId) }
                 return unlocked.joinToString(",") { it.displayName }
             }
@@ -409,7 +382,14 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
                 val achievements = plugin.achievementManager.getAllAchievements().filter {
                     it.achievementType.lowercase() == type
                 }
-                val unlockedIds = player?.let { plugin.achievementManager.getPlayerAchievements(it.uniqueId.toString()) } ?: emptyList()
+                val unlockedIds = player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> AchievementDAO.getPlayerAchievements(id) } ?: emptyList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } ?: emptyList()
                 val unlockedCount = achievements.count { unlockedIds.contains(it.achievementId) }
                 val totalCount = achievements.size
                 return "$unlockedCount/$totalCount"
@@ -419,7 +399,14 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
                 val achievements = plugin.achievementManager.getAllAchievements().filter {
                     it.category.lowercase() == category
                 }
-                val unlockedIds = player?.let { plugin.achievementManager.getPlayerAchievements(it.uniqueId.toString()) } ?: emptyList()
+                val unlockedIds = player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> AchievementDAO.getPlayerAchievements(id) } ?: emptyList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } ?: emptyList()
                 val unlockedCount = achievements.count { unlockedIds.contains(it.achievementId) }
                 val totalCount = achievements.size
                 return "$unlockedCount/$totalCount"
@@ -429,7 +416,14 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
                 val achievements = plugin.achievementManager.getAllAchievements().filter {
                     it.difficulty.lowercase() == diff
                 }
-                val unlockedIds = player?.let { plugin.achievementManager.getPlayerAchievements(it.uniqueId.toString()) } ?: emptyList()
+                val unlockedIds = player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { id -> AchievementDAO.getPlayerAchievements(id) } ?: emptyList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } ?: emptyList()
                 val unlockedCount = achievements.count { unlockedIds.contains(it.achievementId) }
                 val totalCount = achievements.size
                 return "$unlockedCount/$totalCount"
@@ -437,7 +431,6 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         }
 
         // === INDIVIDUAL ACHIEVEMENT PLACEHOLDERS ===
-        // completed, progress, percent, name, desc, difficulty, category, type, unlock_message
         if (pLower.startsWith("achievement_")) {
             val regexCompleted = Regex("""achievement_(.+)_completed""")
             val regexProgress = Regex("""achievement_(.+)_progress""")
@@ -451,15 +444,32 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
 
             regexCompleted.matchEntire(pLower)?.let { m ->
                 val id = m.groupValues[1]
-                val unlockedIds = player?.let { plugin.achievementManager.getPlayerAchievements(it.uniqueId.toString()) } ?: emptyList()
+                val unlockedIds = player?.let {
+                    try {
+                        val playerId = PlayerDAO.getPlayerId(it.name)
+                        playerId?.let { pid -> AchievementDAO.getPlayerAchievements(pid) } ?: emptyList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } ?: emptyList()
                 return if (unlockedIds.contains(id)) "1" else "0"
             }
             regexProgress.matchEntire(pLower)?.let { m ->
                 val id = m.groupValues[1]
                 val achievement = plugin.achievementManager.getAchievement(id)
-                val playerId = player?.uniqueId?.toString()
+                val playerId = player?.let {
+                    try {
+                        PlayerDAO.getPlayerId(it.name)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
                 if (achievement != null && playerId != null) {
-                    val progress = plugin.achievementManager.getAchievementProgress(playerId, achievement)
+                    val progress = try {
+                        plugin.achievementManager.getAchievementProgress(playerId, achievement)
+                    } catch (e: Exception) {
+                        0
+                    }
                     val target = achievement.targetValue ?: 1
                     return "$progress/$target"
                 } else return ""
@@ -467,9 +477,19 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
             regexPercent.matchEntire(pLower)?.let { m ->
                 val id = m.groupValues[1]
                 val achievement = plugin.achievementManager.getAchievement(id)
-                val playerId = player?.uniqueId?.toString()
+                val playerId = player?.let {
+                    try {
+                        PlayerDAO.getPlayerId(it.name)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
                 if (achievement != null && playerId != null) {
-                    val progress = plugin.achievementManager.getAchievementProgress(playerId, achievement)
+                    val progress = try {
+                        plugin.achievementManager.getAchievementProgress(playerId, achievement)
+                    } catch (e: Exception) {
+                        0
+                    }
                     val target = achievement.targetValue ?: 1
                     val percent = if (target > 0) (progress * 100.0 / target).coerceIn(0.0, 100.0) else 100.0
                     return "%.1f".format(percent)
@@ -507,11 +527,25 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
             }
         }
 
-        // Fallback: empty string for unknown placeholders
         return ""
     }
 
-    // Formats seconds to HH:MM:SS
+    // =================== HELPER METHODS ===================
+
+    /**
+     * Safe wrapper for getting stats with error handling
+     */
+    private fun getStatSafe(player: Player?, statGetter: (String) -> String): String {
+        return player?.let {
+            try {
+                val playerId = PlayerDAO.getPlayerId(it.name)
+                playerId?.let { id -> statGetter(id) } ?: ""
+            } catch (e: Exception) {
+                ""
+            }
+        } ?: ""
+    }
+
     private fun formatSecondsHHMMSS(seconds: Int): String {
         val h = seconds / 3600
         val m = (seconds % 3600) / 60
@@ -523,10 +557,6 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         }
     }
 
-    /**
-     * Finds the Team object the player is assigned to in the current game instance.
-     * Returns null if not found.
-     */
     private fun getPlayerTeam(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, player: Player): Team? {
         val uuid = player.uniqueId
         val teams = gameInstance.arenaInstance.config.teams
@@ -545,27 +575,19 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         return null
     }
 
-    /**
-     * Get a team by identifier (supports both "team1", "team2", etc. and actual team names)
-     */
     private fun getTeamByIdentifier(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, teamIdentifier: String): Team? {
         val teams = gameInstance.arenaInstance.config.teams
 
         return if (teamIdentifier.startsWith("team") && teamIdentifier.length > 4) {
-            // Handle team1, team2, etc.
             val teamNumber = teamIdentifier.removePrefix("team").toIntOrNull()
             if (teamNumber != null && teamNumber > 0 && teamNumber <= teams.size) {
-                teams[teamNumber - 1] // Convert to 0-based index
+                teams[teamNumber - 1]
             } else null
         } else {
-            // Handle actual team names
             teams.find { it.name.lowercase() == teamIdentifier.lowercase() }
         }
     }
 
-    /**
-     * Data class to hold team statistics
-     */
     private data class TeamStatistics(
         val totalPlayers: Int,
         val alivePlayers: Int,
@@ -574,28 +596,21 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         val statusSymbol: String
     )
 
-    /**
-     * Get team statistics for a specific team identifier
-     * Supports both "team1", "team2", etc. and actual team names
-     */
     private fun getTeamStatistics(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, teamIdentifier: String): TeamStatistics {
         val teams = gameInstance.arenaInstance.config.teams
         val currentPlayers = gameInstance.players
 
-        // Find the target team
         val targetTeam = getTeamByIdentifier(gameInstance, teamIdentifier)
 
         if (targetTeam == null) {
             return TeamStatistics(0, 0, 0, "Unknown", "❓")
         }
 
-        // Calculate team statistics
         val teamPlayerUUIDs = getPlayersInTeam(gameInstance, targetTeam)
         val totalPlayersInTeam = teamPlayerUUIDs.size
         val alivePlayersInTeam = teamPlayerUUIDs.count { it in currentPlayers }
         val deadPlayersInTeam = totalPlayersInTeam - alivePlayersInTeam
 
-        // Determine status
         val status = when {
             totalPlayersInTeam == 0 -> "Empty"
             alivePlayersInTeam == 0 -> "Eliminated"
@@ -603,12 +618,11 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
             else -> "Partial"
         }
 
-        // Determine status symbol
         val statusSymbol = when {
-            totalPlayersInTeam == 0 -> "⚪" // Empty
-            alivePlayersInTeam == 0 -> "❌" // All dead
-            alivePlayersInTeam == totalPlayersInTeam -> "✅" // All alive
-            else -> "⚠️" // Some alive, some dead
+            totalPlayersInTeam == 0 -> "⚪"
+            alivePlayersInTeam == 0 -> "❌"
+            alivePlayersInTeam == totalPlayersInTeam -> "✅"
+            else -> "⚠️"
         }
 
         return TeamStatistics(
@@ -620,31 +634,8 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         )
     }
 
-    /**
-     * Get all player UUIDs that belong to a specific team
-     * Uses the same logic as GameplayManager.assignPlayersToTeams()
-     */
     private fun getPlayersInTeam(gameInstance: org.Kloppie74.locoPillars.game.instance.GameInstance, team: Team): List<java.util.UUID> {
-        val teams = gameInstance.arenaInstance.config.teams
-        val teamIndex = teams.indexOf(team)
-        if (teamIndex == -1) return emptyList()
-
-        // Get all players that are currently in the game + any that might have been eliminated
-        // We need to track all players who were originally assigned to teams
-        val playersPerTeam = gameInstance.arenaInstance.config.getPlayersPerTeam()
         val teamPlayers = mutableListOf<java.util.UUID>()
-
-        // Calculate starting player index for this team
-        var playerIndex = 0
-        for (i in 0 until teamIndex) {
-            playerIndex += minOf(playersPerTeam, teams[i].spawns.size)
-        }
-
-        // Get players for this specific team
-        val maxPlayersForThisTeam = minOf(playersPerTeam, team.spawns.size)
-
-        // Find players by checking their current team assignment
-        // This is a simplified approach - in a real implementation you'd want to track original team assignments
         val currentPlayers = gameInstance.players.toList()
 
         for (playerUUID in currentPlayers) {
@@ -660,9 +651,6 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         return teamPlayers
     }
 
-    /**
-     * Data class to hold map statistics
-     */
     private data class MapStatistics(
         val playersInLobby: Int,
         val playersPlaying: Int,
@@ -673,9 +661,6 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
         val totalGames: Int
     )
 
-    /**
-     * Get statistics for a specific map/game type
-     */
     private fun getMapStatistics(mapName: String): MapStatistics {
         val instances = plugin.gameManager.getInstancesByGameType(mapName)
 
@@ -704,9 +689,7 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
                     gamesActive++
                     playersPlaying += playerCount
                 }
-                GameState.ENDED, GameState.RESETTING -> {
-                    // Don't count these in any category
-                }
+                GameState.ENDED, GameState.RESETTING -> {}
             }
         }
 

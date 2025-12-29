@@ -81,7 +81,6 @@ class ArenaWorldManager(
                     debugLog("  - Environment: ${world.environment}")
                     debugLog("  - Seed: ${world.seed}")
                     debugLog("  - Spawn location: ${world.spawnLocation}")
-                    debugLog("  - Keep spawn in memory: ${world.keepSpawnInMemory}")
 
                     configureWorld(world)
                     arenaWorlds[worldName] = world
