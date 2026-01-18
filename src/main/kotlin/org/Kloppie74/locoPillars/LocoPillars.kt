@@ -2,6 +2,8 @@ package org.Kloppie74.locoPillars
 
 import com.comphenix.protocol.ProtocolLibrary
 import com.comphenix.protocol.ProtocolManager
+import org.Kloppie74.locoPillars.api.LocoDevCommand
+import org.Kloppie74.locoPillars.api.LocoDevStatsService
 import org.Kloppie74.locoPillars.commands.Editor.Menu
 import org.Kloppie74.locoPillars.commands.MemoryCommand
 import org.bukkit.plugin.java.JavaPlugin
@@ -104,6 +106,8 @@ class LocoPillars : JavaPlugin() {
     lateinit var scoreboardManager: ScoreboardManager
     lateinit var tabVisibilityManager: TabVisibilityManager
     lateinit var teamsListener: TeamsListener
+
+    var locoDevStats: LocoDevStatsService? = null
 
     override fun onEnable() {
         instance = this
@@ -291,6 +295,16 @@ class LocoPillars : JavaPlugin() {
                 logger.warning("[LocoPillars] PlaceholderAPI not found, placeholders will not work.")
             }
 
+            try {
+                logger.info("[LocoPillars] Initializing LocoDev Stats API...")
+                locoDevStats = LocoDevStatsService(this)
+                locoDevStats?.start()
+                logger.info("[LocoPillars] ✓ LocoDev Stats API initialized")
+            } catch (e: Exception) {
+                logger.warning("[LocoPillars] ✗ LocoDev Stats could not start: ${e.message}")
+                e.printStackTrace()
+            }
+
             // 16. STARTUP SUMMARY
             showStartupSummary()
         } catch (e: Exception) {
@@ -382,6 +396,12 @@ class LocoPillars : JavaPlugin() {
         logger.info("[LocoPillars] ==========================================")
 
         try {
+            locoDevStats?.stop()
+        } catch (e: Exception) {
+            logger.warning("[LocoDev] Error bij stats shutdown: ${e.message}")
+        }
+
+        try {
             var cleanupErrors = 0
 
             if (::gameManager.isInitialized) {
@@ -428,7 +448,6 @@ class LocoPillars : JavaPlugin() {
             e.printStackTrace()
         }
 
-        // ✅ Database shutdown (GEEN check meer op lateinit)
         try {
             DatabaseManager.close()
             logger.info("[LocoPillars] ✓ DatabaseManager shutdown completed")
@@ -518,6 +537,13 @@ class LocoPillars : JavaPlugin() {
             }
         } else {
             logger.severe("[LocoPillars] ✗ Failed to register '/memory' command")
+        }
+
+        getCommand("locodev")?.let {
+            val locoCmd = LocoDevCommand(this)
+            it.setExecutor(locoCmd)
+            it.tabCompleter = locoCmd
+            debugLog("✓ Command '/locodev' registered")
         }
     }
 

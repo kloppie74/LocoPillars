@@ -210,7 +210,6 @@ Scoreboards:
       7: "&f"
       6: "&fLevel: &b%locopillars_db_level%"
       5: "&fExperience: &e%locopillars_db_experience%"
-      5: "&fGames won: &d%locopillars_db_games_won%"
       4: "&fAchievements: &a%locopillars_achievement_total_completed_percent%% completed"
       2: "&f"
       1: "&fPlay.LocoMc.net"

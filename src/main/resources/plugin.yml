@@ -7,6 +7,12 @@ description: "Pillars of the Fortune - memory-friendly multi-instance minigame!"
 depend: [WorldEdit, WorldGuard]
 
 commands:
+  locodev:
+    description: LocoDev API commands
+    usage: /locodev <version|announcements|stats|info|reload>
+    permission: locopillars.locodev
+    aliases: [ ldev, lcd ]
+
   pillars:
     description: "Main command for Pillars of Fortune"
     usage: "/pillars <join|leave|list|status|stats|help> [args]"

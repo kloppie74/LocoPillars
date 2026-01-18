@@ -67,6 +67,12 @@ dependencies {
 
     // Forceer ASM 9.6 voor Java 21 class compatibility
     implementation("org.ow2.asm:asm:9.6")
+
+    // OkHttp for HTTP requests
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // JSON library
+    implementation("org.json:json:20231013")
 }
 
 tasks {
