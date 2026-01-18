@@ -7,6 +7,7 @@ import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.commands.Editor.MapManager
+import org.Kloppie74.locoPillars.commands.admin.MapAdminCommand
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.utils.MSG
@@ -14,8 +15,13 @@ import org.Kloppie74.locoPillars.commands.Editor.Menu
 
 class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabCompleter {
 
-    private val adminSubCmds = listOf("menu", "createmap", "editmap", "deletemap", "listmaps")
+    private val adminSubCmds = listOf("menu", "createmap", "editmap", "deletemap", "listmaps", "map")
     private val adminPerm = "locopillars.pillars.admin"
+    
+    // Map admin command handler
+    private val mapAdminCommand: MapAdminCommand by lazy {
+        MapAdminCommand(plugin, plugin.mapIOManager, plugin.editorSessionManager)
+    }
 
     private val subPermissions = mapOf(
         "join" to "locopillars.pillars.join",
@@ -39,10 +45,15 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
                 return true
             }
             if (args.size < 2) {
-                sender.sendMessage(MSG.chatColors("&e/pillars admin <menu|createmap|editmap|deletemap|listmaps>"))
+                sender.sendMessage(MSG.chatColors("&e/pillars admin <menu|map|createmap|editmap|deletemap|listmaps>"))
                 return true
             }
             when (args[1].lowercase()) {
+                "map" -> {
+                    // Route to MapAdminCommand
+                    val mapArgs = args.drop(2).toTypedArray()
+                    return mapAdminCommand.onCommand(sender, command, label, mapArgs)
+                }
                 "menu" -> {
                     Menu.openMainMenu(sender)
                     return true
@@ -337,10 +348,28 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
         if (args.isNotEmpty() && args[0].equals("admin", ignoreCase = true) && sender.hasPermission(adminPerm)) {
             return when (args.size) {
                 2 -> adminSubCmds.filter { it.startsWith(args[1], ignoreCase = true) }
-                3 -> if (args[1].lowercase() in listOf("editmap", "deletemap")) {
-                    MapManager.getAllMapNames().filter { it.startsWith(args[2], ignoreCase = true) }
-                } else emptyList()
-                else -> emptyList()
+                3 -> {
+                    when (args[1].lowercase()) {
+                        "map" -> {
+                            // Route to MapAdminCommand tab completion
+                            val mapArgs = args.drop(2).toTypedArray()
+                            mapAdminCommand.onTabComplete(sender, command, alias, mapArgs) ?: emptyList()
+                        }
+                        "editmap", "deletemap" -> {
+                            MapManager.getAllMapNames().filter { it.startsWith(args[2], ignoreCase = true) }
+                        }
+                        else -> emptyList()
+                    }
+                }
+                else -> {
+                    // For args size 4+, check if it's a map subcommand
+                    if (args[1].lowercase() == "map") {
+                        val mapArgs = args.drop(2).toTypedArray()
+                        mapAdminCommand.onTabComplete(sender, command, alias, mapArgs) ?: emptyList()
+                    } else {
+                        emptyList()
+                    }
+                }
             }
         }
 
