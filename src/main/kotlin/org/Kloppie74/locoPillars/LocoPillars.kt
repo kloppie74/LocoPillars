@@ -6,12 +6,15 @@ import org.Kloppie74.locoPillars.api.LocoDevCommand
 import org.Kloppie74.locoPillars.api.LocoDevStatsService
 import org.Kloppie74.locoPillars.commands.Editor.Menu
 import org.Kloppie74.locoPillars.commands.MemoryCommand
+import org.Kloppie74.locoPillars.commands.admin.MapAdminCommand
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.game.config.GameConfig
 import org.Kloppie74.locoPillars.game.manager.GameManager
 import org.Kloppie74.locoPillars.game.arena.ArenaManager
 import org.Kloppie74.locoPillars.game.arena.ArenaWorldManager
 import org.Kloppie74.locoPillars.game.template.TemplateManager
+import org.Kloppie74.locoPillars.game.map.MapIOManager
+import org.Kloppie74.locoPillars.game.map.EditorSessionManager
 import org.Kloppie74.locoPillars.commands.PillarsCommand
 import org.Kloppie74.locoPillars.commands.StatsCommand
 import org.Kloppie74.locoPillars.game.manager.SpawnAreaManager
@@ -76,6 +79,12 @@ class LocoPillars : JavaPlugin() {
     lateinit var configs: List<GameConfig>
         private set
     lateinit var gameListener: GameListener
+    
+    // Map Editor System
+    lateinit var mapIOManager: MapIOManager
+        private set
+    lateinit var editorSessionManager: EditorSessionManager
+        private set
 
     lateinit var hotbarItemManager: HotbarItemManager
     lateinit var itemHotBarListener: ItemHotBarListener
@@ -144,6 +153,12 @@ class LocoPillars : JavaPlugin() {
                 logger.info("[LocoPillars] No templates found, creating default templates...")
                 templateManager.createDefaultTemplates()
             }
+
+            // 3.5 MAP EDITOR SYSTEM
+            logger.info("[LocoPillars] Initializing Map Editor System...")
+            mapIOManager = MapIOManager(this, configManager)
+            editorSessionManager = EditorSessionManager(this, mapIOManager)
+            logger.info("[LocoPillars] ✓ Map Editor System initialized")
 
             worldManager = ArenaWorldManager(this, configManager)
             arenaManager = ArenaManager(this, worldManager, configManager)
@@ -439,6 +454,13 @@ class LocoPillars : JavaPlugin() {
 
             if (::arenaManager.isInitialized) {
                 arenaManager.onDisable()
+            }
+            
+            // Cleanup editor sessions
+            if (::editorSessionManager.isInitialized) {
+                logger.info("[LocoPillars] Cleaning up editor sessions...")
+                editorSessionManager.cleanup()
+                logger.info("[LocoPillars] ✓ Editor sessions cleanup completed")
             }
 
             logger.info("[LocoPillars] ✓ Cleanup completed with $cleanupErrors total errors")
