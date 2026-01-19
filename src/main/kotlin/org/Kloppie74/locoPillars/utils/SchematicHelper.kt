@@ -37,6 +37,9 @@ object SchematicHelper {
         return pasteClipboard(plugin, configManager, clipboard, location)
     }
 
+    /**
+     * Paste a preloaded clipboard into the world at the given location.
+     */
     fun pasteClipboard(plugin: JavaPlugin, configManager: ConfigManager, clipboard: Clipboard, location: Location): Boolean {
         try {
             val bWorld = location.world ?: run {

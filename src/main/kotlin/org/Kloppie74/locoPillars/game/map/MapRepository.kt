@@ -176,6 +176,7 @@ class MapRepository(
         }
         
         // Copy default schematic if it exists
+        // Prefer explicit _template.schem overrides before falling back to default_map.schem.
         val templateSchem = listOf(
             File(templatesFolder, "_template.schem"),
             File(templatesFolder, "default_map.schem")

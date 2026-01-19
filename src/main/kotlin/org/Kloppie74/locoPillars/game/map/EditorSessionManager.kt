@@ -33,8 +33,6 @@ class EditorSessionManager(
     
     private val activeSessions = mutableMapOf<UUID, EditorSession>()
     private val pendingSessions = mutableSetOf<UUID>()
-    private val faweAvailable = Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
-    // FAWE (FastAsyncWorldEdit) allows safe async schematic operations; otherwise run on main thread.
     
     /**
      * Start an editor session for a player
@@ -106,15 +104,20 @@ class EditorSessionManager(
     }
 
     private fun pasteClipboardAsync(clipboard: Clipboard, location: Location): CompletableFuture<Boolean> {
-        return scheduleTask(faweAvailable) {
+        return scheduleTask(isFaweAvailable()) {
             SchematicHelper.pasteClipboard(plugin, plugin.configManager, clipboard, location)
         }
     }
 
     private fun saveSchematicAsync(loc1: Location, loc2: Location, schemFile: File): CompletableFuture<Boolean> {
-        return scheduleTask(faweAvailable) {
+        return scheduleTask(isFaweAvailable()) {
             SchematicHelper.saveSchematic(plugin, plugin.configManager, loc1, loc2, schemFile)
         }
+    }
+
+    private fun isFaweAvailable(): Boolean {
+        // FAWE (FastAsyncWorldEdit) allows safe async schematic operations.
+        return Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
     }
 
     private fun finishSessionStart(
@@ -168,7 +171,7 @@ class EditorSessionManager(
     private fun applyBedrockAnchor(world: World, mapName: String, updateSettings: Boolean) {
         val anchorBlock = world.getBlockAt(0, 0, 0)
         anchorBlock.type = Material.BEDROCK
-        if (anchorBlock.type != Material.BEDROCK) {
+        if (world.getBlockAt(0, 0, 0).type != Material.BEDROCK) {
             plugin.logger.warning("[EditorSessionManager] Failed to set bedrock anchor for $mapName")
         }
         if (!updateSettings) {
@@ -184,6 +187,10 @@ class EditorSessionManager(
 
     private fun <T> scheduleTask(async: Boolean, task: () -> T): CompletableFuture<T> {
         val future = CompletableFuture<T>()
+        if (!plugin.isEnabled) {
+            future.completeExceptionally(IllegalStateException("Plugin disabled"))
+            return future
+        }
         val runnable = Runnable {
             if (!plugin.isEnabled) {
                 future.completeExceptionally(IllegalStateException("Plugin disabled"))
