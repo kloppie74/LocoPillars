@@ -1,6 +1,7 @@
 package org.Kloppie74.locoPillars.game.map
 
 import org.bukkit.Bukkit
+import org.bukkit.GameMode
 import org.bukkit.World
 import org.bukkit.WorldCreator
 import org.bukkit.entity.Player
@@ -23,7 +24,7 @@ import java.util.UUID
  */
 class EditorSessionManager(
     private val plugin: LocoPillars,
-    private val mapIOManager: MapIOManager
+    private val mapRepository: MapRepository
 ) {
     
     private val activeSessions = mutableMapOf<UUID, EditorSession>()
@@ -33,7 +34,7 @@ class EditorSessionManager(
      */
     fun startSession(player: Player, mapName: String): Boolean {
         // Check if map exists
-        if (!mapIOManager.mapExists(mapName)) {
+        if (!mapRepository.mapExists(mapName)) {
             player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
             return false
         }
@@ -55,9 +56,12 @@ class EditorSessionManager(
         }
         
         // Load schematic if it exists
-        val schemFile = mapIOManager.getMapSchematicFile(mapName)
+        val schemFile = mapRepository.getMapSchematicFile(mapName)
         if (schemFile.exists()) {
-            val centerLoc = world.getBlockAt(0, 65, 0).location
+            val spawnY = mapRepository.loadMapSettings(mapName)
+                ?.getDouble("Settings.SpawnPoint.Y", 65.0)
+                ?: 65.0
+            val centerLoc = world.getBlockAt(0, spawnY.toInt(), 0).location
             val success = SchematicHelper.pasteSchematic(plugin, plugin.configManager, schemFile, centerLoc)
             
             if (success) {
@@ -70,21 +74,24 @@ class EditorSessionManager(
         }
         
         // Create session
-        val session = EditorSession(player, mapName, world, plugin, mapIOManager)
+        val session = EditorSession(player, mapName, world, plugin, mapRepository)
         activeSessions[player.uniqueId] = session
         
-        // Teleport player
-        player.teleport(world.getBlockAt(0, 65, 0).location.add(0.5, 1.0, 0.5))
+        // Set creative mode and teleport player
+        player.gameMode = GameMode.CREATIVE
+        player.teleport(world.getBlockAt(0, 100, 0).location)
         
         // Send info
         player.sendMessage(MSG.chatColors("&a=== Editor Session Started ==="))
         player.sendMessage(MSG.chatColors("&eMap: &f$mapName"))
         player.sendMessage(MSG.chatColors("&eWorld: &f$worldName"))
         player.sendMessage(MSG.chatColors("&7RED particles show the save region"))
+        player.sendMessage(MSG.chatColors("&7GREEN particles show the play border"))
         player.sendMessage(MSG.chatColors(""))
         player.sendMessage(MSG.chatColors("&7Commands:"))
         player.sendMessage(MSG.chatColors("  &e/pillars admin map save &7- Save changes"))
         player.sendMessage(MSG.chatColors("  &e/pillars admin map resize <radius> &7- Adjust save region"))
+        player.sendMessage(MSG.chatColors("  &e/pillars admin map settings &7- Open editor settings"))
         player.sendMessage(MSG.chatColors("  &e/pillars admin map info &7- Show session info"))
         player.sendMessage(MSG.chatColors("  &e/pillars admin map cancel &7- Cancel without saving"))
         
@@ -113,7 +120,7 @@ class EditorSessionManager(
         
         // Get save region bounds
         val (loc1, loc2) = session.getSaveRegionBounds()
-        val schemFile = mapIOManager.getMapSchematicFile(session.mapName)
+        val schemFile = mapRepository.getMapSchematicFile(session.mapName)
         
         // Ensure parent directory exists
         schemFile.parentFile?.mkdirs()
@@ -126,10 +133,11 @@ class EditorSessionManager(
             player.sendMessage(MSG.chatColors("&7Schematic saved to: &f${schemFile.name}"))
             
             // Save settings (in case radius was changed)
-            val config = mapIOManager.loadMapSettings(session.mapName)
+            val config = mapRepository.loadMapSettings(session.mapName)
             if (config != null) {
-                config.set("SchematicRadius", session.getSchematicRadius())
-                mapIOManager.saveMapSettings(session.mapName, config)
+                config.set("SaveRadius", session.getSaveRadius())
+                config.set("SchematicRadius", session.getSaveRadius())
+                mapRepository.saveMapSettings(session.mapName, config)
             }
             
             debugLog("Saved map ${session.mapName}")
@@ -229,7 +237,7 @@ class EditorSessionManager(
             return false
         }
         
-        session.setSchematicRadius(radius)
+        session.setSaveRadius(radius)
         return true
     }
     

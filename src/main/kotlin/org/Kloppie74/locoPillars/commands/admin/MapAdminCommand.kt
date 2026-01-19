@@ -5,9 +5,8 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
-import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.map.EditorSessionManager
-import org.Kloppie74.locoPillars.game.map.MapIOManager
+import org.Kloppie74.locoPillars.game.map.MapRepository
 import org.Kloppie74.locoPillars.utils.MSG
 
 /**
@@ -22,12 +21,12 @@ import org.Kloppie74.locoPillars.utils.MSG
  * - /pillars admin map cancel - Cancel current editing session
  * - /pillars admin map resize <radius> - Adjust schematic save radius
  * - /pillars admin map info - Show current session info
- * - /pillars admin map settings <name> - Open map settings GUI
+ * - /pillars admin map settings - Open map settings GUI
  */
 class MapAdminCommand(
-    private val plugin: LocoPillars,
-    private val mapIOManager: MapIOManager,
-    private val editorSessionManager: EditorSessionManager
+    private val mapRepository: MapRepository,
+    private val editorSessionManager: EditorSessionManager,
+    private val mapEditorMenu: MapEditorMenu
 ) : CommandExecutor, TabCompleter {
     
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -80,14 +79,14 @@ class MapAdminCommand(
             return
         }
         
-        if (mapIOManager.mapExists(mapName)) {
+        if (mapRepository.mapExists(mapName)) {
             player.sendMessage(MSG.chatColors("&cMap '$mapName' already exists!"))
             return
         }
         
         player.sendMessage(MSG.chatColors("&eCreating map: &f$mapName&e..."))
         
-        val success = mapIOManager.createMap(mapName)
+        val success = mapRepository.createMap(mapName)
         
         if (success) {
             player.sendMessage(MSG.chatColors("&a✓ Map '$mapName' created successfully!"))
@@ -101,7 +100,7 @@ class MapAdminCommand(
         if (args.size < 2) {
             player.sendMessage(MSG.chatColors("&cUsage: /pillars admin map edit <name>"))
             
-            val maps = mapIOManager.getAllMapNames()
+            val maps = mapRepository.getAllMapNames()
             if (maps.isNotEmpty()) {
                 player.sendMessage(MSG.chatColors("&7Available maps: &e${maps.joinToString(", ")}"))
             }
@@ -110,7 +109,7 @@ class MapAdminCommand(
         
         val mapName = args[1]
         
-        if (!mapIOManager.mapExists(mapName)) {
+        if (!mapRepository.mapExists(mapName)) {
             player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
             player.sendMessage(MSG.chatColors("&7Use &e/pillars admin map list &7to see available maps"))
             return
@@ -128,7 +127,7 @@ class MapAdminCommand(
         
         val mapName = args[1]
         
-        if (!mapIOManager.mapExists(mapName)) {
+        if (!mapRepository.mapExists(mapName)) {
             player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
             return
         }
@@ -137,7 +136,7 @@ class MapAdminCommand(
         // For now, just delete it
         player.sendMessage(MSG.chatColors("&cDeleting map: &f$mapName&c..."))
         
-        val success = mapIOManager.deleteMap(mapName)
+        val success = mapRepository.deleteMap(mapName)
         
         if (success) {
             player.sendMessage(MSG.chatColors("&c✓ Map '$mapName' has been deleted!"))
@@ -147,7 +146,7 @@ class MapAdminCommand(
     }
     
     private fun handleList(player: Player) {
-        val maps = mapIOManager.getAllMapNames()
+        val maps = mapRepository.getAllMapNames()
         
         if (maps.isEmpty()) {
             player.sendMessage(MSG.chatColors("&eNo maps found!"))
@@ -158,9 +157,9 @@ class MapAdminCommand(
         player.sendMessage(MSG.chatColors("&6=== Available Maps (${maps.size}) ==="))
         
         maps.forEach { mapName ->
-            val validation = mapIOManager.validateMap(mapName)
+            val validation = mapRepository.validateMap(mapName)
             val status = if (validation.isValid) "&a✓" else "&c✗"
-            val radius = mapIOManager.getSchematicRadius(mapName)
+            val radius = mapRepository.getSaveRadius(mapName)
             
             player.sendMessage(MSG.chatColors("$status &e$mapName &7(radius: ${radius})"))
             
@@ -208,9 +207,9 @@ class MapAdminCommand(
         
         if (args.size < 2) {
             val session = editorSessionManager.getSession(player)
-            val currentRadius = session?.getSchematicRadius() ?: 50
+            val currentRadius = session?.getSaveRadius() ?: 50
             player.sendMessage(MSG.chatColors("&cUsage: /pillars admin map resize <radius>"))
-            player.sendMessage(MSG.chatColors("&7Current radius: &e$currentRadius"))
+            player.sendMessage(MSG.chatColors("&7Current save radius: &e$currentRadius"))
             player.sendMessage(MSG.chatColors("&7Recommended range: 20-200"))
             return
         }
@@ -235,22 +234,13 @@ class MapAdminCommand(
     }
     
     private fun handleSettings(player: Player, args: Array<out String>) {
-        if (args.size < 2) {
-            player.sendMessage(MSG.chatColors("&cUsage: /pillars admin map settings <name>"))
+        if (!editorSessionManager.hasSession(player)) {
+            player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
+            player.sendMessage(MSG.chatColors("&7Use &e/pillars admin map edit <name> &7to start editing"))
             return
         }
-        
-        val mapName = args[1]
-        
-        if (!mapIOManager.mapExists(mapName)) {
-            player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
-            return
-        }
-        
-        // Open GUI (to be implemented)
-        player.sendMessage(MSG.chatColors("&eMap settings GUI coming soon!"))
-        player.sendMessage(MSG.chatColors("&7For now, edit the settings.yml file directly"))
-        player.sendMessage(MSG.chatColors("&7File: &fplugins/LocoPillars/maps/$mapName/settings.yml"))
+
+        mapEditorMenu.open(player)
     }
     
     private fun handleValidate(player: Player, args: Array<out String>) {
@@ -261,12 +251,12 @@ class MapAdminCommand(
         
         val mapName = args[1]
         
-        if (!mapIOManager.mapExists(mapName)) {
+        if (!mapRepository.mapExists(mapName)) {
             player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
             return
         }
         
-        val validation = mapIOManager.validateMap(mapName)
+        val validation = mapRepository.validateMap(mapName)
         
         player.sendMessage(MSG.chatColors("&6=== Map Validation: $mapName ==="))
         
@@ -297,6 +287,7 @@ class MapAdminCommand(
         player.sendMessage(MSG.chatColors("&e/pillars admin map cancel &7- Cancel current session"))
         player.sendMessage(MSG.chatColors("&e/pillars admin map resize <radius> &7- Adjust save region"))
         player.sendMessage(MSG.chatColors("&e/pillars admin map info &7- Show session info"))
+        player.sendMessage(MSG.chatColors("&e/pillars admin map settings &7- Open editor settings"))
         player.sendMessage(MSG.chatColors("&e/pillars admin map validate <name> &7- Validate map"))
     }
     
@@ -320,9 +311,9 @@ class MapAdminCommand(
             
             2 -> {
                 when (args[0].lowercase()) {
-                    "edit", "delete", "settings", "validate" -> {
+                    "edit", "delete", "validate" -> {
                         // Suggest map names
-                        mapIOManager.getAllMapNames()
+                        mapRepository.getAllMapNames()
                             .filter { it.lowercase().startsWith(args[1].lowercase()) }
                     }
                     "resize" -> {

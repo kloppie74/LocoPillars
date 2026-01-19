@@ -120,7 +120,7 @@ permissions:
   locoPillars.play:
     description: "Allow players to join and play games"
     default: true
-  locoPillars.admin:
+  locopillars.admin:
     description: "Administrative permissions for LocoPillars"
     default: op
   locoPillars.stats:

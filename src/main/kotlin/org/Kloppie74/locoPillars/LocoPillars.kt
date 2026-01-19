@@ -4,16 +4,15 @@ import com.comphenix.protocol.ProtocolLibrary
 import com.comphenix.protocol.ProtocolManager
 import org.Kloppie74.locoPillars.api.LocoDevCommand
 import org.Kloppie74.locoPillars.api.LocoDevStatsService
-import org.Kloppie74.locoPillars.commands.Editor.Menu
 import org.Kloppie74.locoPillars.commands.MemoryCommand
-import org.Kloppie74.locoPillars.commands.admin.MapAdminCommand
+import org.Kloppie74.locoPillars.commands.admin.MapEditorMenu
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.game.config.GameConfig
 import org.Kloppie74.locoPillars.game.manager.GameManager
 import org.Kloppie74.locoPillars.game.arena.ArenaManager
 import org.Kloppie74.locoPillars.game.arena.ArenaWorldManager
 import org.Kloppie74.locoPillars.game.template.TemplateManager
-import org.Kloppie74.locoPillars.game.map.MapIOManager
+import org.Kloppie74.locoPillars.game.map.MapRepository
 import org.Kloppie74.locoPillars.game.map.EditorSessionManager
 import org.Kloppie74.locoPillars.commands.PillarsCommand
 import org.Kloppie74.locoPillars.commands.StatsCommand
@@ -81,9 +80,11 @@ class LocoPillars : JavaPlugin() {
     lateinit var gameListener: GameListener
     
     // Map Editor System
-    lateinit var mapIOManager: MapIOManager
+    lateinit var mapRepository: MapRepository
         private set
     lateinit var editorSessionManager: EditorSessionManager
+        private set
+    lateinit var mapEditorMenu: MapEditorMenu
         private set
 
     lateinit var hotbarItemManager: HotbarItemManager
@@ -156,8 +157,10 @@ class LocoPillars : JavaPlugin() {
 
             // 3.5 MAP EDITOR SYSTEM
             logger.info("[LocoPillars] Initializing Map Editor System...")
-            mapIOManager = MapIOManager(this, configManager)
-            editorSessionManager = EditorSessionManager(this, mapIOManager)
+            mapRepository = MapRepository(this, configManager)
+            editorSessionManager = EditorSessionManager(this, mapRepository)
+            mapEditorMenu = MapEditorMenu(this, editorSessionManager)
+            server.pluginManager.registerEvents(mapEditorMenu, this)
             logger.info("[LocoPillars] ✓ Map Editor System initialized")
 
             worldManager = ArenaWorldManager(this, configManager)
@@ -205,7 +208,6 @@ class LocoPillars : JavaPlugin() {
             registerCommands()
             placeholders = Placeholders(this)
 
-            getServer().pluginManager.registerEvents(Menu, this)
 
             if (!setupProtocolLib()) {
                 logger.severe("ProtocolLib is required for proper tab functionality! Disabling tab per-game-instance feature.")
