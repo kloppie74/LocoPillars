@@ -6,17 +6,17 @@ import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import java.io.File
 
 /**
- * MapIOManager - Handles Folder-Based Map Storage
+ * MapRepository - Handles Folder-Based Map Storage
  * 
  * Architecture:
  * - Maps are stored in: plugins/LocoPillars/maps/<MapName>/
  * - Each map folder contains:
  *   - region.schem: The physical world data (WorldEdit schematic)
- *   - settings.yml: Metadata (SpawnPoints, BorderSize, MaxPlayers, SchematicRadius, etc.)
+ *   - settings.yml: Metadata (SpawnPoints, BorderSize, SaveRadius, etc.)
  * 
  * The .yml acts as the database record; the .schem is the physical asset.
  */
-class MapIOManager(
+class MapRepository(
     private val plugin: JavaPlugin,
     private val configManager: ConfigManager
 ) {
@@ -74,7 +74,8 @@ class MapIOManager(
         // Map Metadata
         config.set("MapName", "NewMap")
         config.set("DisplayName", "New Map")
-        config.set("SchematicRadius", 50) // Critical for dynamic save
+        config.set("SaveRadius", 50)
+        config.set("SchematicRadius", 50)
         
         // Game Settings
         config.set("Settings.BuildHeight", 80)
@@ -277,20 +278,28 @@ class MapIOManager(
     }
     
     /**
-     * Get the schematic radius for a map (used for dynamic save)
+     * Get the save radius for a map (used for dynamic save)
      */
-    fun getSchematicRadius(mapName: String): Int {
+    fun getSaveRadius(mapName: String): Int {
         val config = loadMapSettings(mapName)
-        return config?.getInt("SchematicRadius", 50) ?: 50
+        return config?.getInt("SaveRadius")
+            ?: config?.getInt("SchematicRadius", 50)
+            ?: 50
     }
     
     /**
-     * Update the schematic radius for a map
+     * Update the save radius for a map
      */
-    fun updateSchematicRadius(mapName: String, radius: Int): Boolean {
+    fun updateSaveRadius(mapName: String, radius: Int): Boolean {
         val config = loadMapSettings(mapName) ?: return false
+        config.set("SaveRadius", radius)
         config.set("SchematicRadius", radius)
         return saveMapSettings(mapName, config)
+    }
+
+    fun getBorderSize(mapName: String): Double {
+        val config = loadMapSettings(mapName)
+        return config?.getDouble("Border.Size", 100.0) ?: 100.0
     }
     
     /**
@@ -317,8 +326,8 @@ class MapIOManager(
                     warnings.add("No spawn locations defined")
                 }
                 
-                if (!config.contains("SchematicRadius")) {
-                    warnings.add("SchematicRadius not defined (will default to 50)")
+                if (!config.contains("SaveRadius") && !config.contains("SchematicRadius")) {
+                    warnings.add("SaveRadius not defined (will default to 50)")
                 }
                 
             } catch (e: Exception) {
@@ -337,7 +346,7 @@ class MapIOManager(
     
     private fun debugLog(message: String) {
         if (configManager.debugMode) {
-            plugin.logger.info("[MapIOManager] $message")
+            plugin.logger.info("[MapRepository] $message")
         }
     }
 }

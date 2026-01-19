@@ -6,21 +6,19 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
-import org.Kloppie74.locoPillars.commands.Editor.MapManager
 import org.Kloppie74.locoPillars.commands.admin.MapAdminCommand
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.utils.MSG
-import org.Kloppie74.locoPillars.commands.Editor.Menu
 
 class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabCompleter {
 
-    private val adminSubCmds = listOf("menu", "createmap", "editmap", "deletemap", "listmaps", "map")
-    private val adminPerm = "locopillars.pillars.admin"
+    private val adminSubCmds = listOf("map")
+    private val adminPerm = "locopillars.admin"
     
     // Map admin command handler
     private val mapAdminCommand: MapAdminCommand by lazy {
-        MapAdminCommand(plugin, plugin.mapIOManager, plugin.editorSessionManager)
+        MapAdminCommand(plugin.mapRepository, plugin.editorSessionManager, plugin.mapEditorMenu)
     }
 
     private val subPermissions = mapOf(
@@ -45,7 +43,7 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
                 return true
             }
             if (args.size < 2) {
-                sender.sendMessage(MSG.chatColors("&e/pillars admin <menu|map|createmap|editmap|deletemap|listmaps>"))
+                sender.sendMessage(MSG.chatColors("&e/pillars admin map <subcommand>"))
                 return true
             }
             when (args[1].lowercase()) {
@@ -54,30 +52,9 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
                     val mapArgs = args.drop(2).toTypedArray()
                     return mapAdminCommand.onCommand(sender, command, label, mapArgs)
                 }
-                "menu" -> {
-                    Menu.openMainMenu(sender)
-                    return true
-                }
-                "createmap" -> {
-                    Menu.openMainMenu(sender) // Let user click "Create Map" in GUI; chat prompt handled by Menu
-                    return true
-                }
-                "editmap" -> {
-                    Menu.openMapSelector(sender, Menu.MapAction.EDIT)
-                    return true
-                }
-                "deletemap" -> {
-                    Menu.openMapSelector(sender, Menu.MapAction.DELETE)
-                    return true
-                }
-                "listmaps" -> {
-                    val maps = MapManager.getAllMapNames()
-                    sender.sendMessage(MSG.chatColors("&eAvailable maps: &7${if (maps.isEmpty()) "none" else maps.joinToString(", ")}"))
-                    return true
-                }
                 else -> {
                     sender.sendMessage(MSG.chatColors("&cUnknown admin subcommand: ${args[1]}"))
-                    sender.sendMessage(MSG.chatColors("&e/pillars admin <menu|createmap|editmap|deletemap|listmaps>"))
+                    sender.sendMessage(MSG.chatColors("&e/pillars admin map <subcommand>"))
                     return true
                 }
             }
@@ -354,9 +331,6 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
                             // Route to MapAdminCommand tab completion
                             val mapArgs = args.drop(2).toTypedArray()
                             mapAdminCommand.onTabComplete(sender, command, alias, mapArgs) ?: emptyList()
-                        }
-                        "editmap", "deletemap" -> {
-                            MapManager.getAllMapNames().filter { it.startsWith(args[2], ignoreCase = true) }
                         }
                         else -> emptyList()
                     }
