@@ -7,9 +7,7 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
-import org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyBlockConfig
 import org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyBlockEngine
-import org.Kloppie74.locoPillars.utils.MSG
 
 class EngineLuckyBlocksCommand(private val config: ConfigManager, private val engine: LuckyBlockEngine) : CommandExecutor, TabCompleter {
 
@@ -196,130 +194,6 @@ class EngineLuckyBlocksCommand(private val config: ConfigManager, private val en
 
         return emptyList()
     }
-}
-
-// Updated menu system to work with the engine
-object EngineLuckyBlocksMenu {
-
-    fun openMenu(engine: LuckyBlockEngine, player: Player, page: Int = 0) {
-        val configs = engine.getAllConfigs().values.toList().sortedBy { it.displayName }
-        val menuTitle = "LuckyBlocks Engine"
-        val rows = 6
-        val cols = 9
-        val blocksPerPage = (rows - 2) * (cols - 2) // 7x4 = 28
-
-        val maxPage = kotlin.math.max(0, ((configs.size - 1) / blocksPerPage))
-        val currentPage = kotlin.math.min(kotlin.math.max(page, 0), maxPage)
-
-        val inv = Bukkit.createInventory(null, rows * cols, "$menuTitle - Page ${currentPage + 1}/${maxPage + 1}")
-
-        // Fill borders
-        for (slot in 0 until rows * cols) {
-            if (isBorder(slot, rows, cols)) {
-                val item = org.bukkit.inventory.ItemStack(org.bukkit.Material.GRAY_STAINED_GLASS_PANE)
-                val meta = item.itemMeta
-                meta?.setDisplayName(" ")
-                item.itemMeta = meta
-                inv.setItem(slot, item)
-            }
-        }
-
-        // Add LuckyBlocks
-        val startIndex = currentPage * blocksPerPage
-        val endIndex = kotlin.math.min(startIndex + blocksPerPage, configs.size)
-        var blockSlot = 0
-
-        for (i in startIndex until endIndex) {
-            val config = configs[i]
-            val slot = getSlotFromIndex(blockSlot, cols)
-            val item = createMenuItemFromConfig(config, engine)
-            inv.setItem(slot, item)
-            blockSlot++
-        }
-
-        // Navigation arrows
-        if (currentPage > 0) {
-            val leftArrow = org.bukkit.inventory.ItemStack(org.bukkit.Material.ARROW)
-            val leftMeta = leftArrow.itemMeta
-            leftMeta?.setDisplayName(MSG.chatColors("&bPrevious Page"))
-            leftArrow.itemMeta = leftMeta
-            inv.setItem(getArrowLeftSlot(rows, cols), leftArrow)
-        }
-
-        if (currentPage < maxPage) {
-            val rightArrow = org.bukkit.inventory.ItemStack(org.bukkit.Material.ARROW)
-            val rightMeta = rightArrow.itemMeta
-            rightMeta?.setDisplayName(MSG.chatColors("&bNext Page"))
-            rightArrow.itemMeta = rightMeta
-            inv.setItem(getArrowRightSlot(rows, cols), rightArrow)
-        }
-
-        player.openInventory(inv)
-    }
-
-    private fun createMenuItemFromConfig(config: LuckyBlockConfig, engine: LuckyBlockEngine): org.bukkit.inventory.ItemStack {
-        val materialName = config.icon.material.uppercase()
-        val material = try {
-            org.bukkit.Material.valueOf(materialName)
-        } catch (e: Exception) {
-            org.bukkit.Material.PLAYER_HEAD
-        }
-
-        val item = org.bukkit.inventory.ItemStack(material)
-        val meta = item.itemMeta ?: return item
-
-        // Set custom model data if present
-        config.icon.customModelData?.let { customModelData ->
-            try {
-                meta.setCustomModelData(customModelData)
-            } catch (e: Exception) {
-                // Ignore if not supported
-            }
-        }
-
-        meta.setDisplayName(MSG.chatColors("&e${config.displayName} &7[${config.rarity}]"))
-
-        val lore = mutableListOf<String>()
-        if (config.description.isNotBlank()) {
-            lore.add(MSG.chatColors("&f${config.description}"))
-        }
-        lore.add("")
-        lore.add(MSG.chatColors("&8Rarity: &b${config.rarity}"))
-        lore.add(MSG.chatColors("&8Effects: &7${config.effects.size}"))
-        lore.add(MSG.chatColors("&8Conditions: &7${config.conditions.size}"))
-        lore.add(MSG.chatColors("&8Filters: &7${config.filters.size}"))
-        lore.add(MSG.chatColors("&8Triggers: &7${config.triggers.size}"))
-        lore.add("")
-        lore.add(MSG.chatColors("&eClick to get this LuckyBlock!"))
-        lore.add(MSG.chatColors("&8ID: &7${config.id}"))
-
-        meta.lore = lore
-
-        // Store the config ID for click handling
-        meta.persistentDataContainer.set(
-            org.bukkit.NamespacedKey.minecraft("luckyblock_config_id"),
-            org.bukkit.persistence.PersistentDataType.STRING,
-            config.id
-        )
-
-        item.itemMeta = meta
-        return item
-    }
-
-    private fun isBorder(slot: Int, rows: Int, cols: Int): Boolean {
-        val row = slot / cols
-        val col = slot % cols
-        return row == 0 || row == rows - 1 || col == 0 || col == cols - 1
-    }
-
-    private fun getSlotFromIndex(index: Int, cols: Int): Int {
-        val row = index / 7 + 1
-        val col = index % 7 + 1
-        return row * cols + col
-    }
-
-    private fun getArrowLeftSlot(rows: Int, cols: Int): Int = ((rows / 2) * cols)
-    private fun getArrowRightSlot(rows: Int, cols: Int): Int = ((rows / 2) * cols) + cols - 1
 }
 
 // Integration helper for existing codebase

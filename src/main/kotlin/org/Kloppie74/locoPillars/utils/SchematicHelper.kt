@@ -32,8 +32,22 @@ object SchematicHelper {
         debugLog(plugin, configManager, "File: ${schemFile.absolutePath}")
         debugLog(plugin, configManager, "Target location: ${location.world?.name} at ${location.blockX}, ${location.blockY}, ${location.blockZ}")
 
+        if (!validateSchematicFile(plugin, configManager, schemFile)) return false
+        val clipboard = loadSchematic(plugin, configManager, schemFile) ?: return false
+        return pasteClipboard(plugin, configManager, clipboard, location)
+    }
+
+    /**
+     * Paste a preloaded clipboard into the world at the given location.
+     *
+     * @param plugin plugin context used for logging
+     * @param configManager configuration access for debug logging
+     * @param clipboard clipboard to paste
+     * @param location target location for the paste
+     * @return true when the paste completes successfully
+     */
+    fun pasteClipboard(plugin: JavaPlugin, configManager: ConfigManager, clipboard: Clipboard, location: Location): Boolean {
         try {
-            if (!validateSchematicFile(plugin, configManager, schemFile)) return false
             val bWorld = location.world ?: run {
                 plugin.logger.severe("[SchematicHelper] Location world is null!")
                 return false
@@ -41,23 +55,13 @@ object SchematicHelper {
 
             val weWorld = BukkitAdapter.adapt(bWorld)
             WorldEdit.getInstance().newEditSession(weWorld).use { editSession ->
-                val format = ClipboardFormats.findByFile(schemFile) ?: run {
-                    plugin.logger.severe("[SchematicHelper] Could not determine format for: ${schemFile.name}")
-                    return false
-                }
+                val operation = ClipboardHolder(clipboard)
+                    .createPaste(editSession)
+                    .to(BlockVector3.at(location.blockX, location.blockY, location.blockZ))
+                    .ignoreAirBlocks(false)
+                    .build()
 
-                FileInputStream(schemFile).use { inputStream ->
-                    format.getReader(inputStream).use { reader ->
-                        val clipboard = reader.read()
-                        val operation = ClipboardHolder(clipboard)
-                            .createPaste(editSession)
-                            .to(BlockVector3.at(location.blockX, location.blockY, location.blockZ))
-                            .ignoreAirBlocks(false)
-                            .build()
-
-                        Operations.complete(operation)
-                    }
-                }
+                Operations.complete(operation)
             }
 
             debugLog(plugin, configManager, "✓ Paste operation completed successfully!")
