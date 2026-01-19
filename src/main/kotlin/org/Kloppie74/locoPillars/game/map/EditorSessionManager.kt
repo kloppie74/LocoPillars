@@ -34,6 +34,7 @@ class EditorSessionManager(
     private val activeSessions = mutableMapOf<UUID, EditorSession>()
     private val pendingSessions = mutableSetOf<UUID>()
     private val faweAvailable = Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
+    // FAWE enables async WorldEdit operations; fallback runs on main thread for safety.
     
     /**
      * Start an editor session for a player
@@ -178,7 +179,15 @@ class EditorSessionManager(
 
     private fun <T> scheduleTask(async: Boolean, task: () -> T): CompletableFuture<T> {
         val future = CompletableFuture<T>()
+        if (!plugin.isEnabled) {
+            future.completeExceptionally(IllegalStateException("Plugin disabled"))
+            return future
+        }
         val runnable = Runnable {
+            if (!plugin.isEnabled) {
+                future.completeExceptionally(IllegalStateException("Plugin disabled"))
+                return@Runnable
+            }
             try {
                 future.complete(task())
             } catch (e: Exception) {
@@ -252,7 +261,7 @@ class EditorSessionManager(
                         return@runOnMain
                     }
 
-                    player.sendMessage(MSG.chatColors("&aSaved! &f${session.mapName}"))
+                    player.sendMessage(MSG.chatColors("&aSuccessfully saved: &f${session.mapName}"))
                     player.sendMessage(MSG.chatColors("&7Schematic saved to: &f${schemFile.name}"))
 
                     val config = mapRepository.loadMapSettings(session.mapName)
