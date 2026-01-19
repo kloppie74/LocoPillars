@@ -34,7 +34,7 @@ class EditorSessionManager(
     private val activeSessions = mutableMapOf<UUID, EditorSession>()
     private val pendingSessions = mutableSetOf<UUID>()
     private val faweAvailable = Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
-    // FAWE determines whether schematic tasks run async or stay on the main thread for safety.
+    // FAWE (FastAsyncWorldEdit) allows safe async schematic operations; otherwise run on main thread.
     
     /**
      * Start an editor session for a player
@@ -99,6 +99,7 @@ class EditorSessionManager(
     }
 
     private fun loadSchematicAsync(schemFile: File): CompletableFuture<Clipboard?> {
+        // File I/O is safe off-thread regardless of FAWE availability.
         return scheduleTask(true) {
             SchematicHelper.loadSchematic(plugin, plugin.configManager, schemFile)
         }
