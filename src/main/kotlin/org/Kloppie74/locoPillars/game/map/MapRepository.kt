@@ -176,14 +176,22 @@ class MapRepository(
         }
         
         // Copy default schematic if it exists
-        val templateSchem = File(templatesFolder, "default_map.schem")
+        val templateSchem = listOf(
+            File(templatesFolder, "_template.schem"),
+            File(templatesFolder, "default_map.schem")
+        ).firstOrNull { it.exists() }
         val mapSchem = File(mapFolder, "region.schem")
-        
-        if (templateSchem.exists()) {
+
+        if (templateSchem != null) {
             templateSchem.copyTo(mapSchem, overwrite = true)
-            debugLog("Copied default_map.schem to $mapName")
+            debugLog("Copied ${templateSchem.name} to $mapName")
         } else {
-            debugLog("No default schematic found - map will start as void world")
+            val config = YamlConfiguration.loadConfiguration(mapSettings)
+            config.set("Settings.SpawnPoint.X", 0.0)
+            config.set("Settings.SpawnPoint.Y", 1.0)
+            config.set("Settings.SpawnPoint.Z", 0.0)
+            config.save(mapSettings)
+            debugLog("No default schematic found - map will start with bedrock anchor")
         }
         
         plugin.logger.info("Successfully created map: $mapName")

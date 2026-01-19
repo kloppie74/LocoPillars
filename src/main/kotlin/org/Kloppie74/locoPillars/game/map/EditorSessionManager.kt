@@ -1,7 +1,10 @@
 package org.Kloppie74.locoPillars.game.map
 
+import com.sk89q.worldedit.extent.clipboard.Clipboard
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
+import org.bukkit.Location
+import org.bukkit.Material
 import org.bukkit.World
 import org.bukkit.WorldCreator
 import org.bukkit.entity.Player
@@ -11,6 +14,7 @@ import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.SchematicHelper
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 
 /**
  * EditorSessionManager - Manages all active editor sessions
@@ -28,6 +32,8 @@ class EditorSessionManager(
 ) {
     
     private val activeSessions = mutableMapOf<UUID, EditorSession>()
+    private val pendingSessions = mutableSetOf<UUID>()
+    private val faweAvailable = Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
     
     /**
      * Start an editor session for a player
@@ -40,11 +46,13 @@ class EditorSessionManager(
         }
         
         // Check if player already has an active session
-        if (activeSessions.containsKey(player.uniqueId)) {
+        if (activeSessions.containsKey(player.uniqueId) || pendingSessions.contains(player.uniqueId)) {
             player.sendMessage(MSG.chatColors("&cYou already have an active editor session!"))
             player.sendMessage(MSG.chatColors("&7Use &e/pillars admin map cancel &7to end it"))
             return false
         }
+
+        pendingSessions.add(player.uniqueId)
         
         // Create temporary world
         val worldName = "pillars_edit_${mapName}_${UUID.randomUUID().toString().substring(0, 8)}"
@@ -52,36 +60,93 @@ class EditorSessionManager(
         
         if (world == null) {
             player.sendMessage(MSG.chatColors("&cFailed to create editor world!"))
+            pendingSessions.remove(player.uniqueId)
             return false
         }
-        
+
         // Load schematic if it exists
         val schemFile = mapRepository.getMapSchematicFile(mapName)
+        val spawnY = mapRepository.loadMapSettings(mapName)
+            ?.getDouble("Settings.SpawnPoint.Y", 65.0)
+            ?: 65.0
+        val centerLoc = world.getBlockAt(0, spawnY.toInt(), 0).location
+
         if (schemFile.exists()) {
-            val spawnY = mapRepository.loadMapSettings(mapName)
-                ?.getDouble("Settings.SpawnPoint.Y", 65.0)
-                ?: 65.0
-            val centerLoc = world.getBlockAt(0, spawnY.toInt(), 0).location
-            val success = SchematicHelper.pasteSchematic(plugin, plugin.configManager, schemFile, centerLoc)
-            
-            if (success) {
+            player.sendMessage(MSG.chatColors("&eLoading schematic asynchronously..."))
+            loadSchematicAsync(schemFile)
+                .thenCompose { clipboard ->
+                    if (clipboard == null) {
+                        CompletableFuture.completedFuture(false)
+                    } else {
+                        pasteClipboardAsync(clipboard, centerLoc)
+                    }
+                }
+                .exceptionally { ex ->
+                    plugin.logger.severe("[EditorSessionManager] Failed to load schematic for $mapName: ${ex.message}")
+                    false
+                }
+                .whenComplete { success, _ ->
+                    runOnMain {
+                        finishSessionStart(player, mapName, world, worldName, success, true)
+                    }
+                }
+        } else {
+            finishSessionStart(player, mapName, world, worldName, false, false)
+        }
+
+        return true
+    }
+
+    private fun loadSchematicAsync(schemFile: File): CompletableFuture<Clipboard?> {
+        return scheduleTask(true) {
+            SchematicHelper.loadSchematic(plugin, plugin.configManager, schemFile)
+        }
+    }
+
+    private fun pasteClipboardAsync(clipboard: Clipboard, location: Location): CompletableFuture<Boolean> {
+        return scheduleTask(faweAvailable) {
+            SchematicHelper.pasteClipboard(plugin, plugin.configManager, clipboard, location)
+        }
+    }
+
+    private fun saveSchematicAsync(loc1: Location, loc2: Location, schemFile: File): CompletableFuture<Boolean> {
+        return scheduleTask(faweAvailable) {
+            SchematicHelper.saveSchematic(plugin, plugin.configManager, loc1, loc2, schemFile)
+        }
+    }
+
+    private fun finishSessionStart(
+        player: Player,
+        mapName: String,
+        world: World,
+        worldName: String,
+        pasteSuccess: Boolean,
+        hadSchematic: Boolean
+    ) {
+        pendingSessions.remove(player.uniqueId)
+        if (!player.isOnline) {
+            cleanupWorld(worldName)
+            return
+        }
+
+        if (hadSchematic) {
+            if (pasteSuccess) {
                 player.sendMessage(MSG.chatColors("&aLoaded existing schematic for map: &f$mapName"))
             } else {
                 player.sendMessage(MSG.chatColors("&cFailed to load schematic, starting with empty world"))
+                applyBedrockAnchor(world, mapName, updateSettings = false)
             }
         } else {
-            player.sendMessage(MSG.chatColors("&7No existing schematic found, starting with empty world"))
+            player.sendMessage(MSG.chatColors("&7No existing schematic found, starting with bedrock anchor"))
+            applyBedrockAnchor(world, mapName, updateSettings = true)
         }
-        
-        // Create session
+
         val session = EditorSession(player, mapName, world, plugin, mapRepository)
         activeSessions[player.uniqueId] = session
-        
-        // Set creative mode and teleport player
+
         player.gameMode = GameMode.CREATIVE
         player.teleport(world.getBlockAt(0, 100, 0).location)
-        
-        // Send info
+
         player.sendMessage(MSG.chatColors("&a=== Editor Session Started ==="))
         player.sendMessage(MSG.chatColors("&eMap: &f$mapName"))
         player.sendMessage(MSG.chatColors("&eWorld: &f$worldName"))
@@ -94,9 +159,58 @@ class EditorSessionManager(
         player.sendMessage(MSG.chatColors("  &e/pillars admin map settings &7- Open editor settings"))
         player.sendMessage(MSG.chatColors("  &e/pillars admin map info &7- Show session info"))
         player.sendMessage(MSG.chatColors("  &e/pillars admin map cancel &7- Cancel without saving"))
-        
+
         debugLog("Started editor session for ${player.name} on map $mapName")
-        return true
+    }
+
+    private fun applyBedrockAnchor(world: World, mapName: String, updateSettings: Boolean) {
+        world.getBlockAt(0, 0, 0).type = Material.BEDROCK
+        if (!updateSettings) {
+            return
+        }
+
+        val config = mapRepository.loadMapSettings(mapName) ?: return
+        config.set("Settings.SpawnPoint.X", 0.0)
+        config.set("Settings.SpawnPoint.Y", 1.0)
+        config.set("Settings.SpawnPoint.Z", 0.0)
+        mapRepository.saveMapSettings(mapName, config)
+    }
+
+    private fun <T> scheduleTask(async: Boolean, task: () -> T): CompletableFuture<T> {
+        val future = CompletableFuture<T>()
+        val runnable = Runnable {
+            try {
+                future.complete(task())
+            } catch (e: Exception) {
+                future.completeExceptionally(e)
+            }
+        }
+
+        if (async) {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable)
+        } else {
+            Bukkit.getScheduler().runTask(plugin, runnable)
+        }
+
+        return future
+    }
+
+    private fun runOnMain(task: () -> Unit) {
+        Bukkit.getScheduler().runTask(plugin, Runnable { task() })
+    }
+
+    private fun cleanupWorld(worldName: String) {
+        val world = Bukkit.getWorld(worldName) ?: return
+        val mainWorld = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NORMAL }
+        if (mainWorld != null) {
+            world.players.forEach { it.teleport(mainWorld.spawnLocation) }
+        }
+        if (Bukkit.unloadWorld(world, false)) {
+            val worldFolder = File(Bukkit.getWorldContainer(), worldName)
+            if (worldFolder.exists()) {
+                worldFolder.deleteRecursively()
+            }
+        }
     }
     
     /**
@@ -124,32 +238,35 @@ class EditorSessionManager(
         
         // Ensure parent directory exists
         schemFile.parentFile?.mkdirs()
-        
-        // Save schematic using WorldEdit/FAWE
-        val success = SchematicHelper.saveSchematic(plugin, plugin.configManager, loc1, loc2, schemFile)
-        
-        if (success) {
-            player.sendMessage(MSG.chatColors("&aSuccessfully saved map: &f${session.mapName}"))
-            player.sendMessage(MSG.chatColors("&7Schematic saved to: &f${schemFile.name}"))
-            
-            // Save settings (in case radius was changed)
-            val config = mapRepository.loadMapSettings(session.mapName)
-            if (config != null) {
-                config.set("SaveRadius", session.getSaveRadius())
-                config.set("SchematicRadius", session.getSaveRadius())
-                mapRepository.saveMapSettings(session.mapName, config)
+
+        saveSchematicAsync(loc1, loc2, schemFile)
+            .exceptionally { ex ->
+                plugin.logger.severe("[EditorSessionManager] Failed to save schematic for ${session.mapName}: ${ex.message}")
+                false
             }
-            
-            debugLog("Saved map ${session.mapName}")
-        } else {
-            player.sendMessage(MSG.chatColors("&cFailed to save schematic!"))
-            player.sendMessage(MSG.chatColors("&7Your session will remain active"))
-            return false
-        }
-        
-        // End session and cleanup
-        endSession(player, true)
-        
+            .whenComplete { success, _ ->
+                runOnMain {
+                    if (!success) {
+                        player.sendMessage(MSG.chatColors("&cFailed to save schematic!"))
+                        player.sendMessage(MSG.chatColors("&7Your session will remain active"))
+                        return@runOnMain
+                    }
+
+                    player.sendMessage(MSG.chatColors("&aSaved! &f${session.mapName}"))
+                    player.sendMessage(MSG.chatColors("&7Schematic saved to: &f${schemFile.name}"))
+
+                    val config = mapRepository.loadMapSettings(session.mapName)
+                    if (config != null) {
+                        config.set("SaveRadius", session.getSaveRadius())
+                        config.set("SchematicRadius", session.getSaveRadius())
+                        mapRepository.saveMapSettings(session.mapName, config)
+                    }
+
+                    debugLog("Saved map ${session.mapName}")
+                    endSession(player, true)
+                }
+            }
+
         return true
     }
     
