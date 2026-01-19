@@ -34,7 +34,7 @@ class EditorSessionManager(
     private val activeSessions = mutableMapOf<UUID, EditorSession>()
     private val pendingSessions = mutableSetOf<UUID>()
     private val faweAvailable = Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
-    // FAWE enables async WorldEdit operations; fallback runs on main thread for safety.
+    // FAWE determines whether schematic tasks run async or stay on the main thread for safety.
     
     /**
      * Start an editor session for a player
@@ -165,7 +165,11 @@ class EditorSessionManager(
     }
 
     private fun applyBedrockAnchor(world: World, mapName: String, updateSettings: Boolean) {
-        world.getBlockAt(0, 0, 0).type = Material.BEDROCK
+        val anchorBlock = world.getBlockAt(0, 0, 0)
+        anchorBlock.type = Material.BEDROCK
+        if (anchorBlock.type != Material.BEDROCK) {
+            plugin.logger.warning("[EditorSessionManager] Failed to set bedrock anchor for $mapName")
+        }
         if (!updateSettings) {
             return
         }
@@ -179,10 +183,6 @@ class EditorSessionManager(
 
     private fun <T> scheduleTask(async: Boolean, task: () -> T): CompletableFuture<T> {
         val future = CompletableFuture<T>()
-        if (!plugin.isEnabled) {
-            future.completeExceptionally(IllegalStateException("Plugin disabled"))
-            return future
-        }
         val runnable = Runnable {
             if (!plugin.isEnabled) {
                 future.completeExceptionally(IllegalStateException("Plugin disabled"))
@@ -195,10 +195,14 @@ class EditorSessionManager(
             }
         }
 
-        if (async) {
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable)
-        } else {
-            Bukkit.getScheduler().runTask(plugin, runnable)
+        try {
+            if (async) {
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable)
+            } else {
+                Bukkit.getScheduler().runTask(plugin, runnable)
+            }
+        } catch (e: IllegalStateException) {
+            future.completeExceptionally(e)
         }
 
         return future
