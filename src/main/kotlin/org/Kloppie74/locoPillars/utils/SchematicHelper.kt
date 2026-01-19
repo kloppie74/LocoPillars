@@ -39,6 +39,12 @@ object SchematicHelper {
 
     /**
      * Paste a preloaded clipboard into the world at the given location.
+     *
+     * @param plugin plugin context used for logging
+     * @param configManager configuration access for debug logging
+     * @param clipboard clipboard to paste
+     * @param location target location for the paste
+     * @return true when the paste completes successfully
      */
     fun pasteClipboard(plugin: JavaPlugin, configManager: ConfigManager, clipboard: Clipboard, location: Location): Boolean {
         try {

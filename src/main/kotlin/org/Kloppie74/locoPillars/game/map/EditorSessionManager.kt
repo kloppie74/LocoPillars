@@ -169,11 +169,7 @@ class EditorSessionManager(
     }
 
     private fun applyBedrockAnchor(world: World, mapName: String, updateSettings: Boolean) {
-        val anchorBlock = world.getBlockAt(0, 0, 0)
-        anchorBlock.type = Material.BEDROCK
-        if (world.getBlockAt(0, 0, 0).type != Material.BEDROCK) {
-            plugin.logger.warning("[EditorSessionManager] Failed to set bedrock anchor for $mapName")
-        }
+        world.getBlockAt(0, 0, 0).type = Material.BEDROCK
         if (!updateSettings) {
             return
         }
@@ -187,15 +183,9 @@ class EditorSessionManager(
 
     private fun <T> scheduleTask(async: Boolean, task: () -> T): CompletableFuture<T> {
         val future = CompletableFuture<T>()
-        if (!plugin.isEnabled) {
-            future.completeExceptionally(IllegalStateException("Plugin disabled"))
-            return future
-        }
+        if (!ensurePluginEnabled(future)) return future
         val runnable = Runnable {
-            if (!plugin.isEnabled) {
-                future.completeExceptionally(IllegalStateException("Plugin disabled"))
-                return@Runnable
-            }
+            if (!ensurePluginEnabled(future)) return@Runnable
             try {
                 future.complete(task())
             } catch (e: Exception) {
@@ -214,6 +204,14 @@ class EditorSessionManager(
         }
 
         return future
+    }
+
+    private fun <T> ensurePluginEnabled(future: CompletableFuture<T>): Boolean {
+        if (!plugin.isEnabled) {
+            future.completeExceptionally(IllegalStateException("Plugin disabled"))
+            return false
+        }
+        return true
     }
 
     private fun runOnMain(task: () -> Unit) {
