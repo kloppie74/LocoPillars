@@ -86,6 +86,13 @@ commands:
     usage: "/luckyblocks [menu|getluckyblock]"
     aliases: [ luckyblock, luckyb ]
 
+  editor:
+    description: "Admin Editor System – toggle edit mode and manage maps"
+    usage: "/editor <enable|disable|toggle|map|info|validate|files|spawn|help> [args]"
+    permission: locopillars.admin
+    permission-message: "§cYou do not have permission to use the editor!"
+    aliases: [ edit, adminedit ]
+
 
 permissions:
   locopillars.luckyblocks.menu:
@@ -122,6 +129,10 @@ permissions:
     default: true
   locopillars.admin:
     description: "Administrative permissions for LocoPillars"
+    default: op
+
+  locopillars.editor:
+    description: "Use the /editor command and related admin-editor tools"
     default: op
   locoPillars.stats:
     description: "View server statistics"
