@@ -5,11 +5,11 @@ import com.comphenix.protocol.ProtocolManager
 import org.Kloppie74.locoPillars.api.LocoDevCommand
 import org.Kloppie74.locoPillars.api.LocoDevStatsService
 import org.Kloppie74.locoPillars.commands.MemoryCommand
-import org.Kloppie74.locoPillars.commands.admin.MapEditorMenu
 import org.Kloppie74.locoPillars.commands.editor.AdminEditorCommand
 import org.Kloppie74.locoPillars.editor.AdminEditorManager
 import org.Kloppie74.locoPillars.editor.EditorFileValidator
 import org.Kloppie74.locoPillars.editor.EditorHotbarManager
+import org.Kloppie74.locoPillars.editor.EditorSettingsGui
 import org.Kloppie74.locoPillars.editor.GameFileService
 import org.Kloppie74.locoPillars.editor.SpawnPointEditor
 import org.Kloppie74.locoPillars.editor.listener.EditorInteractionListener
@@ -87,18 +87,18 @@ class LocoPillars : JavaPlugin() {
         private set
     lateinit var gameListener: GameListener
     
-    // Map Editor System
+    // Map Editor System (core: session management and file storage)
     lateinit var mapRepository: MapRepository
         private set
     lateinit var editorSessionManager: EditorSessionManager
         private set
-    lateinit var mapEditorMenu: MapEditorMenu
-        private set
 
-    // Admin Editor System (new)
+    // Admin Editor System
     lateinit var editorHotbarManager: EditorHotbarManager
         private set
     lateinit var adminEditorManager: AdminEditorManager
+        private set
+    lateinit var editorSettingsGui: EditorSettingsGui
         private set
     lateinit var spawnPointEditor: SpawnPointEditor
         private set
@@ -175,31 +175,28 @@ class LocoPillars : JavaPlugin() {
                 templateManager.createDefaultTemplates()
             }
 
-            // 3.5 MAP EDITOR SYSTEM
-            logger.info("[LocoPillars] Initializing Map Editor System...")
-            mapRepository = MapRepository(this, configManager)
+            // 3.5 MAP EDITOR & ADMIN EDITOR SYSTEM
+            logger.info("[LocoPillars] Initializing Map Editor & Admin Editor System...")
+            mapRepository       = MapRepository(this, configManager)
             editorSessionManager = EditorSessionManager(this, mapRepository)
-            mapEditorMenu = MapEditorMenu(this, editorSessionManager)
-            server.pluginManager.registerEvents(mapEditorMenu, this)
-            logger.info("[LocoPillars] ✓ Map Editor System initialized")
 
-            // Admin Editor System (new modular editor)
-            logger.info("[LocoPillars] Initializing Admin Editor System...")
             editorHotbarManager  = EditorHotbarManager()
+            editorSettingsGui    = EditorSettingsGui(this, editorSessionManager)
             adminEditorManager   = AdminEditorManager(this, editorHotbarManager)
             spawnPointEditor     = SpawnPointEditor(this, mapRepository)
             gameFileService      = GameFileService(this, configManager, mapRepository)
             editorFileValidator  = EditorFileValidator(this, configManager, mapRepository)
 
+            server.pluginManager.registerEvents(editorSettingsGui, this)
             server.pluginManager.registerEvents(
                 EditorModeListener(adminEditorManager, editorSessionManager), this)
             server.pluginManager.registerEvents(
                 EditorInteractionListener(
                     this, adminEditorManager, editorHotbarManager,
-                    spawnPointEditor, editorFileValidator, editorSessionManager, mapEditorMenu
+                    spawnPointEditor, editorFileValidator, editorSessionManager, editorSettingsGui
                 ), this
             )
-            logger.info("[LocoPillars] ✓ Admin Editor System initialized")
+            logger.info("[LocoPillars] ✓ Map Editor & Admin Editor System initialized")
 
             worldManager = ArenaWorldManager(this, configManager)
             arenaManager = ArenaManager(this, worldManager, configManager)
@@ -617,8 +614,8 @@ class LocoPillars : JavaPlugin() {
         // Admin Editor System command
         getCommand("editor")?.let {
             val editorCmd = AdminEditorCommand(
-                adminEditorManager, mapRepository, spawnPointEditor,
-                editorFileValidator, gameFileService, editorSessionManager
+                this, adminEditorManager, mapRepository, editorSessionManager,
+                editorSettingsGui, spawnPointEditor, editorFileValidator, gameFileService
             )
             it.setExecutor(editorCmd)
             it.tabCompleter = editorCmd

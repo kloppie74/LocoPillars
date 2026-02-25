@@ -6,28 +6,19 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
-import org.Kloppie74.locoPillars.commands.admin.MapAdminCommand
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.utils.MSG
 
 class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabCompleter {
 
-    private val adminSubCmds = listOf("map")
-    private val adminPerm = "locopillars.admin"
-    
-    // Map admin command handler
-    private val mapAdminCommand: MapAdminCommand by lazy {
-        MapAdminCommand(plugin.mapRepository, plugin.editorSessionManager, plugin.mapEditorMenu)
-    }
-
     private val subPermissions = mapOf(
-        "join" to "locopillars.pillars.join",
-        "leave" to "locopillars.pillars.leave",
-        "list" to "locopillars.pillars.list",
+        "join"   to "locopillars.pillars.join",
+        "leave"  to "locopillars.pillars.leave",
+        "list"   to "locopillars.pillars.list",
         "status" to "locopillars.pillars.status",
-        "stats" to "locopillars.pillars.stats",
-        "help" to "locopillars.pillars.help"
+        "stats"  to "locopillars.pillars.stats",
+        "help"   to "locopillars.pillars.help"
     )
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -36,31 +27,6 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
             return true
         }
 
-        // --- ADMIN COMMANDS ---
-        if (args.isNotEmpty() && args[0].equals("admin", ignoreCase = true)) {
-            if (!sender.hasPermission(adminPerm)) {
-                sender.sendMessage(MSG.chatColors("&cYou don't have permission to use /pillars admin!"))
-                return true
-            }
-            if (args.size < 2) {
-                sender.sendMessage(MSG.chatColors("&e/pillars admin map <subcommand>"))
-                return true
-            }
-            when (args[1].lowercase()) {
-                "map" -> {
-                    // Route to MapAdminCommand
-                    val mapArgs = args.drop(2).toTypedArray()
-                    return mapAdminCommand.onCommand(sender, command, label, mapArgs)
-                }
-                else -> {
-                    sender.sendMessage(MSG.chatColors("&cUnknown admin subcommand: ${args[1]}"))
-                    sender.sendMessage(MSG.chatColors("&e/pillars admin map <subcommand>"))
-                    return true
-                }
-            }
-        }
-
-        // --- NORMAL PLAYER COMMANDS ---
         if (args.isEmpty()) {
             showHelp(sender)
             return true
@@ -320,32 +286,6 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (sender !is Player) return emptyList()
-
-        // --- ADMIN TAB-COMPLETE ---
-        if (args.isNotEmpty() && args[0].equals("admin", ignoreCase = true) && sender.hasPermission(adminPerm)) {
-            return when (args.size) {
-                2 -> adminSubCmds.filter { it.startsWith(args[1], ignoreCase = true) }
-                3 -> {
-                    when (args[1].lowercase()) {
-                        "map" -> {
-                            // Route to MapAdminCommand tab completion
-                            val mapArgs = args.drop(2).toTypedArray()
-                            mapAdminCommand.onTabComplete(sender, command, alias, mapArgs) ?: emptyList()
-                        }
-                        else -> emptyList()
-                    }
-                }
-                else -> {
-                    // For args size 4+, check if it's a map subcommand
-                    if (args[1].lowercase() == "map") {
-                        val mapArgs = args.drop(2).toTypedArray()
-                        mapAdminCommand.onTabComplete(sender, command, alias, mapArgs) ?: emptyList()
-                    } else {
-                        emptyList()
-                    }
-                }
-            }
-        }
 
         // Only show subcommands player has permission for
         val availableSubCmds = subPermissions.filter { sender.hasPermission(it.value) }.keys.toList()

@@ -1,12 +1,15 @@
 package org.Kloppie74.locoPillars.commands.editor
 
+import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
+import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.editor.AdminEditorManager
 import org.Kloppie74.locoPillars.editor.EditorFileValidator
+import org.Kloppie74.locoPillars.editor.EditorSettingsGui
 import org.Kloppie74.locoPillars.editor.GameFileService
 import org.Kloppie74.locoPillars.editor.SpawnPointEditor
 import org.Kloppie74.locoPillars.game.map.EditorSessionManager
@@ -16,43 +19,60 @@ import org.Kloppie74.locoPillars.utils.MSG
 /**
  * AdminEditorCommand — `/editor`
  *
- * Top-level command for the Admin-Editor system. Provides a clean, single
- * entry-point for toggling edit mode and managing maps without having to go
- * through `/pillars admin map`.
+ * Single entry-point for the Admin-Editor system. Replaces the old
+ * `/pillars admin map` flow entirely.
  *
  * ## Sub-commands
  * ```
- * /editor enable [map]          Enable edit mode, optionally focusing a map
- * /editor disable               Disable edit mode and restore hotbar
- * /editor toggle [map]          Toggle edit mode on/off
- * /editor map <name>            Set the active map in the current edit session
- * /editor map clear             Clear the active map selection
- * /editor info                  Show current edit mode info
- * /editor validate [map]        Validate one or all maps
- * /editor files [map]           Show file info for one or all maps
- * /editor spawn list            List spawn points for the active map
- * /editor spawn set <t> <slot>  Set a spawn point at your current location
- * /editor spawn remove <t> <s>  Remove a spawn point
- * /editor help                  Show this help
+ * /editor enable [map]               Enable edit mode (optional map focus)
+ * /editor disable                    Disable edit mode and restore hotbar
+ * /editor toggle [map]               Toggle edit mode on/off
+ * /editor map <name|clear>           Select / clear the active map
+ * /editor info                       Show current session info
+ *
+ * — Map management (world-editing session) —
+ * /editor create <name>              Create a new map from the default template
+ * /editor edit <name>                Open a full schematic-edit session
+ * /editor delete <name>              Delete a map and all its files
+ * /editor list                       List all maps with validation status
+ * /editor save                       Save the current schematic and close session
+ * /editor cancel                     Cancel the current session (no save)
+ * /editor resize <radius>            Adjust schematic save radius
+ * /editor settings                   Open the save-radius GUI
+ *
+ * — Validation & files —
+ * /editor validate [map]             Validate one or all maps
+ * /editor files [map]                Show file status for one or all maps
+ *
+ * — Spawn points —
+ * /editor spawn list                 List spawn points for the active map
+ * /editor spawn set <team> <slot>    Set spawn at your current location
+ * /editor spawn remove <team> <slot> Remove a spawn point
+ *
+ * /editor help                       Show this help
  * ```
  *
  * ## Permissions
  * All sub-commands require `locopillars.admin`.
  *
- * @param adminEditorManager Central registry for edit mode state.
- * @param mapRepository Source of map metadata.
+ * @param plugin Plugin instance for task scheduling.
+ * @param adminEditorManager Central registry for edit-mode state.
+ * @param mapRepository Source of map metadata and file paths.
+ * @param editorSessionManager Creates / manages world-editing sessions.
+ * @param editorSettingsGui GUI for adjusting save parameters.
  * @param spawnPointEditor Handles spawn point CRUD.
- * @param fileValidator Validates map files.
+ * @param fileValidator Validates map files, reports errors.
  * @param gameFileService Reads raw file metadata.
- * @param editorSessionManager Read-only access to active map-editing sessions.
  */
 class AdminEditorCommand(
+    private val plugin: LocoPillars,
     private val adminEditorManager: AdminEditorManager,
     private val mapRepository: MapRepository,
+    private val editorSessionManager: EditorSessionManager,
+    private val editorSettingsGui: EditorSettingsGui,
     private val spawnPointEditor: SpawnPointEditor,
     private val fileValidator: EditorFileValidator,
-    private val gameFileService: GameFileService,
-    private val editorSessionManager: EditorSessionManager
+    private val gameFileService: GameFileService
 ) : CommandExecutor, TabCompleter {
 
     private val permission = "locopillars.admin"
@@ -78,8 +98,19 @@ class AdminEditorCommand(
             "toggle"   -> handleToggle(sender, args)
             "map"      -> handleMap(sender, args)
             "info"     -> handleInfo(sender)
+            // Map management (replaces /pillars admin map ...)
+            "create"   -> handleCreate(sender, args)
+            "edit"     -> handleEdit(sender, args)
+            "delete"   -> handleDelete(sender, args)
+            "list"     -> handleList(sender)
+            "save"     -> handleSave(sender)
+            "cancel"   -> handleCancel(sender)
+            "resize"   -> handleResize(sender, args)
+            "settings" -> handleSettings(sender)
+            // Validation & files
             "validate" -> handleValidate(sender, args)
             "files"    -> handleFiles(sender, args)
+            // Spawn points
             "spawn"    -> handleSpawn(sender, args)
             "help", null -> showHelp(sender)
             else -> {
@@ -126,20 +157,14 @@ class AdminEditorCommand(
     }
 
     private fun handleMap(player: Player, args: Array<out String>) {
-        if (!adminEditorManager.isActive(player)) {
-            player.sendMessage(MSG.chatColors("&cEdit mode is not active! Use &e/editor enable &cfirst."))
-            return
-        }
-
         val subArg = args.getOrNull(1)
 
         if (subArg == null) {
             val current = adminEditorManager.getState(player)?.activeMapName
-            if (current != null) {
-                player.sendMessage(MSG.chatColors("&eActive map: &f$current"))
-            } else {
-                player.sendMessage(MSG.chatColors("&7No map selected. Use &e/editor map <name>"))
-            }
+            player.sendMessage(
+                if (current != null) MSG.chatColors("&eActive map: &f$current")
+                else MSG.chatColors("&7No map selected. Use &e/editor map <name>")
+            )
             return
         }
 
@@ -152,10 +177,7 @@ class AdminEditorCommand(
         val mapName = subArg
         if (!mapRepository.mapExists(mapName)) {
             player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
-            val maps = mapRepository.getAllMapNames()
-            if (maps.isNotEmpty()) {
-                player.sendMessage(MSG.chatColors("&7Available: &e${maps.joinToString(", ")}"))
-            }
+            suggestMaps(player)
             return
         }
 
@@ -173,15 +195,156 @@ class AdminEditorCommand(
 
         player.sendMessage(MSG.chatColors("&6=== Edit Mode Info ==="))
         player.sendMessage(MSG.chatColors("&eDuration: &f${state.activeDurationSeconds()}s"))
-        player.sendMessage(MSG.chatColors("&eActive map: &f${state.activeMapName ?: "&7none"}"))
+        player.sendMessage(MSG.chatColors("&eActive map: &f${state.activeMapName ?: "&7(none)"}"))
 
         val session = editorSessionManager.getSession(player)
         if (session != null) {
             player.sendMessage(MSG.chatColors("&eEditor session: &aactive &7(world: ${session.tempWorld.name})"))
             player.sendMessage(MSG.chatColors("&eSave radius: &f${session.getSaveRadius()}"))
+            player.sendMessage(MSG.chatColors("&eBorder size: &f${session.getBorderSize().toInt()}"))
         } else {
             player.sendMessage(MSG.chatColors("&eEditor session: &7none"))
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Map management sub-commands  (replaces /pillars admin map ...)
+    // -------------------------------------------------------------------------
+
+    private fun handleCreate(player: Player, args: Array<out String>) {
+        val mapName = args.getOrNull(1) ?: run {
+            player.sendMessage(MSG.chatColors("&cUsage: /editor create <name>"))
+            return
+        }
+
+        if (!isValidMapName(mapName)) {
+            player.sendMessage(MSG.chatColors("&cInvalid map name! Only letters, numbers, dashes and underscores."))
+            return
+        }
+
+        if (mapRepository.mapExists(mapName)) {
+            player.sendMessage(MSG.chatColors("&cMap '$mapName' already exists!"))
+            return
+        }
+
+        player.sendMessage(MSG.chatColors("&eCreating map: &f$mapName&e…"))
+
+        if (mapRepository.createMap(mapName)) {
+            player.sendMessage(MSG.chatColors("&a✓ Map '$mapName' created successfully!"))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor edit $mapName &7to start editing."))
+        } else {
+            player.sendMessage(MSG.chatColors("&c✗ Failed to create map '$mapName'. Check console."))
+        }
+    }
+
+    private fun handleEdit(player: Player, args: Array<out String>) {
+        val mapName = args.getOrNull(1) ?: run {
+            player.sendMessage(MSG.chatColors("&cUsage: /editor edit <name>"))
+            val maps = mapRepository.getAllMapNames()
+            if (maps.isNotEmpty()) player.sendMessage(MSG.chatColors("&7Available maps: &e${maps.joinToString(", ")}"))
+            return
+        }
+
+        if (!mapRepository.mapExists(mapName)) {
+            player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
+            suggestMaps(player)
+            return
+        }
+
+        if (adminEditorManager.isActive(player)) {
+            adminEditorManager.setActiveMap(player, mapName)
+        }
+
+        editorSessionManager.startSession(player, mapName)
+    }
+
+    private fun handleDelete(player: Player, args: Array<out String>) {
+        val mapName = args.getOrNull(1) ?: run {
+            player.sendMessage(MSG.chatColors("&cUsage: /editor delete <name>"))
+            return
+        }
+
+        if (!mapRepository.mapExists(mapName)) {
+            player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
+            return
+        }
+
+        player.sendMessage(MSG.chatColors("&cDeleting map: &f$mapName&c…"))
+
+        if (mapRepository.deleteMap(mapName)) {
+            player.sendMessage(MSG.chatColors("&c✓ Map '$mapName' has been deleted."))
+            if (adminEditorManager.getState(player)?.activeMapName == mapName) {
+                adminEditorManager.setActiveMap(player, null)
+            }
+        } else {
+            player.sendMessage(MSG.chatColors("&c✗ Failed to delete map '$mapName'. Check console."))
+        }
+    }
+
+    private fun handleList(player: Player) {
+        val maps = mapRepository.getAllMapNames()
+
+        if (maps.isEmpty()) {
+            player.sendMessage(MSG.chatColors("&eNo maps found!"))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor create <name> &7to create a map."))
+            return
+        }
+
+        player.sendMessage(MSG.chatColors("&6=== Available Maps (${maps.size}) ==="))
+        maps.forEach { mapName ->
+            val validation = mapRepository.validateMap(mapName)
+            val status     = if (validation.isValid) "&a✓" else "&c✗"
+            val radius     = mapRepository.getSaveRadius(mapName)
+            player.sendMessage(MSG.chatColors("$status &e$mapName &7(radius: $radius)"))
+            if (!validation.isValid) {
+                validation.errors.forEach { player.sendMessage(MSG.chatColors("    &c- $it")) }
+            }
+            validation.warnings.forEach { player.sendMessage(MSG.chatColors("    &e⚠ $it")) }
+        }
+        player.sendMessage(MSG.chatColors("&7Use &e/editor edit <name> &7to edit a map."))
+    }
+
+    private fun handleSave(player: Player) {
+        if (!editorSessionManager.hasSession(player)) {
+            player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor edit <name> &7to start one."))
+            return
+        }
+        editorSessionManager.saveAndEndSession(player)
+    }
+
+    private fun handleCancel(player: Player) {
+        if (!editorSessionManager.hasSession(player)) {
+            player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
+            return
+        }
+        editorSessionManager.cancelSession(player)
+    }
+
+    private fun handleResize(player: Player, args: Array<out String>) {
+        if (!editorSessionManager.hasSession(player)) {
+            player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor edit <name> &7to start one."))
+            return
+        }
+
+        val radius = args.getOrNull(1)?.toIntOrNull() ?: run {
+            val current = editorSessionManager.getSession(player)?.getSaveRadius() ?: 50
+            player.sendMessage(MSG.chatColors("&cUsage: /editor resize <radius>"))
+            player.sendMessage(MSG.chatColors("&7Current radius: &e$current &7| Recommended: 20–200"))
+            return
+        }
+
+        editorSessionManager.resizeSession(player, radius)
+    }
+
+    private fun handleSettings(player: Player) {
+        if (!editorSessionManager.hasSession(player)) {
+            player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor edit <name> &7to start one."))
+            return
+        }
+        Bukkit.getScheduler().runTask(plugin, Runnable { editorSettingsGui.open(player) })
     }
 
     private fun handleValidate(player: Player, args: Array<out String>) {
@@ -291,18 +454,29 @@ class AdminEditorCommand(
     // -------------------------------------------------------------------------
 
     private fun showHelp(player: Player) {
-        player.sendMessage(MSG.chatColors("&6=== Admin Editor Commands ==="))
-        player.sendMessage(MSG.chatColors("&e/editor enable [map]         &7- Enable edit mode"))
-        player.sendMessage(MSG.chatColors("&e/editor disable              &7- Disable edit mode"))
-        player.sendMessage(MSG.chatColors("&e/editor toggle [map]         &7- Toggle edit mode"))
-        player.sendMessage(MSG.chatColors("&e/editor map <name|clear>     &7- Select active map"))
-        player.sendMessage(MSG.chatColors("&e/editor info                 &7- Show session info"))
-        player.sendMessage(MSG.chatColors("&e/editor validate [map]       &7- Validate map files"))
-        player.sendMessage(MSG.chatColors("&e/editor files [map]          &7- Show file status"))
-        player.sendMessage(MSG.chatColors("&e/editor spawn list           &7- List spawn points"))
-        player.sendMessage(MSG.chatColors("&e/editor spawn set <t> <s>    &7- Set spawn at location"))
-        player.sendMessage(MSG.chatColors("&e/editor spawn remove <t> <s> &7- Remove spawn point"))
-        player.sendMessage(MSG.chatColors("&7Also see: &e/pillars admin map <sub> &7for full editing"))
+        player.sendMessage(MSG.chatColors("&6=== Admin Editor — /editor ==="))
+        player.sendMessage(MSG.chatColors("&b— Edit mode —"))
+        player.sendMessage(MSG.chatColors("&e/editor enable [map]              &7Enable edit mode"))
+        player.sendMessage(MSG.chatColors("&e/editor disable                   &7Disable edit mode"))
+        player.sendMessage(MSG.chatColors("&e/editor toggle [map]              &7Toggle edit mode"))
+        player.sendMessage(MSG.chatColors("&e/editor map <name|clear>          &7Select active map"))
+        player.sendMessage(MSG.chatColors("&e/editor info                      &7Show session info"))
+        player.sendMessage(MSG.chatColors("&b— Map management —"))
+        player.sendMessage(MSG.chatColors("&e/editor create <name>             &7Create new map"))
+        player.sendMessage(MSG.chatColors("&e/editor edit <name>               &7Open edit session"))
+        player.sendMessage(MSG.chatColors("&e/editor delete <name>             &7Delete a map"))
+        player.sendMessage(MSG.chatColors("&e/editor list                      &7List all maps"))
+        player.sendMessage(MSG.chatColors("&e/editor save                      &7Save & close session"))
+        player.sendMessage(MSG.chatColors("&e/editor cancel                    &7Cancel (no save)"))
+        player.sendMessage(MSG.chatColors("&e/editor resize <radius>           &7Adjust save region"))
+        player.sendMessage(MSG.chatColors("&e/editor settings                  &7Open settings GUI"))
+        player.sendMessage(MSG.chatColors("&b— Validation & files —"))
+        player.sendMessage(MSG.chatColors("&e/editor validate [map]            &7Validate map files"))
+        player.sendMessage(MSG.chatColors("&e/editor files [map]               &7Show file status"))
+        player.sendMessage(MSG.chatColors("&b— Spawn points —"))
+        player.sendMessage(MSG.chatColors("&e/editor spawn list                &7List spawn points"))
+        player.sendMessage(MSG.chatColors("&e/editor spawn set <team> <slot>   &7Set spawn at location"))
+        player.sendMessage(MSG.chatColors("&e/editor spawn remove <t> <s>      &7Remove spawn point"))
     }
 
     // -------------------------------------------------------------------------
@@ -318,21 +492,26 @@ class AdminEditorCommand(
         if (sender !is Player || !sender.hasPermission(permission)) return emptyList()
 
         return when (args.size) {
-            1 -> listOf("enable", "disable", "toggle", "map", "info", "validate", "files", "spawn", "help")
-                .filter { it.startsWith(args[0], ignoreCase = true) }
+            1 -> listOf(
+                "enable", "disable", "toggle", "map", "info",
+                "create", "edit", "delete", "list",
+                "save", "cancel", "resize", "settings",
+                "validate", "files",
+                "spawn", "help"
+            ).filter { it.startsWith(args[0], ignoreCase = true) }
 
             2 -> when (args[0].lowercase()) {
-                "enable", "toggle" ->
-                    mapRepository.getAllMapNames()
-                        .filter { it.startsWith(args[1], ignoreCase = true) }
+                "enable", "toggle", "edit", "delete" ->
+                    mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
                 "map" -> {
                     val suggestions = mutableListOf("clear")
                     suggestions += mapRepository.getAllMapNames()
                     suggestions.filter { it.startsWith(args[1], ignoreCase = true) }
                 }
                 "validate", "files" ->
-                    mapRepository.getAllMapNames()
-                        .filter { it.startsWith(args[1], ignoreCase = true) }
+                    mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
+                "resize" -> listOf("25", "50", "75", "100", "150", "200")
+                    .filter { it.startsWith(args[1]) }
                 "spawn" -> listOf("list", "set", "remove")
                     .filter { it.startsWith(args[1], ignoreCase = true) }
                 else -> emptyList()
@@ -380,6 +559,16 @@ class AdminEditorCommand(
         if (report.warnings.isNotEmpty()) {
             player.sendMessage(MSG.chatColors("&eWarnings:"))
             report.warnings.forEach { player.sendMessage(MSG.chatColors("  &e- $it")) }
+        }
+    }
+
+    private fun isValidMapName(name: String): Boolean =
+        name.matches(Regex("^[a-zA-Z0-9_-]+$"))
+
+    private fun suggestMaps(player: Player) {
+        val maps = mapRepository.getAllMapNames()
+        if (maps.isNotEmpty()) {
+            player.sendMessage(MSG.chatColors("&7Available maps: &e${maps.joinToString(", ")}"))
         }
     }
 }
