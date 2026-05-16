@@ -301,7 +301,7 @@ class ConfigManager(private val plugin: JavaPlugin) {
 
         config.createSection("database")
         val dbSection = config.getConfigurationSection("database")!!
-        dbSection.set("type", "sqlite")
+        dbSection.set("type", "h2")
         dbSection.set("host", "localhost")
         dbSection.set("port", 3306)
         dbSection.set("database", "locopillars")
@@ -561,7 +561,7 @@ class ConfigManager(private val plugin: JavaPlugin) {
     private fun loadDatabaseConfig(config: FileConfiguration): DatabaseConfig {
         val dbSection = config.getConfigurationSection("database")
         return DatabaseConfig(
-            type = dbSection?.getString("type") ?: "sqlite",
+            type = dbSection?.getString("type") ?: "h2",
             host = dbSection?.getString("host") ?: "localhost",
             port = dbSection?.getInt("port") ?: 3306,
             database = dbSection?.getString("database") ?: "locopillars",

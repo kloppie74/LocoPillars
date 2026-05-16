@@ -347,16 +347,6 @@ class LocoPillars : JavaPlugin() {
                 logger.warning("[LocoPillars] PlaceholderAPI not found, placeholders will not work.")
             }
 
-            try {
-                logger.info("[LocoPillars] Initializing LocoDev Stats API...")
-                locoDevStats = LocoDevStatsService(this)
-                locoDevStats?.start()
-                logger.info("[LocoPillars] ✓ LocoDev Stats API initialized")
-            } catch (e: Exception) {
-                logger.warning("[LocoPillars] ✗ LocoDev Stats could not start: ${e.message}")
-                e.printStackTrace()
-            }
-
             // 16. STARTUP SUMMARY
             showStartupSummary()
         } catch (e: Exception) {

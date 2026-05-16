@@ -4,7 +4,7 @@ version: 1.0.0
 api-version: 1.21
 authors: [kloppie74]
 description: "Pillars of the Fortune - memory-friendly multi-instance minigame!"
-depend: [WorldEdit, WorldGuard]
+depend: [WorldEdit, WorldGuard, PlaceholderAPI]
 
 commands:
   locodev:
