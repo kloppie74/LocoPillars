@@ -7,12 +7,6 @@ description: "Pillars of the Fortune - memory-friendly multi-instance minigame!"
 depend: [WorldEdit, WorldGuard, PlaceholderAPI]
 
 commands:
-  locodev:
-    description: LocoDev API commands
-    usage: /locodev <version|announcements|stats|info|reload>
-    permission: locopillars.locodev
-    aliases: [ ldev, lcd ]
-
   pillars:
     description: "Main command for Pillars of Fortune"
     usage: "/pillars <join|leave|list|status|stats|help> [args]"
@@ -88,7 +82,7 @@ commands:
 
   editor:
     description: "Admin Editor System – toggle edit mode and manage maps"
-    usage: "/editor <enable|disable|toggle|map|info|validate|files|spawn|help> [args]"
+    usage: "/editor <enable|disable|toggle|map|info|create|edit|delete|list|save|cancel|resize|settings|validate|files|spawn|help> [args]"
     permission: locopillars.admin
     permission-message: "§cYou do not have permission to use the editor!"
     aliases: [ edit, adminedit ]

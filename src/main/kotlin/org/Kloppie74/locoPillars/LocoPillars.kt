@@ -2,8 +2,6 @@ package org.Kloppie74.locoPillars
 
 import com.comphenix.protocol.ProtocolLibrary
 import com.comphenix.protocol.ProtocolManager
-import org.Kloppie74.locoPillars.api.LocoDevCommand
-import org.Kloppie74.locoPillars.api.LocoDevStatsService
 import org.Kloppie74.locoPillars.commands.MemoryCommand
 import org.Kloppie74.locoPillars.commands.editor.AdminEditorCommand
 import org.Kloppie74.locoPillars.editor.AdminEditorManager
@@ -136,8 +134,6 @@ class LocoPillars : JavaPlugin() {
     lateinit var scoreboardManager: ScoreboardManager
     lateinit var tabVisibilityManager: TabVisibilityManager
     lateinit var teamsListener: TeamsListener
-
-    var locoDevStats: LocoDevStatsService? = null
 
     override fun onEnable() {
         instance = this
@@ -438,12 +434,6 @@ class LocoPillars : JavaPlugin() {
         logger.info("[LocoPillars] ==========================================")
 
         try {
-            locoDevStats?.stop()
-        } catch (e: Exception) {
-            logger.warning("[LocoDev] Error bij stats shutdown: ${e.message}")
-        }
-
-        try {
             var cleanupErrors = 0
 
             if (::gameManager.isInitialized) {
@@ -592,13 +582,6 @@ class LocoPillars : JavaPlugin() {
             }
         } else {
             logger.severe("[LocoPillars] ✗ Failed to register '/memory' command")
-        }
-
-        getCommand("locodev")?.let {
-            val locoCmd = LocoDevCommand(this)
-            it.setExecutor(locoCmd)
-            it.tabCompleter = locoCmd
-            debugLog("✓ Command '/locodev' registered")
         }
 
         // Admin Editor System command

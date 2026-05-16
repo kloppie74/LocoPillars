@@ -183,7 +183,7 @@ class AdminEditorCommand(
 
         adminEditorManager.setActiveMap(player, mapName)
         player.sendMessage(MSG.chatColors("&aActive map set to: &f$mapName"))
-        player.sendMessage(MSG.chatColors("&7Hotbar tools will now operate on this map."))
+        player.sendMessage(MSG.chatColors("&7Use &e/editor edit &7to start editing this map."))
     }
 
     private fun handleInfo(player: Player) {
@@ -238,8 +238,9 @@ class AdminEditorCommand(
     }
 
     private fun handleEdit(player: Player, args: Array<out String>) {
-        val mapName = args.getOrNull(1) ?: run {
+        val mapName = args.getOrNull(1) ?: adminEditorManager.getState(player)?.activeMapName ?: run {
             player.sendMessage(MSG.chatColors("&cUsage: /editor edit <name>"))
+            player.sendMessage(MSG.chatColors("&7Tip: first select a map with &e/editor map <name>&7, then use &e/editor edit"))
             val maps = mapRepository.getAllMapNames()
             if (maps.isNotEmpty()) player.sendMessage(MSG.chatColors("&7Available maps: &e${maps.joinToString(", ")}"))
             return
