@@ -273,6 +273,7 @@ class EditorSessionManager(
 
                     player.sendMessage(MSG.chatColors("&aSuccessfully saved: &f${session.mapName}"))
                     player.sendMessage(MSG.chatColors("&7Schematic saved to: &f${schemFile.name}"))
+                    player.sendMessage(MSG.chatColors("&7Run &e/editor setup &7to sync Data/Games and Data/Schems."))
 
                     val config = mapRepository.loadMapSettings(session.mapName)
                     if (config != null) {
