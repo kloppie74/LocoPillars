@@ -24,8 +24,6 @@ import org.Kloppie74.locoPillars.utils.MSG
  *
  * ## Sub-commands
  * ```
- * /editor enable [map]               Enable edit mode (optional map focus)
- * /editor disable                    Disable edit mode and restore hotbar
  * /editor toggle [map]               Toggle edit mode on/off
  * /editor map <name|clear>           Select / clear the active map
  * /editor info                       Show current session info
@@ -94,8 +92,6 @@ class AdminEditorCommand(
         }
 
         when (args.getOrNull(0)?.lowercase()) {
-            "enable"   -> handleEnable(sender, args)
-            "disable"  -> handleDisable(sender)
             "toggle"   -> handleToggle(sender, args)
             "map"      -> handleMap(sender, args)
             "info"     -> handleInfo(sender)
@@ -130,26 +126,6 @@ class AdminEditorCommand(
     // -------------------------------------------------------------------------
     // Sub-command handlers
     // -------------------------------------------------------------------------
-
-    private fun handleEnable(player: Player, args: Array<out String>) {
-        val mapName = args.getOrNull(1)
-
-        if (mapName != null && !mapRepository.mapExists(mapName)) {
-            player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
-            player.sendMessage(MSG.chatColors("&7Use &e/editor validate &7or &e/editor list"))
-            return
-        }
-
-        adminEditorManager.enable(player, mapName)
-        player.sendMessage(MSG.chatColors("&7Quick start: &e/editor map <name> &7→ &e/editor edit &7→ &e/editor settings"))
-    }
-
-    private fun handleDisable(player: Player) {
-        if (editorSessionManager.hasSession(player)) {
-            editorSessionManager.cancelSession(player)
-        }
-        adminEditorManager.disable(player)
-    }
 
     private fun handleToggle(player: Player, args: Array<out String>) {
         val mapName = args.getOrNull(1)
@@ -370,7 +346,7 @@ class AdminEditorCommand(
 
     private fun handleHotbar(player: Player, args: Array<out String>) {
         if (!adminEditorManager.isActive(player)) {
-            player.sendMessage(MSG.chatColors("&cEdit mode is not active. Use &e/editor enable &cfirst."))
+            player.sendMessage(MSG.chatColors("&cEdit mode is not active yet. Start with &e/editor edit <map>&c."))
             return
         }
 
@@ -566,8 +542,6 @@ class AdminEditorCommand(
     private fun showHelp(player: Player) {
         player.sendMessage(MSG.chatColors("&6=== Admin Editor — /editor ==="))
         player.sendMessage(MSG.chatColors("&b— Edit mode —"))
-        player.sendMessage(MSG.chatColors("&e/editor enable [map]              &7Enable edit mode"))
-        player.sendMessage(MSG.chatColors("&e/editor disable                   &7Disable edit mode"))
         player.sendMessage(MSG.chatColors("&e/editor toggle [map]              &7Toggle edit mode"))
         player.sendMessage(MSG.chatColors("&e/editor map <name|clear>          &7Select active map"))
         player.sendMessage(MSG.chatColors("&e/editor info                      &7Show session info"))
@@ -608,7 +582,7 @@ class AdminEditorCommand(
 
         return when (args.size) {
             1 -> listOf(
-                "enable", "disable", "toggle", "map", "info",
+                "toggle", "map", "info",
                 "doctor", "hotbar", "holograms", "setup",
                 "create", "edit", "delete", "list",
                 "save", "cancel", "resize", "settings",
@@ -617,7 +591,7 @@ class AdminEditorCommand(
             ).filter { it.startsWith(args[0], ignoreCase = true) }
 
             2 -> when (args[0].lowercase()) {
-                "enable", "toggle", "edit", "delete" ->
+                "toggle", "edit", "delete" ->
                     mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
                 "map" -> {
                     val suggestions = mutableListOf("clear")

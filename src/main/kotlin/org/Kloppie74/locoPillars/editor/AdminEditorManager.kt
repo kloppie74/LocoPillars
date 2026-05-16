@@ -57,7 +57,7 @@ class AdminEditorManager(
      */
     fun enable(player: Player, mapName: String? = null) {
         if (isActive(player)) {
-            player.sendMessage(MSG.chatColors("&eEdit mode is already active! Use &c/editor disable &eto exit."))
+            player.sendMessage(MSG.chatColors("&eEdit mode is already active! Use &e/editor toggle &eto exit."))
             player.sendMessage(MSG.chatColors("&7Need help? Use &e/editor help &7or &e/editor info"))
             return
         }
@@ -90,7 +90,7 @@ class AdminEditorManager(
         player.sendMessage(MSG.chatColors("&7Next step 1/3: &e/editor map <name> &7(if not selected yet)"))
         player.sendMessage(MSG.chatColors("&7Next step 2/3: &e/editor edit"))
         player.sendMessage(MSG.chatColors("&7Next step 3/3: &e/editor settings"))
-        player.sendMessage(MSG.chatColors("&7Use &e/editor help &7for all commands, or &c/editor disable &7to exit."))
+        player.sendMessage(MSG.chatColors("&7Use &e/editor help &7for all commands, or &e/editor toggle &7to exit."))
 
         debugLog("Edit mode enabled for ${player.name}" + (mapName?.let { " (map: $it)" } ?: ""))
     }
@@ -143,7 +143,7 @@ class AdminEditorManager(
         if (enabled) {
             hotbarManager.giveEditorHotbar(player)
             player.sendMessage(MSG.chatColors("&aEditor hotbar enabled."))
-            player.sendMessage(MSG.chatColors("&7Tip: Use slot 8 (Barrier) or &e/editor disable &7to leave edit mode."))
+            player.sendMessage(MSG.chatColors("&7Tip: Use slot 8 (Barrier) or &e/editor toggle &7to leave edit mode."))
         } else {
             for (slot in 0..8) {
                 player.inventory.setItem(slot, null)

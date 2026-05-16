@@ -31,13 +31,13 @@ spawn points and files without having to open a full map-editing world session.
 
 ## How Edit Mode Works
 
-1. Admin runs `/editor enable [mapName]`
-2. `AdminEditorManager` records an `EditModeState` for the player and snapshots
+1. Admin runs `/editor edit <mapName>` (or `/editor map <mapName>` then `/editor edit`)
+2. `AdminEditorManager` auto-enables edit mode, records an `EditModeState`, and snapshots
    their existing hotbar.
 3. `EditorHotbarManager` replaces slots 0–8 with editor tools.
 4. The admin uses the hotbar items or `/editor` sub-commands to interact with
    maps.
-5. Admin runs `/editor disable` (or right-clicks the **Barrier** in slot 8).
+5. Admin runs `/editor toggle` (or right-clicks the **Barrier** in slot 8).
 6. Original hotbar is restored; state is removed.
 
 ---
@@ -47,8 +47,6 @@ spawn points and files without having to open a full map-editing world session.
 All commands require the `locopillars.admin` permission.
 
 ```
-/editor enable [map]            Enable edit mode, optionally focus a map
-/editor disable                 Disable edit mode and restore hotbar
 /editor toggle [map]            Toggle edit mode on/off
 /editor map <name|clear>        Select (or clear) the active map
 /editor doctor                  Diagnose Data/Games + Data/Schems readiness
@@ -124,10 +122,10 @@ Also still available:
 
 ## Manual Testing Checklist
 
-- [ ] `/editor enable` gives hotbar and prints activation message
+- [ ] `/editor edit <name>` auto-enables edit mode, gives hotbar, and starts a session
 - [ ] `/editor hotbar off` hides custom editor hotbar while keeping edit mode active
 - [ ] `/editor hotbar on` restores custom editor hotbar
-- [ ] `/editor disable` restores original hotbar
+- [ ] `/editor toggle` restores original hotbar when edit mode is active
 - [ ] `/editor map <name>` sets the active map
 - [ ] `/editor doctor` shows template readiness from Data/Games + Data/Schems
 - [ ] `/editor edit` starts editing the currently active map without requiring map argument
