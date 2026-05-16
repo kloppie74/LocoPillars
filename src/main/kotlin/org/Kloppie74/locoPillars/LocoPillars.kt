@@ -5,7 +5,15 @@ import com.comphenix.protocol.ProtocolManager
 import org.Kloppie74.locoPillars.api.LocoDevCommand
 import org.Kloppie74.locoPillars.api.LocoDevStatsService
 import org.Kloppie74.locoPillars.commands.MemoryCommand
-import org.Kloppie74.locoPillars.commands.admin.MapEditorMenu
+import org.Kloppie74.locoPillars.commands.editor.AdminEditorCommand
+import org.Kloppie74.locoPillars.editor.AdminEditorManager
+import org.Kloppie74.locoPillars.editor.EditorFileValidator
+import org.Kloppie74.locoPillars.editor.EditorHotbarManager
+import org.Kloppie74.locoPillars.editor.EditorSettingsGui
+import org.Kloppie74.locoPillars.editor.GameFileService
+import org.Kloppie74.locoPillars.editor.SpawnPointEditor
+import org.Kloppie74.locoPillars.editor.listener.EditorInteractionListener
+import org.Kloppie74.locoPillars.editor.listener.EditorModeListener
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.game.config.GameConfig
 import org.Kloppie74.locoPillars.game.manager.GameManager
@@ -79,12 +87,24 @@ class LocoPillars : JavaPlugin() {
         private set
     lateinit var gameListener: GameListener
     
-    // Map Editor System
+    // Map Editor System (core: session management and file storage)
     lateinit var mapRepository: MapRepository
         private set
     lateinit var editorSessionManager: EditorSessionManager
         private set
-    lateinit var mapEditorMenu: MapEditorMenu
+
+    // Admin Editor System
+    lateinit var editorHotbarManager: EditorHotbarManager
+        private set
+    lateinit var adminEditorManager: AdminEditorManager
+        private set
+    lateinit var editorSettingsGui: EditorSettingsGui
+        private set
+    lateinit var spawnPointEditor: SpawnPointEditor
+        private set
+    lateinit var gameFileService: GameFileService
+        private set
+    lateinit var editorFileValidator: EditorFileValidator
         private set
 
     lateinit var hotbarItemManager: HotbarItemManager
@@ -155,13 +175,28 @@ class LocoPillars : JavaPlugin() {
                 templateManager.createDefaultTemplates()
             }
 
-            // 3.5 MAP EDITOR SYSTEM
-            logger.info("[LocoPillars] Initializing Map Editor System...")
-            mapRepository = MapRepository(this, configManager)
+            // 3.5 MAP EDITOR & ADMIN EDITOR SYSTEM
+            logger.info("[LocoPillars] Initializing Map Editor & Admin Editor System...")
+            mapRepository       = MapRepository(this, configManager)
             editorSessionManager = EditorSessionManager(this, mapRepository)
-            mapEditorMenu = MapEditorMenu(this, editorSessionManager)
-            server.pluginManager.registerEvents(mapEditorMenu, this)
-            logger.info("[LocoPillars] ✓ Map Editor System initialized")
+
+            editorHotbarManager  = EditorHotbarManager()
+            editorSettingsGui    = EditorSettingsGui(this, editorSessionManager)
+            adminEditorManager   = AdminEditorManager(this, editorHotbarManager)
+            spawnPointEditor     = SpawnPointEditor(this, mapRepository)
+            gameFileService      = GameFileService(this, configManager, mapRepository)
+            editorFileValidator  = EditorFileValidator(this, configManager, mapRepository)
+
+            server.pluginManager.registerEvents(editorSettingsGui, this)
+            server.pluginManager.registerEvents(
+                EditorModeListener(adminEditorManager, editorSessionManager), this)
+            server.pluginManager.registerEvents(
+                EditorInteractionListener(
+                    this, adminEditorManager, editorHotbarManager,
+                    spawnPointEditor, editorFileValidator, editorSessionManager, editorSettingsGui
+                ), this
+            )
+            logger.info("[LocoPillars] ✓ Map Editor & Admin Editor System initialized")
 
             worldManager = ArenaWorldManager(this, configManager)
             arenaManager = ArenaManager(this, worldManager, configManager)
@@ -465,6 +500,12 @@ class LocoPillars : JavaPlugin() {
                 logger.info("[LocoPillars] ✓ Editor sessions cleanup completed")
             }
 
+            // Cleanup admin edit mode states
+            if (::adminEditorManager.isInitialized) {
+                adminEditorManager.cleanupAll()
+                logger.info("[LocoPillars] ✓ Admin editor mode states cleaned up")
+            }
+
             logger.info("[LocoPillars] ✓ Cleanup completed with $cleanupErrors total errors")
 
         } catch (e: Exception) {
@@ -569,6 +610,17 @@ class LocoPillars : JavaPlugin() {
             it.tabCompleter = locoCmd
             debugLog("✓ Command '/locodev' registered")
         }
+
+        // Admin Editor System command
+        getCommand("editor")?.let {
+            val editorCmd = AdminEditorCommand(
+                this, adminEditorManager, mapRepository, editorSessionManager,
+                editorSettingsGui, spawnPointEditor, editorFileValidator, gameFileService
+            )
+            it.setExecutor(editorCmd)
+            it.tabCompleter = editorCmd
+            debugLog("✓ Command '/editor' registered")
+        } ?: logger.warning("[LocoPillars] '/editor' command not found in plugin.yml")
     }
 
     private fun showNoConfigsWarning() {
