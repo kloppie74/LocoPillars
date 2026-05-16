@@ -31,8 +31,41 @@ class EditorSession(
     val sessionId: UUID = UUID.randomUUID()
     private var saveRadius: Int = mapRepository.getSaveRadius(mapName)
     private var borderSize: Double = mapRepository.getBorderSize(mapName)
-    private val borderEnabled: Boolean = mapRepository.loadMapSettings(mapName)
+    private var borderEnabled: Boolean = mapRepository.loadMapSettings(mapName)
         ?.getBoolean("Border.Enabled", true)
+        ?: true
+    private var borderDamageAmount: Double = mapRepository.loadMapSettings(mapName)
+        ?.getDouble("Border.DamageAmount", 1.0)
+        ?: 1.0
+    private var borderDamageBuffer: Double = mapRepository.loadMapSettings(mapName)
+        ?.getDouble("Border.DamageBuffer", 5.0)
+        ?: 5.0
+    private var buildHeight: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.BuildHeight", 80)
+        ?: 80
+    private var buildRange: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.BuildRange", 50)
+        ?: 50
+    private var deathHeight: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.DeathHeight", -10)
+        ?: -10
+    private var lobbyTimer: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.LobbyTimer", 15)
+        ?: 15
+    private var cageTimer: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.CageTimer", 5)
+        ?: 5
+    private var gameTimer: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.GameTimer", 600)
+        ?: 600
+    private var itemTimer: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.ItemTimer", 10)
+        ?: 10
+    private var canBreakMapBlocks: Boolean = mapRepository.loadMapSettings(mapName)
+        ?.getBoolean("Settings.Can-Break-Map-Blocks", false)
+        ?: false
+    private var hologramsEnabled: Boolean = mapRepository.loadMapSettings(mapName)
+        ?.getBoolean("Editor.Holograms.Enabled", true)
         ?: true
     private var particleTask: BukkitTask? = null
     private val spawnHolograms = mutableListOf<TextDisplay>()
@@ -53,7 +86,9 @@ class EditorSession(
     init {
         debugLog("EditorSession created for player ${player.name}, map: $mapName")
         startParticleVisualization()
-        spawnSpawnHolograms()
+        if (hologramsEnabled) {
+            spawnSpawnHolograms()
+        }
     }
     
     /**
@@ -214,6 +249,19 @@ class EditorSession(
     fun getBorderSize(): Double {
         return borderSize
     }
+
+    fun isBorderEnabled(): Boolean = borderEnabled
+    fun getBorderDamageAmount(): Double = borderDamageAmount
+    fun getBorderDamageBuffer(): Double = borderDamageBuffer
+    fun getBuildHeight(): Int = buildHeight
+    fun getBuildRange(): Int = buildRange
+    fun getDeathHeight(): Int = deathHeight
+    fun getLobbyTimer(): Int = lobbyTimer
+    fun getCageTimer(): Int = cageTimer
+    fun getGameTimer(): Int = gameTimer
+    fun getItemTimer(): Int = itemTimer
+    fun canBreakMapBlocks(): Boolean = canBreakMapBlocks
+    fun isHologramsEnabled(): Boolean = hologramsEnabled
     
     /**
      * Update the schematic radius and refresh particle display
@@ -236,6 +284,103 @@ class EditorSession(
         player.sendMessage(MSG.chatColors("&7The RED particle boundary has been updated"))
         
         debugLog("Updated save radius to $radius for map $mapName")
+    }
+
+    fun setBorderSize(size: Double) {
+        val clamped = size.coerceIn(10.0, 1000.0)
+        borderSize = clamped
+        persist("Border.Size", clamped)
+        player.sendMessage(MSG.chatColors("&aBorder size updated to: &f${clamped.toInt()}"))
+    }
+
+    fun toggleBorderEnabled() {
+        borderEnabled = !borderEnabled
+        persist("Border.Enabled", borderEnabled)
+        player.sendMessage(MSG.chatColors("&aBorder visualization is now: &f${if (borderEnabled) "enabled" else "disabled"}"))
+    }
+
+    fun setBorderDamageAmount(amount: Double) {
+        val clamped = amount.coerceIn(0.0, 20.0)
+        borderDamageAmount = clamped
+        persist("Border.DamageAmount", clamped)
+        player.sendMessage(MSG.chatColors("&aBorder damage amount updated to: &f${"%.1f".format(clamped)}"))
+    }
+
+    fun setBorderDamageBuffer(buffer: Double) {
+        val clamped = buffer.coerceIn(0.0, 100.0)
+        borderDamageBuffer = clamped
+        persist("Border.DamageBuffer", clamped)
+        player.sendMessage(MSG.chatColors("&aBorder damage buffer updated to: &f${"%.1f".format(clamped)}"))
+    }
+
+    fun setBuildHeight(value: Int) {
+        buildHeight = value.coerceIn(20, 320)
+        persist("Settings.BuildHeight", buildHeight)
+        player.sendMessage(MSG.chatColors("&aBuildHeight updated to: &f$buildHeight"))
+    }
+
+    fun setBuildRange(value: Int) {
+        buildRange = value.coerceIn(10, 500)
+        persist("Settings.BuildRange", buildRange)
+        player.sendMessage(MSG.chatColors("&aBuildRange updated to: &f$buildRange"))
+    }
+
+    fun setDeathHeight(value: Int) {
+        deathHeight = value.coerceIn(-128, 320)
+        persist("Settings.DeathHeight", deathHeight)
+        player.sendMessage(MSG.chatColors("&aDeathHeight updated to: &f$deathHeight"))
+    }
+
+    fun setLobbyTimer(value: Int) {
+        lobbyTimer = value.coerceIn(5, 300)
+        persist("Settings.LobbyTimer", lobbyTimer)
+        player.sendMessage(MSG.chatColors("&aLobbyTimer updated to: &f$lobbyTimer"))
+    }
+
+    fun setCageTimer(value: Int) {
+        cageTimer = value.coerceIn(1, 60)
+        persist("Settings.CageTimer", cageTimer)
+        player.sendMessage(MSG.chatColors("&aCageTimer updated to: &f$cageTimer"))
+    }
+
+    fun setGameTimer(value: Int) {
+        gameTimer = value.coerceIn(60, 7200)
+        persist("Settings.GameTimer", gameTimer)
+        player.sendMessage(MSG.chatColors("&aGameTimer updated to: &f$gameTimer"))
+    }
+
+    fun setItemTimer(value: Int) {
+        itemTimer = value.coerceIn(1, 300)
+        persist("Settings.ItemTimer", itemTimer)
+        player.sendMessage(MSG.chatColors("&aItemTimer updated to: &f$itemTimer"))
+    }
+
+    fun toggleBreakMapBlocks() {
+        canBreakMapBlocks = !canBreakMapBlocks
+        persist("Settings.Can-Break-Map-Blocks", canBreakMapBlocks)
+        player.sendMessage(MSG.chatColors("&aCan-Break-Map-Blocks: &f${if (canBreakMapBlocks) "enabled" else "disabled"}"))
+    }
+
+    fun setHologramsEnabled(enabled: Boolean) {
+        if (hologramsEnabled == enabled) {
+            return
+        }
+        hologramsEnabled = enabled
+        persist("Editor.Holograms.Enabled", enabled)
+        if (enabled) {
+            spawnSpawnHolograms()
+        } else {
+            clearSpawnHolograms()
+        }
+        player.sendMessage(MSG.chatColors("&aSpawn holograms ${if (enabled) "enabled" else "disabled"}"))
+    }
+
+    fun refreshHolograms() {
+        clearSpawnHolograms()
+        if (hologramsEnabled) {
+            spawnSpawnHolograms()
+        }
+        player.sendMessage(MSG.chatColors("&aSpawn holograms refreshed."))
     }
     
     /**
@@ -289,8 +434,7 @@ class EditorSession(
         // Stop particle task
         particleTask?.cancel()
         particleTask = null
-        spawnHolograms.forEach { it.remove() }
-        spawnHolograms.clear()
+        clearSpawnHolograms()
         player.gameMode = originalGameMode
         
         debugLog("EditorSession ended for player ${player.name}, saveChanges: $saveChanges")
@@ -319,11 +463,24 @@ class EditorSession(
         player.sendMessage(MSG.chatColors("&eWorld: &f${tempWorld.name}"))
         player.sendMessage(MSG.chatColors("&eSave Radius: &f$saveRadius"))
         player.sendMessage(MSG.chatColors("&eBorder Size: &f${borderSize.toInt()}"))
+        player.sendMessage(MSG.chatColors("&eBorder Enabled: &f${if (borderEnabled) "yes" else "no"}"))
+        player.sendMessage(MSG.chatColors("&eHolograms: &f${if (hologramsEnabled) "enabled" else "disabled"}"))
         player.sendMessage(MSG.chatColors("&eCenter: &f${centerX.toInt()}, ${centerY.toInt()}, ${centerZ.toInt()}"))
         player.sendMessage(MSG.chatColors("&7The RED particles show the save region"))
         player.sendMessage(MSG.chatColors("&7The GREEN particles show the play border"))
-        player.sendMessage(MSG.chatColors("&7Use &e/pillars admin map resize <radius> &7to adjust"))
-        player.sendMessage(MSG.chatColors("&7Use &e/pillars admin map save &7to save your changes"))
+        player.sendMessage(MSG.chatColors("&7Use &e/editor resize <radius> &7to adjust"))
+        player.sendMessage(MSG.chatColors("&7Use &e/editor save &7to save your changes"))
+    }
+
+    private fun clearSpawnHolograms() {
+        spawnHolograms.forEach { it.remove() }
+        spawnHolograms.clear()
+    }
+
+    private fun persist(path: String, value: Any) {
+        val config = mapRepository.loadMapSettings(mapName) ?: return
+        config.set(path, value)
+        mapRepository.saveMapSettings(mapName, config)
     }
     
     private fun debugLog(message: String) {

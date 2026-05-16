@@ -206,7 +206,7 @@ class EditorInteractionListener(
         event.isCancelled = true
 
         if (!editorSessionManager.hasSession(player)) {
-            player.sendMessage(MSG.chatColors("&cStart a map editing session first: &e/editor edit <name>"))
+            player.sendMessage(MSG.chatColors("&cStart a map editing session first: &e/editor edit"))
             return
         }
 
@@ -229,7 +229,7 @@ class EditorInteractionListener(
                 player.sendMessage(MSG.chatColors("&eOpen a full edit session with:"))
                 player.sendMessage(MSG.chatColors("&e/editor edit $mapName"))
             } else {
-                player.sendMessage(MSG.chatColors("&cNo map session active. Use &e/editor map <name> &cthen /editor edit <name>."))
+                player.sendMessage(MSG.chatColors("&cNo map session active. Use &e/editor map <name> &cthen /editor edit."))
             }
         }
     }
@@ -237,6 +237,9 @@ class EditorInteractionListener(
     private fun handleExitEditor(event: PlayerInteractEvent, player: Player) {
         if (event.action != Action.RIGHT_CLICK_BLOCK && event.action != Action.RIGHT_CLICK_AIR) return
         event.isCancelled = true
+        if (editorSessionManager.hasSession(player)) {
+            editorSessionManager.cancelSession(player)
+        }
         adminEditorManager.disable(player)
     }
 
@@ -262,4 +265,3 @@ class EditorInteractionListener(
         }
     }
 }
-

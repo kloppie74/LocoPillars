@@ -1,6 +1,7 @@
 package org.Kloppie74.locoPillars.editor.model
 
 import java.util.UUID
+import org.bukkit.GameMode
 import org.bukkit.inventory.ItemStack
 
 /**
@@ -15,7 +16,10 @@ data class EditModeState(
     val playerUuid: UUID,
     val startedAt: Long = System.currentTimeMillis(),
     var activeMapName: String? = null,
-    val hotbarSlotSnapshot: Map<Int, ItemStack?> = emptyMap()
+    val hotbarSlotSnapshot: Map<Int, ItemStack?> = emptyMap(),
+    val originalGameMode: GameMode,
+    val originalAllowFlight: Boolean,
+    var hotbarEnabled: Boolean = true
 ) {
     /** Returns how long (in seconds) this edit mode has been active. */
     fun activeDurationSeconds(): Long = (System.currentTimeMillis() - startedAt) / 1000L

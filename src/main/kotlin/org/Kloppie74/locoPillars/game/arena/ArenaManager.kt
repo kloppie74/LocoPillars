@@ -61,6 +61,7 @@ class ArenaManager(
         val dataFolder = File(plugin.dataFolder, "Data")
         val gamesFolder = File(dataFolder, "Games")
         val schemsFolder = File(dataFolder, "Schems")
+        val mapsFolder = File(plugin.dataFolder, "maps")
 
         if (!dataFolder.exists()) {
             dataFolder.mkdirs()
@@ -120,6 +121,20 @@ class ArenaManager(
                     }
                 } else {
                     debugLog("✗ No schematic found for config: $name")
+                }
+            }
+
+            // Final fallback: maps/<name>/region.schem
+            if (schemFiles.isEmpty()) {
+                val mapSchematic = File(mapsFolder, "$name/region.schem")
+                debugLog("No Data/Schems schematic found, checking map fallback: ${mapSchematic.absolutePath}")
+                if (mapSchematic.exists()) {
+                    if (org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, configManager, mapSchematic)) {
+                        schemFiles.add(mapSchematic)
+                        debugLog("✓ Valid fallback schematic from maps folder: ${mapSchematic.name}")
+                    } else {
+                        debugLog("✗ Invalid fallback schematic from maps folder: ${mapSchematic.name}")
+                    }
                 }
             }
 

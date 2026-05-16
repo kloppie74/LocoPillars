@@ -54,8 +54,8 @@ class EditorHotbarManager {
                    "&7Use &e/editor spawn &7to manage.")))
         inv.setItem(2, makeTool(Material.COMPASS,       ITEM_SCHEM_TOOL,
             listOf("&7Save or load the schematic",
-                   "&7for the active map.",
-                   "&7Use &e/editor schem &7to manage.")))
+                    "&7for the active map.",
+                    "&7Use &e/editor edit/save/cancel &7to manage.")))
         inv.setItem(3, makeTool(Material.BOOK,          ITEM_VALIDATE_TOOL,
             listOf("&7Right-click to run a full",
                    "&7validation report on the active map.")))

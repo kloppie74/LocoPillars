@@ -2,8 +2,6 @@ package org.Kloppie74.locoPillars
 
 import com.comphenix.protocol.ProtocolLibrary
 import com.comphenix.protocol.ProtocolManager
-import org.Kloppie74.locoPillars.api.LocoDevCommand
-import org.Kloppie74.locoPillars.api.LocoDevStatsService
 import org.Kloppie74.locoPillars.commands.MemoryCommand
 import org.Kloppie74.locoPillars.commands.editor.AdminEditorCommand
 import org.Kloppie74.locoPillars.editor.AdminEditorManager
@@ -137,8 +135,6 @@ class LocoPillars : JavaPlugin() {
     lateinit var tabVisibilityManager: TabVisibilityManager
     lateinit var teamsListener: TeamsListener
 
-    var locoDevStats: LocoDevStatsService? = null
-
     override fun onEnable() {
         instance = this
 
@@ -186,6 +182,11 @@ class LocoPillars : JavaPlugin() {
             spawnPointEditor     = SpawnPointEditor(this, mapRepository)
             gameFileService      = GameFileService(this, configManager, mapRepository)
             editorFileValidator  = EditorFileValidator(this, configManager, mapRepository)
+            val quickSetup = gameFileService.runQuickSetup()
+            logger.info("[LocoPillars] Quick setup: folders=${quickSetup.foldersCreated}, bundled=${quickSetup.bundledConfigsCopied}, legacyCfg=${quickSetup.legacyConfigsMoved}, legacySchem=${quickSetup.legacySchemsMoved}, mirrored=${quickSetup.mapTemplatesMirrored}")
+            if (quickSetup.warnings.isNotEmpty()) {
+                quickSetup.warnings.forEach { logger.warning("[LocoPillars] Quick setup warning: $it") }
+            }
 
             server.pluginManager.registerEvents(editorSettingsGui, this)
             server.pluginManager.registerEvents(
@@ -438,12 +439,6 @@ class LocoPillars : JavaPlugin() {
         logger.info("[LocoPillars] ==========================================")
 
         try {
-            locoDevStats?.stop()
-        } catch (e: Exception) {
-            logger.warning("[LocoDev] Error bij stats shutdown: ${e.message}")
-        }
-
-        try {
             var cleanupErrors = 0
 
             if (::gameManager.isInitialized) {
@@ -594,13 +589,6 @@ class LocoPillars : JavaPlugin() {
             logger.severe("[LocoPillars] ✗ Failed to register '/memory' command")
         }
 
-        getCommand("locodev")?.let {
-            val locoCmd = LocoDevCommand(this)
-            it.setExecutor(locoCmd)
-            it.tabCompleter = locoCmd
-            debugLog("✓ Command '/locodev' registered")
-        }
-
         // Admin Editor System command
         getCommand("editor")?.let {
             val editorCmd = AdminEditorCommand(
@@ -618,13 +606,13 @@ class LocoPillars : JavaPlugin() {
         logger.warning("[LocoPillars] NO GAME CONFIGURATIONS FOUND!")
         logger.warning("[LocoPillars] ==========================================")
         logger.warning("[LocoPillars] Please ensure:")
-        logger.warning("[LocoPillars] 1. Config files (.yml) are in: ${dataFolder.absolutePath}/Games/")
-        logger.warning("[LocoPillars] 2. Schematic files (.schem) are in: ${dataFolder.absolutePath}/Schems/")
+        logger.warning("[LocoPillars] 1. Config files (.yml) are in: ${dataFolder.absolutePath}/Data/Games/")
+        logger.warning("[LocoPillars] 2. Schematic files (.schem) are in: ${dataFolder.absolutePath}/Data/Schems/")
         logger.warning("[LocoPillars] 3. File names match (without extensions)")
         logger.warning("[LocoPillars] 4. Both files exist for each game type")
         logger.warning("[LocoPillars]")
         logger.warning("[LocoPillars] The plugin will continue running but no games will be available")
-        logger.warning("[LocoPillars] Default template examples have been created in the Games folder")
+        logger.warning("[LocoPillars] Default template examples have been created in the Data/Games folder")
         logger.warning("[LocoPillars] ==========================================")
 
         if (configManager.debugMode) {
@@ -671,9 +659,9 @@ class LocoPillars : JavaPlugin() {
         if (configManager.debugMode) {
             logger.info("[LocoPillars] Folder structure:")
             logger.info("[LocoPillars]   - Plugin folder: ${dataFolder.absolutePath}")
-            logger.info("[LocoPillars]   - Games folder: ${dataFolder.resolve("Games").absolutePath}")
-            logger.info("[LocoPillars]   - Schems folder: ${dataFolder.resolve("Schems").absolutePath}")
             logger.info("[LocoPillars]   - Data folder: ${dataFolder.resolve("Data").absolutePath}")
+            logger.info("[LocoPillars]   - Games folder: ${dataFolder.resolve("Data/Games").absolutePath}")
+            logger.info("[LocoPillars]   - Schems folder: ${dataFolder.resolve("Data/Schems").absolutePath}")
             logger.info("[LocoPillars]   - GameWorlds folder: ${dataFolder.resolve("Data/GameWorlds").absolutePath}")
 
             val runtime = Runtime.getRuntime()
