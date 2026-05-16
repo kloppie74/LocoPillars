@@ -1,5 +1,6 @@
 package org.Kloppie74.locoPillars.editor
 
+import org.bukkit.GameMode
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.Kloppie74.locoPillars.LocoPillars
@@ -69,11 +70,16 @@ class AdminEditorManager(
         val state = EditModeState(
             playerUuid = player.uniqueId,
             activeMapName = mapName,
-            hotbarSlotSnapshot = snapshot
+            hotbarSlotSnapshot = snapshot,
+            originalGameMode = player.gameMode,
+            originalAllowFlight = player.allowFlight
         )
         activeModes[player.uniqueId] = state
 
         hotbarManager.giveEditorHotbar(player)
+        state.hotbarEnabled = true
+        player.gameMode = GameMode.CREATIVE
+        player.allowFlight = true
 
         player.sendMessage(MSG.chatColors("&a✦ &lEdit Mode &aactivated!"))
         player.sendMessage(MSG.chatColors("&7Your hotbar now contains editor tools."))
@@ -97,6 +103,8 @@ class AdminEditorManager(
         }
 
         hotbarManager.removeEditorHotbar(player, state.hotbarSlotSnapshot)
+        player.gameMode = state.originalGameMode
+        player.allowFlight = state.originalAllowFlight
 
         player.sendMessage(MSG.chatColors("&c✦ Edit Mode &cdeactivated."))
         player.sendMessage(MSG.chatColors("&7Your original hotbar has been restored."))
@@ -122,6 +130,34 @@ class AdminEditorManager(
 
     /** Returns a snapshot of all currently active edit mode players. */
     fun getActiveEditors(): Map<UUID, EditModeState> = activeModes.toMap()
+
+    fun setHotbarEnabled(player: Player, enabled: Boolean): Boolean {
+        val state = activeModes[player.uniqueId] ?: return false
+        if (enabled == state.hotbarEnabled) {
+            return true
+        }
+
+        if (enabled) {
+            hotbarManager.giveEditorHotbar(player)
+            player.sendMessage(MSG.chatColors("&aEditor hotbar enabled."))
+        } else {
+            for (slot in 0..8) {
+                player.inventory.setItem(slot, null)
+            }
+            player.updateInventory()
+            player.sendMessage(MSG.chatColors("&eEditor hotbar hidden. Use &a/editor hotbar on &eto show it again."))
+        }
+
+        state.hotbarEnabled = enabled
+        return true
+    }
+
+    fun toggleHotbar(player: Player): Boolean {
+        val state = activeModes[player.uniqueId] ?: return false
+        return setHotbarEnabled(player, !state.hotbarEnabled)
+    }
+
+    fun isHotbarEnabled(player: Player): Boolean = activeModes[player.uniqueId]?.hotbarEnabled == true
 
     // -------------------------------------------------------------------------
     // Cleanup

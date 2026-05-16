@@ -98,6 +98,9 @@ class AdminEditorCommand(
             "toggle"   -> handleToggle(sender, args)
             "map"      -> handleMap(sender, args)
             "info"     -> handleInfo(sender)
+            "hotbar"   -> handleHotbar(sender, args)
+            "holograms" -> handleHolograms(sender, args)
+            "setup"    -> handleSetup(sender)
             // Map management (replaces /pillars admin map ...)
             "create"   -> handleCreate(sender, args)
             "edit"     -> handleEdit(sender, args)
@@ -131,7 +134,7 @@ class AdminEditorCommand(
 
         if (mapName != null && !mapRepository.mapExists(mapName)) {
             player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
-            player.sendMessage(MSG.chatColors("&7Use &e/editor validate &7or &e/pillars admin map list"))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor validate &7or &e/editor list"))
             return
         }
 
@@ -139,6 +142,9 @@ class AdminEditorCommand(
     }
 
     private fun handleDisable(player: Player) {
+        if (editorSessionManager.hasSession(player)) {
+            editorSessionManager.cancelSession(player)
+        }
         adminEditorManager.disable(player)
     }
 
@@ -150,6 +156,10 @@ class AdminEditorCommand(
             return
         }
 
+        val wasActive = adminEditorManager.isActive(player)
+        if (wasActive && editorSessionManager.hasSession(player)) {
+            editorSessionManager.cancelSession(player)
+        }
         val nowActive = adminEditorManager.toggle(player)
         if (nowActive && mapName != null) {
             adminEditorManager.setActiveMap(player, mapName)
@@ -252,7 +262,10 @@ class AdminEditorCommand(
             return
         }
 
-        if (adminEditorManager.isActive(player)) {
+        if (!adminEditorManager.isActive(player)) {
+            adminEditorManager.enable(player, mapName)
+            player.sendMessage(MSG.chatColors("&7Edit mode was auto-enabled for cleaner workflow."))
+        } else {
             adminEditorManager.setActiveMap(player, mapName)
         }
 
@@ -302,13 +315,13 @@ class AdminEditorCommand(
             }
             validation.warnings.forEach { player.sendMessage(MSG.chatColors("    &e⚠ $it")) }
         }
-        player.sendMessage(MSG.chatColors("&7Use &e/editor edit <name> &7to edit a map."))
+        player.sendMessage(MSG.chatColors("&7Use &e/editor map <name> &7then &e/editor edit &7to edit a map."))
     }
 
     private fun handleSave(player: Player) {
         if (!editorSessionManager.hasSession(player)) {
             player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
-            player.sendMessage(MSG.chatColors("&7Use &e/editor edit <name> &7to start one."))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor edit &7to start one."))
             return
         }
         editorSessionManager.saveAndEndSession(player)
@@ -325,7 +338,7 @@ class AdminEditorCommand(
     private fun handleResize(player: Player, args: Array<out String>) {
         if (!editorSessionManager.hasSession(player)) {
             player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
-            player.sendMessage(MSG.chatColors("&7Use &e/editor edit <name> &7to start one."))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor edit &7to start one."))
             return
         }
 
@@ -342,10 +355,62 @@ class AdminEditorCommand(
     private fun handleSettings(player: Player) {
         if (!editorSessionManager.hasSession(player)) {
             player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
-            player.sendMessage(MSG.chatColors("&7Use &e/editor edit <name> &7to start one."))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor edit &7to start one."))
             return
         }
         Bukkit.getScheduler().runTask(plugin, Runnable { editorSettingsGui.open(player) })
+    }
+
+    private fun handleHotbar(player: Player, args: Array<out String>) {
+        if (!adminEditorManager.isActive(player)) {
+            player.sendMessage(MSG.chatColors("&cEdit mode is not active. Use &e/editor enable &cfirst."))
+            return
+        }
+
+        when (args.getOrNull(1)?.lowercase()) {
+            null, "status" -> {
+                player.sendMessage(MSG.chatColors("&eEditor hotbar: &f${if (adminEditorManager.isHotbarEnabled(player)) "enabled" else "disabled"}"))
+                player.sendMessage(MSG.chatColors("&7Use: &e/editor hotbar <on|off|toggle|status>"))
+            }
+            "on", "enable" -> adminEditorManager.setHotbarEnabled(player, true)
+            "off", "disable" -> adminEditorManager.setHotbarEnabled(player, false)
+            "toggle" -> adminEditorManager.toggleHotbar(player)
+            else -> player.sendMessage(MSG.chatColors("&cUsage: /editor hotbar <on|off|toggle|status>"))
+        }
+    }
+
+    private fun handleHolograms(player: Player, args: Array<out String>) {
+        val session = editorSessionManager.getSession(player) ?: run {
+            player.sendMessage(MSG.chatColors("&cNo active editor session. Use &e/editor edit &cfirst."))
+            return
+        }
+
+        when (args.getOrNull(1)?.lowercase()) {
+            null, "status" -> {
+                player.sendMessage(MSG.chatColors("&eSpawn holograms: &f${if (session.isHologramsEnabled()) "enabled" else "disabled"}"))
+                player.sendMessage(MSG.chatColors("&7Use: &e/editor holograms <on|off|refresh|status>"))
+            }
+            "on", "enable" -> session.setHologramsEnabled(true)
+            "off", "disable" -> session.setHologramsEnabled(false)
+            "refresh" -> session.refreshHolograms()
+            else -> player.sendMessage(MSG.chatColors("&cUsage: /editor holograms <on|off|refresh|status>"))
+        }
+    }
+
+    private fun handleSetup(player: Player) {
+        val result = gameFileService.runQuickSetup()
+        player.sendMessage(MSG.chatColors("&6=== Editor Quick Setup ==="))
+        player.sendMessage(MSG.chatColors("&7Created folders: &f${result.foldersCreated}"))
+        player.sendMessage(MSG.chatColors("&7Copied bundled configs: &f${result.bundledConfigsCopied}"))
+        player.sendMessage(MSG.chatColors("&7Migrated legacy configs: &f${result.legacyConfigsMoved}"))
+        player.sendMessage(MSG.chatColors("&7Migrated legacy schems: &f${result.legacySchemsMoved}"))
+        player.sendMessage(MSG.chatColors("&7Mirrored maps to arena templates: &f${result.mapTemplatesMirrored}"))
+        if (result.warnings.isNotEmpty()) {
+            player.sendMessage(MSG.chatColors("&eWarnings:"))
+            result.warnings.forEach { player.sendMessage(MSG.chatColors("&e- $it")) }
+        } else {
+            player.sendMessage(MSG.chatColors("&aSetup finished with no warnings."))
+        }
     }
 
     private fun handleValidate(player: Player, args: Array<out String>) {
@@ -462,9 +527,11 @@ class AdminEditorCommand(
         player.sendMessage(MSG.chatColors("&e/editor toggle [map]              &7Toggle edit mode"))
         player.sendMessage(MSG.chatColors("&e/editor map <name|clear>          &7Select active map"))
         player.sendMessage(MSG.chatColors("&e/editor info                      &7Show session info"))
+        player.sendMessage(MSG.chatColors("&e/editor hotbar <on|off|toggle>    &7Enable/disable custom hotbar"))
+        player.sendMessage(MSG.chatColors("&e/editor setup                     &7Auto-prepare Data/Games and Data/Schems"))
         player.sendMessage(MSG.chatColors("&b— Map management —"))
         player.sendMessage(MSG.chatColors("&e/editor create <name>             &7Create new map"))
-        player.sendMessage(MSG.chatColors("&e/editor edit <name>               &7Open edit session"))
+        player.sendMessage(MSG.chatColors("&e/editor edit [name]               &7Open edit session (uses active map)"))
         player.sendMessage(MSG.chatColors("&e/editor delete <name>             &7Delete a map"))
         player.sendMessage(MSG.chatColors("&e/editor list                      &7List all maps"))
         player.sendMessage(MSG.chatColors("&e/editor save                      &7Save & close session"))
@@ -478,6 +545,8 @@ class AdminEditorCommand(
         player.sendMessage(MSG.chatColors("&e/editor spawn list                &7List spawn points"))
         player.sendMessage(MSG.chatColors("&e/editor spawn set <team> <slot>   &7Set spawn at location"))
         player.sendMessage(MSG.chatColors("&e/editor spawn remove <t> <s>      &7Remove spawn point"))
+        player.sendMessage(MSG.chatColors("&b— Holograms —"))
+        player.sendMessage(MSG.chatColors("&e/editor holograms <on|off|refresh>&7Manage spawn holograms"))
     }
 
     // -------------------------------------------------------------------------
@@ -495,6 +564,7 @@ class AdminEditorCommand(
         return when (args.size) {
             1 -> listOf(
                 "enable", "disable", "toggle", "map", "info",
+                "hotbar", "holograms", "setup",
                 "create", "edit", "delete", "list",
                 "save", "cancel", "resize", "settings",
                 "validate", "files",
@@ -511,6 +581,10 @@ class AdminEditorCommand(
                 }
                 "validate", "files" ->
                     mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
+                "hotbar" -> listOf("on", "off", "toggle", "status")
+                    .filter { it.startsWith(args[1], ignoreCase = true) }
+                "holograms" -> listOf("on", "off", "refresh", "status")
+                    .filter { it.startsWith(args[1], ignoreCase = true) }
                 "resize" -> listOf("25", "50", "75", "100", "150", "200")
                     .filter { it.startsWith(args[1]) }
                 "spawn" -> listOf("list", "set", "remove")

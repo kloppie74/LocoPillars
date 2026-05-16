@@ -47,7 +47,7 @@ class EditorSessionManager(
         // Check if player already has an active session
         if (activeSessions.containsKey(player.uniqueId) || pendingSessions.contains(player.uniqueId)) {
             player.sendMessage(MSG.chatColors("&cYou already have an active editor session!"))
-            player.sendMessage(MSG.chatColors("&7Use &e/pillars admin map cancel &7to end it"))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor cancel &7to end it"))
             return false
         }
 
@@ -159,11 +159,11 @@ class EditorSessionManager(
         player.sendMessage(MSG.chatColors("&7GREEN particles show the play border"))
         player.sendMessage(MSG.chatColors(""))
         player.sendMessage(MSG.chatColors("&7Commands:"))
-        player.sendMessage(MSG.chatColors("  &e/pillars admin map save &7- Save changes"))
-        player.sendMessage(MSG.chatColors("  &e/pillars admin map resize <radius> &7- Adjust save region"))
-        player.sendMessage(MSG.chatColors("  &e/pillars admin map settings &7- Open editor settings"))
-        player.sendMessage(MSG.chatColors("  &e/pillars admin map info &7- Show session info"))
-        player.sendMessage(MSG.chatColors("  &e/pillars admin map cancel &7- Cancel without saving"))
+        player.sendMessage(MSG.chatColors("  &e/editor save &7- Save changes"))
+        player.sendMessage(MSG.chatColors("  &e/editor resize <radius> &7- Adjust save region"))
+        player.sendMessage(MSG.chatColors("  &e/editor settings &7- Open editor settings"))
+        player.sendMessage(MSG.chatColors("  &e/editor info &7- Show session info"))
+        player.sendMessage(MSG.chatColors("  &e/editor cancel &7- Cancel without saving"))
 
         debugLog("Started editor session for ${player.name} on map $mapName")
     }

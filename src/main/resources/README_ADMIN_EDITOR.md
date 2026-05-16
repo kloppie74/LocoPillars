@@ -51,12 +51,15 @@ All commands require the `locopillars.admin` permission.
 /editor disable                 Disable edit mode and restore hotbar
 /editor toggle [map]            Toggle edit mode on/off
 /editor map <name|clear>        Select (or clear) the active map
+/editor hotbar <on|off|toggle>  Toggle editor hotbar tools without leaving edit mode
 /editor info                    Show current session info
+/editor setup                   Auto-bootstrap Data/Games and Data/Schems assets
 /editor validate [map]          Validate one or all maps
 /editor files [map]             Show file status for one or all maps
 /editor spawn list              List all spawn points for the active map
 /editor spawn set <team> <slot> Set a spawn point at your current location
 /editor spawn remove <team> <slot>  Remove a spawn point
+/editor holograms <on|off|refresh|status> Manage spawn holograms in edit session
 /editor help                    Show help
 ```
 
@@ -121,11 +124,17 @@ Also still available:
 ## Manual Testing Checklist
 
 - [ ] `/editor enable` gives hotbar and prints activation message
+- [ ] `/editor hotbar off` hides custom editor hotbar while keeping edit mode active
+- [ ] `/editor hotbar on` restores custom editor hotbar
 - [ ] `/editor disable` restores original hotbar
 - [ ] `/editor map <name>` sets the active map
+- [ ] `/editor edit` starts editing the currently active map without requiring map argument
+- [ ] `/editor setup` creates/migrates Data/Games and Data/Schems assets
 - [ ] `/editor validate <name>` prints an accurate report
 - [ ] `/editor files` shows yml/schem status for all maps
 - [ ] `/editor spawn list` lists spawn points from settings.yml
+- [ ] `/editor holograms off` hides spawn holograms in the edit world
+- [ ] `/editor holograms on` restores spawn holograms
 - [ ] `/editor spawn set Team1 Player1` saves your location as a spawn point
 - [ ] Right-clicking the Spawn Setter (name tag) saves Team1/Player1 spawn
 - [ ] Right-clicking the Validation Tool triggers a validate report

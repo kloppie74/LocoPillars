@@ -31,6 +31,8 @@ class GameFileService(
     private val mapRepository: MapRepository
 ) {
     private val mapsFolder: File get() = File(plugin.dataFolder, "maps")
+    private val dataFolder: File get() = File(plugin.dataFolder, "Data")
+    private val gamesFolder: File get() = File(dataFolder, "Games")
     private val schemsFolder: File get() = File(plugin.dataFolder, "Data/Schems")
 
     // -------------------------------------------------------------------------
@@ -72,7 +74,6 @@ class GameFileService(
      * `Data/Games/` (classic game-type configs, not map settings).
      */
     fun listGameConfigFiles(): List<File> {
-        val gamesFolder = File(plugin.dataFolder, "Data/Games")
         if (!gamesFolder.exists()) return emptyList()
         return gamesFolder.listFiles { f -> f.isFile && f.extension == "yml" }?.toList() ?: emptyList()
     }
@@ -91,7 +92,7 @@ class GameFileService(
      * Returns null and logs a warning on failure.
      */
     fun loadGameConfig(configName: String): YamlConfiguration? {
-        val file = File(plugin.dataFolder, "Data/Games/$configName.yml")
+        val file = File(gamesFolder, "$configName.yml")
         if (!file.exists()) {
             plugin.logger.warning("[GameFileService] Game config not found: $configName")
             return null
@@ -109,7 +110,6 @@ class GameFileService(
      * Returns `true` on success.
      */
     fun saveGameConfig(configName: String, config: YamlConfiguration): Boolean {
-        val gamesFolder = File(plugin.dataFolder, "Data/Games")
         gamesFolder.mkdirs()
         val file = File(gamesFolder, "$configName.yml")
         return try {
@@ -131,7 +131,7 @@ class GameFileService(
      * Returns `true` if the copy succeeded.
      */
     fun copyGameConfigTemplate(sourceFile: File, destinationName: String): Boolean {
-        val dest = File(plugin.dataFolder, "Data/Games/$destinationName.yml")
+        val dest = File(gamesFolder, "$destinationName.yml")
         return try {
             sourceFile.copyTo(dest, overwrite = false)
             debugLog("Copied template ${sourceFile.name} → $destinationName.yml")
@@ -151,17 +151,144 @@ class GameFileService(
      * Creates them if needed and logs the result.
      */
     fun ensureDataFolders() {
-        val gameFoldr = File(plugin.dataFolder, "Data/Games")
-        val schemFldr = File(plugin.dataFolder, "Data/Schems")
-
-        if (!gameFoldr.exists()) {
-            gameFoldr.mkdirs()
+        if (!gamesFolder.exists()) {
+            gamesFolder.mkdirs()
             plugin.logger.info("[GameFileService] Created Data/Games folder")
         }
-        if (!schemFldr.exists()) {
-            schemFldr.mkdirs()
+        if (!schemsFolder.exists()) {
+            schemsFolder.mkdirs()
             plugin.logger.info("[GameFileService] Created Data/Schems folder")
         }
+    }
+
+    fun runQuickSetup(): QuickSetupResult {
+        var foldersCreated = 0
+        var bundledConfigsCopied = 0
+        var legacyConfigsMoved = 0
+        var legacySchemsMoved = 0
+        var mapTemplatesMirrored = 0
+        val warnings = mutableListOf<String>()
+
+        if (!dataFolder.exists()) {
+            dataFolder.mkdirs()
+            foldersCreated++
+        }
+        if (!gamesFolder.exists()) {
+            gamesFolder.mkdirs()
+            foldersCreated++
+        }
+        if (!schemsFolder.exists()) {
+            schemsFolder.mkdirs()
+            foldersCreated++
+        }
+
+        bundledConfigsCopied += copyBundledGameConfigs(warnings)
+
+        val legacyGames = File(plugin.dataFolder, "Games")
+        if (legacyGames.exists()) {
+            legacyGames.listFiles { f -> f.isFile && f.extension == "yml" }?.forEach { src ->
+                val dest = File(gamesFolder, src.name)
+                if (!dest.exists()) {
+                    src.copyTo(dest, overwrite = false)
+                    legacyConfigsMoved++
+                }
+            }
+        }
+
+        val legacySchems = File(plugin.dataFolder, "Schems")
+        if (legacySchems.exists()) {
+            legacySchems.listFiles { f -> f.isFile && f.extension == "schem" }?.forEach { src ->
+                val dest = File(schemsFolder, src.name)
+                if (!dest.exists()) {
+                    src.copyTo(dest, overwrite = false)
+                    legacySchemsMoved++
+                }
+            }
+            legacySchems.listFiles { f -> f.isDirectory }?.forEach { folder ->
+                val targetFolder = File(schemsFolder, folder.name)
+                if (!targetFolder.exists()) {
+                    targetFolder.mkdirs()
+                }
+                folder.listFiles { f -> f.isFile && f.extension == "schem" }?.forEach { src ->
+                    val dest = File(targetFolder, src.name)
+                    if (!dest.exists()) {
+                        src.copyTo(dest, overwrite = false)
+                        legacySchemsMoved++
+                    }
+                }
+            }
+        }
+
+        mapTemplatesMirrored += mirrorMapAssetsToArenaTemplates(warnings)
+
+        if (listGameConfigFiles().isEmpty()) {
+            warnings += "No Data/Games configs found after setup. Create one with /editor create <name> or add .yml files."
+        }
+        if (listLegacySchematicFiles().isEmpty() && (schemsFolder.listFiles()?.isEmpty() != false)) {
+            warnings += "No Data/Schems schematics found; arena preloading still needs schematic files."
+        }
+
+        return QuickSetupResult(
+            foldersCreated = foldersCreated,
+            bundledConfigsCopied = bundledConfigsCopied,
+            legacyConfigsMoved = legacyConfigsMoved,
+            legacySchemsMoved = legacySchemsMoved,
+            mapTemplatesMirrored = mapTemplatesMirrored,
+            warnings = warnings
+        )
+    }
+
+    private fun copyBundledGameConfigs(warnings: MutableList<String>): Int {
+        val bundled = listOf(
+            "Games/solo-garden-8p.yml",
+            "Games/team-garden-4p.yml"
+        )
+        var copied = 0
+        bundled.forEach { resourcePath ->
+            val fileName = resourcePath.substringAfterLast("/")
+            val dest = File(gamesFolder, fileName)
+            if (dest.exists()) {
+                return@forEach
+            }
+            val stream = plugin.getResource(resourcePath)
+            if (stream == null) {
+                warnings += "Bundled resource missing: $resourcePath"
+                return@forEach
+            }
+            stream.use { input ->
+                dest.outputStream().use { out -> input.copyTo(out) }
+            }
+            copied++
+        }
+        return copied
+    }
+
+    private fun mirrorMapAssetsToArenaTemplates(warnings: MutableList<String>): Int {
+        if (!mapsFolder.exists()) return 0
+        var mirrored = 0
+        mapsFolder.listFiles { file -> file.isDirectory }?.forEach { mapFolder ->
+            val mapName = mapFolder.name
+            val settings = File(mapFolder, "settings.yml")
+            if (settings.exists()) {
+                val targetConfig = File(gamesFolder, "$mapName.yml")
+                if (!targetConfig.exists()) {
+                    settings.copyTo(targetConfig, overwrite = false)
+                    mirrored++
+                }
+            }
+
+            val region = File(mapFolder, "region.schem")
+            if (region.exists()) {
+                val targetSchem = File(schemsFolder, "$mapName.schem")
+                if (!targetSchem.exists()) {
+                    region.copyTo(targetSchem, overwrite = false)
+                    mirrored++
+                }
+            } else if (settings.exists()) {
+                warnings += "Map '$mapName' has settings.yml but no region.schem."
+            }
+        }
+        return mirrored
     }
 
     // -------------------------------------------------------------------------
@@ -174,3 +301,12 @@ class GameFileService(
         }
     }
 }
+
+data class QuickSetupResult(
+    val foldersCreated: Int,
+    val bundledConfigsCopied: Int,
+    val legacyConfigsMoved: Int,
+    val legacySchemsMoved: Int,
+    val mapTemplatesMirrored: Int,
+    val warnings: List<String>
+)
