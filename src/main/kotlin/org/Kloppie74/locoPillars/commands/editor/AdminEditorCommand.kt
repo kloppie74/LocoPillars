@@ -29,6 +29,7 @@ import org.Kloppie74.locoPillars.utils.MSG
  * /editor toggle [map]               Toggle edit mode on/off
  * /editor map <name|clear>           Select / clear the active map
  * /editor info                       Show current session info
+ * /editor doctor                     Validate Data/Games + Data/Schems readiness
  *
  * — Map management (world-editing session) —
  * /editor create <name>              Create a new map from the default template
@@ -98,6 +99,7 @@ class AdminEditorCommand(
             "toggle"   -> handleToggle(sender, args)
             "map"      -> handleMap(sender, args)
             "info"     -> handleInfo(sender)
+            "doctor"   -> handleDoctor(sender)
             "hotbar"   -> handleHotbar(sender, args)
             "holograms" -> handleHolograms(sender, args)
             "setup"    -> handleSetup(sender)
@@ -139,6 +141,7 @@ class AdminEditorCommand(
         }
 
         adminEditorManager.enable(player, mapName)
+        player.sendMessage(MSG.chatColors("&7Quick start: &e/editor map <name> &7→ &e/editor edit &7→ &e/editor settings"))
     }
 
     private fun handleDisable(player: Player) {
@@ -206,6 +209,7 @@ class AdminEditorCommand(
         player.sendMessage(MSG.chatColors("&6=== Edit Mode Info ==="))
         player.sendMessage(MSG.chatColors("&eDuration: &f${state.activeDurationSeconds()}s"))
         player.sendMessage(MSG.chatColors("&eActive map: &f${state.activeMapName ?: "&7(none)"}"))
+        player.sendMessage(MSG.chatColors("&eCustom hotbar: &f${if (adminEditorManager.isHotbarEnabled(player)) "enabled" else "disabled"}"))
 
         val session = editorSessionManager.getSession(player)
         if (session != null) {
@@ -241,7 +245,9 @@ class AdminEditorCommand(
 
         if (mapRepository.createMap(mapName)) {
             player.sendMessage(MSG.chatColors("&a✓ Map '$mapName' created successfully!"))
-            player.sendMessage(MSG.chatColors("&7Use &e/editor edit $mapName &7to start editing."))
+            player.sendMessage(MSG.chatColors("&7Next step 1/3: &e/editor map $mapName"))
+            player.sendMessage(MSG.chatColors("&7Next step 2/3: &e/editor edit"))
+            player.sendMessage(MSG.chatColors("&7Next step 3/3: &e/editor settings"))
         } else {
             player.sendMessage(MSG.chatColors("&c✗ Failed to create map '$mapName'. Check console."))
         }
@@ -270,6 +276,7 @@ class AdminEditorCommand(
         }
 
         editorSessionManager.startSession(player, mapName)
+        player.sendMessage(MSG.chatColors("&7Tip: open advanced controls with &e/editor settings"))
     }
 
     private fun handleDelete(player: Player, args: Array<out String>) {
@@ -399,17 +406,54 @@ class AdminEditorCommand(
 
     private fun handleSetup(player: Player) {
         val result = gameFileService.runQuickSetup()
-        player.sendMessage(MSG.chatColors("&6=== Editor Quick Setup ==="))
+        player.sendMessage(MSG.chatColors("&6=== Editor Quick Setup (Advanced) ==="))
+        player.sendMessage(MSG.chatColors("&7Data/Games path: &f${result.dataGamesPath}"))
+        player.sendMessage(MSG.chatColors("&7Data/Schems path: &f${result.dataSchemsPath}"))
         player.sendMessage(MSG.chatColors("&7Created folders: &f${result.foldersCreated}"))
         player.sendMessage(MSG.chatColors("&7Copied bundled configs: &f${result.bundledConfigsCopied}"))
         player.sendMessage(MSG.chatColors("&7Migrated legacy configs: &f${result.legacyConfigsMoved}"))
         player.sendMessage(MSG.chatColors("&7Migrated legacy schems: &f${result.legacySchemsMoved}"))
         player.sendMessage(MSG.chatColors("&7Mirrored maps to arena templates: &f${result.mapTemplatesMirrored}"))
+        player.sendMessage(MSG.chatColors("&7Template readiness: &f${result.readiness.readyCount}/${result.readiness.configCount} ready"))
+        result.readiness.entries.take(10).forEach { entry ->
+            val status = if (entry.ready) "&aREADY" else "&cMISSING"
+            player.sendMessage(MSG.chatColors("&7- &e${entry.configName}&7: $status"))
+        }
+        if (result.readiness.entries.size > 10) {
+            player.sendMessage(MSG.chatColors("&7... and ${result.readiness.entries.size - 10} more templates."))
+        }
         if (result.warnings.isNotEmpty()) {
             player.sendMessage(MSG.chatColors("&eWarnings:"))
             result.warnings.forEach { player.sendMessage(MSG.chatColors("&e- $it")) }
+            player.sendMessage(MSG.chatColors("&7Run &e/editor doctor &7for a detailed readiness report."))
         } else {
-            player.sendMessage(MSG.chatColors("&aSetup finished with no warnings."))
+            player.sendMessage(MSG.chatColors("&aSetup completed successfully."))
+            player.sendMessage(MSG.chatColors("&7Run &e/editor doctor &7any time to re-check readiness."))
+        }
+    }
+
+    private fun handleDoctor(player: Player) {
+        val report = gameFileService.analyzeTemplateReadiness()
+        player.sendMessage(MSG.chatColors("&6=== Editor Doctor: Data Template Readiness ==="))
+        player.sendMessage(MSG.chatColors("&7Data/Games: &f${report.dataGamesPath}"))
+        player.sendMessage(MSG.chatColors("&7Data/Schems: &f${report.dataSchemsPath}"))
+        player.sendMessage(MSG.chatColors("&7Ready templates: &f${report.readyCount}/${report.configCount}"))
+
+        if (report.entries.isEmpty()) {
+            player.sendMessage(MSG.chatColors("&cNo game configs found in Data/Games."))
+            player.sendMessage(MSG.chatColors("&7Use &e/editor setup &7or add .yml files manually."))
+            return
+        }
+
+        report.entries.forEach { entry ->
+            val status = if (entry.ready) "&aREADY" else "&cMISSING_SCHEM"
+            player.sendMessage(MSG.chatColors("&e${entry.configName}&7 -> $status"))
+            if (!entry.ready) {
+                player.sendMessage(MSG.chatColors("&7  Expected one of:"))
+                player.sendMessage(MSG.chatColors("&7  - Data/Schems/${entry.configName}.schem"))
+                player.sendMessage(MSG.chatColors("&7  - Data/Schems/${entry.configName}/*.schem"))
+                player.sendMessage(MSG.chatColors("&7  - maps/${entry.configName}/region.schem (fallback)"))
+            }
         }
     }
 
@@ -527,6 +571,7 @@ class AdminEditorCommand(
         player.sendMessage(MSG.chatColors("&e/editor toggle [map]              &7Toggle edit mode"))
         player.sendMessage(MSG.chatColors("&e/editor map <name|clear>          &7Select active map"))
         player.sendMessage(MSG.chatColors("&e/editor info                      &7Show session info"))
+        player.sendMessage(MSG.chatColors("&e/editor doctor                    &7Check Data/Games/Data/Schems readiness"))
         player.sendMessage(MSG.chatColors("&e/editor hotbar <on|off|toggle>    &7Enable/disable custom hotbar"))
         player.sendMessage(MSG.chatColors("&e/editor setup                     &7Auto-prepare Data/Games and Data/Schems"))
         player.sendMessage(MSG.chatColors("&b— Map management —"))
@@ -564,7 +609,7 @@ class AdminEditorCommand(
         return when (args.size) {
             1 -> listOf(
                 "enable", "disable", "toggle", "map", "info",
-                "hotbar", "holograms", "setup",
+                "doctor", "hotbar", "holograms", "setup",
                 "create", "edit", "delete", "list",
                 "save", "cancel", "resize", "settings",
                 "validate", "files",

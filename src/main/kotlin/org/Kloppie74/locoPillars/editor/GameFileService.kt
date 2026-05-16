@@ -181,6 +181,7 @@ class GameFileService(
             schemsFolder.mkdirs()
             foldersCreated++
         }
+        ensureSetupGuideFiles()
 
         bundledConfigsCopied += copyBundledGameConfigs(warnings)
 
@@ -228,13 +229,18 @@ class GameFileService(
             warnings += "No Data/Schems schematics found; arena preloading still needs schematic files."
         }
 
+        val readiness = analyzeTemplateReadiness()
+
         return QuickSetupResult(
+            dataGamesPath = gamesFolder.absolutePath,
+            dataSchemsPath = schemsFolder.absolutePath,
             foldersCreated = foldersCreated,
             bundledConfigsCopied = bundledConfigsCopied,
             legacyConfigsMoved = legacyConfigsMoved,
             legacySchemsMoved = legacySchemsMoved,
             mapTemplatesMirrored = mapTemplatesMirrored,
-            warnings = warnings
+            warnings = warnings,
+            readiness = readiness
         )
     }
 
@@ -291,6 +297,95 @@ class GameFileService(
         return mirrored
     }
 
+    fun analyzeTemplateReadiness(): TemplateReadinessReport {
+        val entries = mutableListOf<TemplateReadinessEntry>()
+        val warnings = mutableListOf<String>()
+
+        val configs = listGameConfigFiles()
+            .sortedBy { it.nameWithoutExtension.lowercase() }
+
+        configs.forEach { config ->
+            val name = config.nameWithoutExtension
+            val singleSchem = File(schemsFolder, "$name.schem")
+            val folder = File(schemsFolder, name)
+            val folderSchems = if (folder.exists() && folder.isDirectory) {
+                folder.listFiles { file -> file.isFile && file.extension == "schem" }?.size ?: 0
+            } else {
+                0
+            }
+            val mapFallback = File(mapsFolder, "$name/region.schem")
+            val ready = singleSchem.exists() || folderSchems > 0 || mapFallback.exists()
+
+            val notes = mutableListOf<String>()
+            if (singleSchem.exists()) notes += "Found Data/Schems/$name.schem"
+            if (folderSchems > 0) notes += "Found $folderSchems schematic(s) in Data/Schems/$name/"
+            if (mapFallback.exists()) notes += "Found fallback maps/$name/region.schem"
+            if (!ready) notes += "Missing schematic for '$name' in Data/Schems or maps fallback."
+
+            entries += TemplateReadinessEntry(
+                configName = name,
+                ready = ready,
+                hasSingleSchem = singleSchem.exists(),
+                folderSchematics = folderSchems,
+                hasMapFallback = mapFallback.exists(),
+                notes = notes
+            )
+        }
+
+        if (configs.isEmpty()) {
+            warnings += "Data/Games contains no .yml files."
+        }
+        entries.filter { !it.ready }.forEach { entry ->
+            warnings += "Template '${entry.configName}' is not preload-ready (missing matching schematic)."
+        }
+
+        return TemplateReadinessReport(
+            dataGamesPath = gamesFolder.absolutePath,
+            dataSchemsPath = schemsFolder.absolutePath,
+            configCount = configs.size,
+            readyCount = entries.count { it.ready },
+            entries = entries,
+            warnings = warnings
+        )
+    }
+
+    private fun ensureSetupGuideFiles() {
+        val gamesGuide = File(gamesFolder, "README_SETUP.txt")
+        if (!gamesGuide.exists()) {
+            gamesGuide.writeText(
+                """
+                LocoPillars Data/Games Setup
+                
+                Put one .yml game config per arena type in this folder.
+                Example: solo-garden-8p.yml
+                
+                The file name (without .yml) must match a schematic in:
+                - Data/Schems/<name>.schem
+                OR
+                - Data/Schems/<name>/*.schem
+                """.trimIndent()
+            )
+        }
+
+        val schemsGuide = File(schemsFolder, "README_SETUP.txt")
+        if (!schemsGuide.exists()) {
+            schemsGuide.writeText(
+                """
+                LocoPillars Data/Schems Setup
+                
+                Store schematic files here for every config in Data/Games.
+                
+                Valid structure:
+                - Data/Schems/<name>.schem
+                OR
+                - Data/Schems/<name>/*.schem
+                
+                <name> must match Data/Games/<name>.yml exactly.
+                """.trimIndent()
+            )
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -303,10 +398,31 @@ class GameFileService(
 }
 
 data class QuickSetupResult(
+    val dataGamesPath: String,
+    val dataSchemsPath: String,
     val foldersCreated: Int,
     val bundledConfigsCopied: Int,
     val legacyConfigsMoved: Int,
     val legacySchemsMoved: Int,
     val mapTemplatesMirrored: Int,
+    val warnings: List<String>,
+    val readiness: TemplateReadinessReport
+)
+
+data class TemplateReadinessReport(
+    val dataGamesPath: String,
+    val dataSchemsPath: String,
+    val configCount: Int,
+    val readyCount: Int,
+    val entries: List<TemplateReadinessEntry>,
     val warnings: List<String>
+)
+
+data class TemplateReadinessEntry(
+    val configName: String,
+    val ready: Boolean,
+    val hasSingleSchem: Boolean,
+    val folderSchematics: Int,
+    val hasMapFallback: Boolean,
+    val notes: List<String>
 )

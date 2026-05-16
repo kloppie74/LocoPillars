@@ -51,6 +51,7 @@ All commands require the `locopillars.admin` permission.
 /editor disable                 Disable edit mode and restore hotbar
 /editor toggle [map]            Toggle edit mode on/off
 /editor map <name|clear>        Select (or clear) the active map
+/editor doctor                  Diagnose Data/Games + Data/Schems readiness
 /editor hotbar <on|off|toggle>  Toggle editor hotbar tools without leaving edit mode
 /editor info                    Show current session info
 /editor setup                   Auto-bootstrap Data/Games and Data/Schems assets
@@ -128,6 +129,7 @@ Also still available:
 - [ ] `/editor hotbar on` restores custom editor hotbar
 - [ ] `/editor disable` restores original hotbar
 - [ ] `/editor map <name>` sets the active map
+- [ ] `/editor doctor` shows template readiness from Data/Games + Data/Schems
 - [ ] `/editor edit` starts editing the currently active map without requiring map argument
 - [ ] `/editor setup` creates/migrates Data/Games and Data/Schems assets
 - [ ] `/editor validate <name>` prints an accurate report

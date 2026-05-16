@@ -82,7 +82,7 @@ commands:
 
   editor:
     description: "Admin Editor System – toggle edit mode and manage maps"
-    usage: "/editor <enable|disable|toggle|map|info|hotbar|holograms|setup|create|edit|delete|list|save|cancel|resize|settings|validate|files|spawn|help> [args]"
+    usage: "/editor <enable|disable|toggle|map|info|doctor|hotbar|holograms|setup|create|edit|delete|list|save|cancel|resize|settings|validate|files|spawn|help> [args]"
     permission: locopillars.admin
     permission-message: "§cYou do not have permission to use the editor!"
     aliases: [ edit, adminedit ]
