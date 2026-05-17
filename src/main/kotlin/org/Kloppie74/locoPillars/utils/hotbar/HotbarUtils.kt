@@ -17,10 +17,15 @@ object HotbarUtils {
     private val CACHE_TIMESTAMPS = ConcurrentHashMap<UUID, Long>()
 
     /**
-     * Main method to setup player hotbar based on current state
+     * Main method to setup player hotbar based on current state.
+     * Skips entirely for active editor players — the editor manages
+     * their gamemode and hotbar independently.
      */
     @JvmStatic
     fun setupPlayerHotbar(player: Player, plugin: LocoPillars) {
+        // Editor players keep Creative + editor hotbar; don't touch them here
+        if (plugin.adminEditorManager.isActive(player)) return
+
         val hotbarType = determineHotbarType(player, plugin)
 
         HOTBAR_CACHE[player.uniqueId] = hotbarType
@@ -85,10 +90,13 @@ object HotbarUtils {
     }
 
     /**
-     * Applies player state (gamemode, flight, etc.) based on hotbar type
+     * Applies player state (gamemode, flight, etc.) based on hotbar type.
+     * Never touches editor players — their state is managed by AdminEditorManager.
      */
     @JvmStatic
     fun applyPlayerStateForHotbarType(player: Player, hotbarType: String, plugin: LocoPillars) {
+        if (plugin.adminEditorManager.isActive(player)) return
+
         when (hotbarType.lowercase()) {
             "spectate" -> {
                 if (SpectatorUtils.isSpectator(player, plugin)) {

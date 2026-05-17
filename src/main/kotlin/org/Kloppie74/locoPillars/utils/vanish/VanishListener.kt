@@ -91,7 +91,7 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onPlayerChangedWorld(event: PlayerChangedWorldEvent) {
-        // Queue update with small delay to let world change complete
+        if (plugin.adminEditorManager.isActive(event.player)) return
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             GlobalVisibilityTicker.queueUpdate(event.player)
             updateBossBar(event.player)
@@ -100,7 +100,7 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onPlayerTeleport(event: PlayerTeleportEvent) {
-        // Queue update after teleport completes
+        if (plugin.adminEditorManager.isActive(event.player)) return
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             GlobalVisibilityTicker.queueUpdate(event.player)
             updateBossBar(event.player)
@@ -109,7 +109,8 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     fun onPlayerGameModeChange(event: PlayerGameModeChangeEvent) {
-        // Queue update after game mode change
+        // Skip editors — the creative enforcer intentionally changes their gamemode
+        if (plugin.adminEditorManager.isActive(event.player)) return
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             GlobalVisibilityTicker.queueUpdate(event.player)
             updateBossBar(event.player)

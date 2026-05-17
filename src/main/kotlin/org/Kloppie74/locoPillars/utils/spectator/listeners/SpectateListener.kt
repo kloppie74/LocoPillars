@@ -34,10 +34,8 @@ class SpectateListener(
         val player = event.player
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            // Let HotbarUtils handle everything - it will coordinate with SpectatorUtils if needed
+            if (plugin.adminEditorManager.isActive(player)) return@Runnable
             HotbarUtils.setupPlayerHotbar(player, plugin)
-
-            // Update visibility for all players
             updateGlobalVisibility()
         }, 10L)
     }
@@ -58,7 +56,7 @@ class SpectateListener(
         val player = event.player
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            // Let HotbarUtils determine the correct state and handle everything
+            if (plugin.adminEditorManager.isActive(player)) return@Runnable
             HotbarUtils.setupPlayerHotbar(player, plugin)
             updateVisibilityForPlayer(player)
         }, 5L)
@@ -74,15 +72,11 @@ class SpectateListener(
         }
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            // Check if hotbar type changed and handle accordingly
+            if (plugin.adminEditorManager.isActive(player)) return@Runnable
             val oldType = HotbarUtils.getCurrentHotbarType(player, plugin)
             HotbarUtils.setupPlayerHotbar(player, plugin)
             val newType = HotbarUtils.getCurrentHotbarType(player, plugin)
-
-            if (oldType != newType) {
-                HotbarUtils.handleHotbarTypeChange(player, oldType, newType, plugin)
-            }
-
+            if (oldType != newType) HotbarUtils.handleHotbarTypeChange(player, oldType, newType, plugin)
             updateVisibilityForPlayer(player)
         }, 5L)
     }
@@ -94,7 +88,7 @@ class SpectateListener(
         val toWorld = player.world.name
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            // Let SpectatorUtils handle world changes - it coordinates with HotbarUtils
+            if (plugin.adminEditorManager.isActive(player)) return@Runnable
             SpectatorUtils.handleWorldChange(player, fromWorld, toWorld, plugin)
             updateVisibilityForPlayer(player)
         }, 5L)

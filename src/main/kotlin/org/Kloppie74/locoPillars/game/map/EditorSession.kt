@@ -1,18 +1,18 @@
 package org.Kloppie74.locoPillars.game.map
 
-import net.kyori.adventure.text.Component
 import org.bukkit.*
 import org.bukkit.entity.Player
 import org.bukkit.entity.TextDisplay
 import org.bukkit.scheduler.BukkitRunnable
 import org.bukkit.scheduler.BukkitTask
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.editor.EditorHologramHelper
 import org.Kloppie74.locoPillars.utils.MSG
 import java.util.UUID
 
 /**
  * EditorSession - Manages a single map editing session
- * 
+ *
  * Responsibilities:
  * - Track the player editing the map
  * - Manage the temporary/volatile edit world
@@ -27,7 +27,7 @@ class EditorSession(
     private val plugin: LocoPillars,
     private val mapRepository: MapRepository
 ) {
-    
+
     val sessionId: UUID = UUID.randomUUID()
     private var saveRadius: Int = mapRepository.getSaveRadius(mapName)
     private var borderSize: Double = mapRepository.getBorderSize(mapName)
@@ -67,11 +67,32 @@ class EditorSession(
     private var hologramsEnabled: Boolean = mapRepository.loadMapSettings(mapName)
         ?.getBoolean("Editor.Holograms.Enabled", true)
         ?: true
+    // ── New fields from full YML ──────────────────────────────────────────────
+    private var minimumPlayers: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("SpawnLocations.MinimumPlayers", 2) ?: 2
+    private var maximumPlayers: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("SpawnLocations.MaximumPlayers", 8) ?: 8
+    private var maxTeams: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("SpawnLocations.MaxTeams", 8) ?: 8
+    private var playersPerTeam: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("SpawnLocations.PlayersPerTeam", 1) ?: 1
+    private var displayName: String = mapRepository.loadMapSettings(mapName)
+        ?.getString("Settings.DisplayName", mapName) ?: mapName
+    private var worldsAmount: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.Worlds-Amount", 10) ?: 10
+    private var loadMap: Boolean = mapRepository.loadMapSettings(mapName)
+        ?.getBoolean("Settings.LoadMap", true) ?: true
+    // RandomItems.Type: "Blacklisted" | "Whitelisted" | "None"
+    private var randomItemsType: String = mapRepository.loadMapSettings(mapName)
+        ?.getString("Settings.RandomItems.Type", "Blacklisted") ?: "Blacklisted"
+    private var luckyBlocksEnabled: Boolean = mapRepository.loadMapSettings(mapName)
+        ?.let { cfg -> cfg.getList("Settings.Luckyblocks")?.isNotEmpty() == true } ?: false
+
     private var particleTask: BukkitTask? = null
     private val spawnHolograms = mutableListOf<TextDisplay>()
     private var isActive: Boolean = true
     private val originalGameMode = player.gameMode
-    
+
     // Center point for schematic save (usually 0,0,0 or the map center)
     private val centerX: Double = mapRepository.loadMapSettings(mapName)
         ?.getDouble("Settings.SpawnPoint.X", 0.0)
@@ -82,7 +103,7 @@ class EditorSession(
     private val centerZ: Double = mapRepository.loadMapSettings(mapName)
         ?.getDouble("Settings.SpawnPoint.Z", 0.0)
         ?: 0.0
-    
+
     init {
         debugLog("EditorSession created for player ${player.name}, map: $mapName")
         startParticleVisualization()
@@ -90,7 +111,7 @@ class EditorSession(
             spawnSpawnHolograms()
         }
     }
-    
+
     /**
      * Start the particle visualization task
      * Displays RED particles outlining the cuboid that will be saved
@@ -102,22 +123,22 @@ class EditorSession(
                     cancel()
                     return
                 }
-                
+
                 displaySaveRegionParticles()
                 displayBorderParticles()
             }
         }.runTaskTimer(plugin, 0L, 10L) // Run every 0.5 seconds
-        
+
         debugLog("Started particle visualization task")
     }
-    
+
     /**
      * Display RED particles outlining the save region
      */
     private fun displaySaveRegionParticles() {
         val world = tempWorld
         val radius = saveRadius.toDouble()
-        
+
         // Calculate bounds
         val minX = centerX - radius
         val maxX = centerX + radius
@@ -125,18 +146,18 @@ class EditorSession(
         val maxY = Math.min(world.maxHeight.toDouble(), centerY + radius)
         val minZ = centerZ - radius
         val maxZ = centerZ + radius
-        
+
         // Draw cuboid outline with particles
         drawParticleLine(world, minX, minY, minZ, maxX, minY, minZ, Color.RED) // Bottom edge 1
         drawParticleLine(world, minX, minY, maxZ, maxX, minY, maxZ, Color.RED) // Bottom edge 2
         drawParticleLine(world, minX, minY, minZ, minX, minY, maxZ, Color.RED) // Bottom edge 3
         drawParticleLine(world, maxX, minY, minZ, maxX, minY, maxZ, Color.RED) // Bottom edge 4
-        
+
         drawParticleLine(world, minX, maxY, minZ, maxX, maxY, minZ, Color.RED) // Top edge 1
         drawParticleLine(world, minX, maxY, maxZ, maxX, maxY, maxZ, Color.RED) // Top edge 2
         drawParticleLine(world, minX, maxY, minZ, minX, maxY, maxZ, Color.RED) // Top edge 3
         drawParticleLine(world, maxX, maxY, minZ, maxX, maxY, maxZ, Color.RED) // Top edge 4
-        
+
         drawParticleLine(world, minX, minY, minZ, minX, maxY, minZ, Color.RED) // Vertical edge 1
         drawParticleLine(world, maxX, minY, minZ, maxX, maxY, minZ, Color.RED) // Vertical edge 2
         drawParticleLine(world, minX, minY, maxZ, minX, maxY, maxZ, Color.RED) // Vertical edge 3
@@ -179,12 +200,10 @@ class EditorSession(
         val reservedKeys = setOf("MinimumPlayers", "MaximumPlayers", "MaxTeams", "PlayersPerTeam")
 
         spawnSection.getKeys(false).forEach { teamKey ->
-            if (teamKey in reservedKeys) {
-                return@forEach
-            }
+            if (teamKey in reservedKeys) return@forEach
 
             val teamSection = spawnSection.getConfigurationSection(teamKey) ?: return@forEach
-            val teamName = teamSection.getString("Name", teamKey)
+            val teamName = teamSection.getString("Name", teamKey) ?: teamKey
 
             teamSection.getKeys(false)
                 .filter { it.startsWith("Player") }
@@ -193,15 +212,20 @@ class EditorSession(
                     val x = playerSection.getDouble("X")
                     val y = playerSection.getDouble("Y")
                     val z = playerSection.getDouble("Z")
-                    val location = Location(tempWorld, x, y + 1.5, z)
-                    val display = tempWorld.spawn(location, TextDisplay::class.java)
-                    display.text(Component.text("$teamName $playerKey"))
-                    display.isPersistent = false
+                    val location = Location(tempWorld, x, y + 2.0, z)
+
+                    // EditorHologramHelper gebruikt Display.Billboard.CENTER zodat het
+                    // hologram vanuit alle kanten (N/E/S/W) leesbaar is.
+                    val display = EditorHologramHelper.spawn(
+                        location,
+                        "&e$teamName &7/ &f$playerKey",
+                        "&7(&b${x.toInt()}&7, &b${y.toInt()}&7, &b${z.toInt()}&7)"
+                    )
                     spawnHolograms.add(display)
                 }
         }
     }
-    
+
     /**
      * Draw a line of particles between two points
      */
@@ -216,19 +240,19 @@ class EditorSession(
         color: Color
     ) {
         val distance = Math.sqrt(
-            Math.pow(x2 - x1, 2.0) + 
-            Math.pow(y2 - y1, 2.0) + 
-            Math.pow(z2 - z1, 2.0)
+            Math.pow(x2 - x1, 2.0) +
+                    Math.pow(y2 - y1, 2.0) +
+                    Math.pow(z2 - z1, 2.0)
         )
-        
+
         val points = Math.ceil(distance / 2.0).toInt() // Particle every 2 blocks
-        
+
         for (i in 0..points) {
             val t = i.toDouble() / points
             val x = x1 + (x2 - x1) * t
             val y = y1 + (y2 - y1) * t
             val z = z1 + (z2 - z1) * t
-            
+
             world.spawnParticle(
                 Particle.DUST,
                 Location(world, x, y, z),
@@ -238,7 +262,18 @@ class EditorSession(
             )
         }
     }
-    
+
+
+    fun getMinimumPlayers(): Int  = minimumPlayers
+    fun getMaximumPlayers(): Int  = maximumPlayers
+    fun getMaxTeams(): Int        = maxTeams
+    fun getPlayersPerTeam(): Int  = playersPerTeam
+    fun getDisplayName(): String  = displayName
+    fun getWorldsAmount(): Int    = worldsAmount
+    fun isLoadMap(): Boolean      = loadMap
+    fun getRandomItemsType(): String = randomItemsType
+    fun isLuckyBlocksEnabled(): Boolean = luckyBlocksEnabled
+
     /**
      * Get the current schematic radius
      */
@@ -262,7 +297,7 @@ class EditorSession(
     fun getItemTimer(): Int = itemTimer
     fun canBreakMapBlocks(): Boolean = canBreakMapBlocks
     fun isHologramsEnabled(): Boolean = hologramsEnabled
-    
+
     /**
      * Update the schematic radius and refresh particle display
      */
@@ -271,18 +306,18 @@ class EditorSession(
             player.sendMessage(MSG.chatColors("&cSave radius must be at least 10!"))
             return
         }
-        
+
         if (radius > 500) {
             player.sendMessage(MSG.chatColors("&cSave radius cannot exceed 500!"))
             return
         }
-        
+
         saveRadius = radius
         mapRepository.updateSaveRadius(mapName, radius)
-        
+
         player.sendMessage(MSG.chatColors("&aSave radius updated to: &f$radius"))
         player.sendMessage(MSG.chatColors("&7The RED particle boundary has been updated"))
-        
+
         debugLog("Updated save radius to $radius for map $mapName")
     }
 
@@ -382,44 +417,44 @@ class EditorSession(
         }
         player.sendMessage(MSG.chatColors("&aSpawn holograms refreshed."))
     }
-    
+
     /**
      * Get the center location for the save region
      */
     fun getCenterLocation(): Location {
         return Location(tempWorld, centerX, centerY, centerZ)
     }
-    
+
     /**
      * Get the save region bounds as a pair of locations
      */
     fun getSaveRegionBounds(): Pair<Location, Location> {
         val radius = saveRadius.toDouble()
-        
+
         val loc1 = Location(
             tempWorld,
             centerX - radius,
             Math.max(tempWorld.minHeight.toDouble(), centerY - radius),
             centerZ - radius
         )
-        
+
         val loc2 = Location(
             tempWorld,
             centerX + radius,
             Math.min(tempWorld.maxHeight.toDouble(), centerY + radius),
             centerZ + radius
         )
-        
+
         return Pair(loc1, loc2)
     }
-    
+
     /**
      * Check if the session is still active
      */
     fun isActive(): Boolean {
         return isActive && player.isOnline
     }
-    
+
     /**
      * End the session and cleanup
      */
@@ -428,24 +463,24 @@ class EditorSession(
             debugLog("Session already ended")
             return
         }
-        
+
         isActive = false
-        
+
         // Stop particle task
         particleTask?.cancel()
         particleTask = null
         clearSpawnHolograms()
         player.gameMode = originalGameMode
-        
+
         debugLog("EditorSession ended for player ${player.name}, saveChanges: $saveChanges")
     }
-    
+
     /**
      * Teleport player back to main world
      */
     fun returnPlayerToLobby() {
         val mainWorld = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NORMAL }
-        
+
         if (mainWorld != null) {
             player.teleport(mainWorld.spawnLocation)
             player.sendMessage(MSG.chatColors("&aTeleported back to spawn"))
@@ -453,7 +488,7 @@ class EditorSession(
             player.sendMessage(MSG.chatColors("&cCould not find main world to teleport to!"))
         }
     }
-    
+
     /**
      * Display session info to the player
      */
@@ -473,8 +508,69 @@ class EditorSession(
     }
 
     private fun clearSpawnHolograms() {
-        spawnHolograms.forEach { it.remove() }
-        spawnHolograms.clear()
+        EditorHologramHelper.removeAll(spawnHolograms)
+    }
+
+
+    fun setMinimumPlayers(value: Int) {
+        minimumPlayers = value.coerceIn(1, maximumPlayers)
+        persist("SpawnLocations.MinimumPlayers", minimumPlayers)
+        player.sendActionBar(MSG.chatColors("&aMin Players: &f$minimumPlayers"))
+    }
+
+    fun setMaximumPlayers(value: Int) {
+        maximumPlayers = value.coerceIn(minimumPlayers, maxTeams * playersPerTeam)
+        persist("SpawnLocations.MaximumPlayers", maximumPlayers)
+        player.sendActionBar(MSG.chatColors("&aMax Players: &f$maximumPlayers"))
+    }
+
+    fun setMaxTeams(value: Int) {
+        maxTeams = value.coerceIn(1, 100)
+        persist("SpawnLocations.MaxTeams", maxTeams)
+        player.sendActionBar(MSG.chatColors("&aMax Teams: &f$maxTeams"))
+    }
+
+    fun setPlayersPerTeam(value: Int) {
+        playersPerTeam = value.coerceIn(1, 20)
+        persist("SpawnLocations.PlayersPerTeam", playersPerTeam)
+        player.sendActionBar(MSG.chatColors("&aPlayers Per Team: &f$playersPerTeam"))
+    }
+
+    fun setDisplayName(name: String) {
+        displayName = name
+        persist("Settings.DisplayName", name)
+        player.sendActionBar(MSG.chatColors("&aDisplay name: &f$name"))
+    }
+
+    fun setWorldsAmount(value: Int) {
+        worldsAmount = value.coerceIn(1, 200)
+        persist("Settings.Worlds-Amount", worldsAmount)
+        player.sendActionBar(MSG.chatColors("&aWorlds Amount: &f$worldsAmount"))
+    }
+
+    fun toggleLoadMap() {
+        loadMap = !loadMap
+        persist("Settings.LoadMap", loadMap)
+        player.sendActionBar(MSG.chatColors("&aLoad Map: &f${if (loadMap) "enabled" else "disabled"}"))
+    }
+
+    fun cycleRandomItemsType() {
+        randomItemsType = when (randomItemsType) {
+            "Blacklisted"  -> "Whitelisted"
+            "Whitelisted"  -> "None"
+            else           -> "Blacklisted"
+        }
+        persist("Settings.RandomItems.Type", randomItemsType)
+        player.sendActionBar(MSG.chatColors("&aRandom Items: &f$randomItemsType"))
+    }
+
+    fun toggleLuckyBlocks() {
+        luckyBlocksEnabled = !luckyBlocksEnabled
+        // When disabled store an empty list; when enabled store a default placeholder
+        val config = mapRepository.loadMapSettings(mapName) ?: return
+        config.set("Settings.Luckyblocks", if (luckyBlocksEnabled) listOf<String>() else listOf<String>())
+        mapRepository.saveMapSettings(mapName, config)
+        player.sendActionBar(MSG.chatColors("&aLucky Blocks: &f${if (luckyBlocksEnabled) "enabled" else "disabled"}"))
     }
 
     private fun persist(path: String, value: Any) {
@@ -482,7 +578,7 @@ class EditorSession(
         config.set(path, value)
         mapRepository.saveMapSettings(mapName, config)
     }
-    
+
     private fun debugLog(message: String) {
         if (plugin.configManager.debugMode) {
             plugin.logger.info("[EditorSession] $message")

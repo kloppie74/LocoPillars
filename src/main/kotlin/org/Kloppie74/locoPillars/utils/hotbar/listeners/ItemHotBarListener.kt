@@ -39,7 +39,7 @@ class ItemHotBarListener(
         val player = event.player
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            // Let HotbarUtils handle everything
+            if (plugin.adminEditorManager.isActive(player)) return@Runnable
             HotbarUtils.setupPlayerHotbar(player, plugin)
         }, 10L)
     }
@@ -58,7 +58,7 @@ class ItemHotBarListener(
         val player = event.player
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            // HotbarUtils will determine the correct state and apply it
+            if (plugin.adminEditorManager.isActive(player)) return@Runnable
             HotbarUtils.setupPlayerHotbar(player, plugin)
         }, 5L)
     }
@@ -68,15 +68,11 @@ class ItemHotBarListener(
         val player = event.player
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            // Check for hotbar type changes
+            if (plugin.adminEditorManager.isActive(player)) return@Runnable
             val oldType = HotbarUtils.getCurrentHotbarType(player, plugin)
             HotbarUtils.setupPlayerHotbar(player, plugin)
             val newType = HotbarUtils.getCurrentHotbarType(player, plugin)
-
-            // Handle transitions if type changed
-            if (oldType != newType) {
-                HotbarUtils.handleHotbarTypeChange(player, oldType, newType, plugin)
-            }
+            if (oldType != newType) HotbarUtils.handleHotbarTypeChange(player, oldType, newType, plugin)
         }, 5L)
     }
 
@@ -87,7 +83,7 @@ class ItemHotBarListener(
         val toWorld = player.world.name
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            // Let SpectatorUtils handle world changes - it coordinates with HotbarUtils
+            if (plugin.adminEditorManager.isActive(player)) return@Runnable
             SpectatorUtils.handleWorldChange(player, fromWorld, toWorld, plugin)
         }, 5L)
     }

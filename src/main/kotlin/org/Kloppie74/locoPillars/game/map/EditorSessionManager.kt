@@ -18,33 +18,31 @@ import java.util.concurrent.CompletableFuture
 
 /**
  * EditorSessionManager - Manages all active editor sessions
- * 
- * Responsibilities:
- * - Create and track editor sessions
- * - Generate temporary void worlds for editing
- * - Load schematics into edit worlds
- * - Save regions back to schematics
- * - Clean up sessions and worlds
+ *
+ * ### Fix 1 patch
+ * [finishSessionStart] roept `adminEditorManager.enable(..., deferHotbar = true)` aan
+ * (of respecteert dat het al actief is) en teleporteert daarna de speler naar
+ * de edit world. De [PlayerChangedWorldEvent] in EditorModeListener geeft
+ * vervolgens de hotbar — pas nádat de world-switch klaar is.
  */
 class EditorSessionManager(
     private val plugin: LocoPillars,
     private val mapRepository: MapRepository
 ) {
-    
-    private val activeSessions = mutableMapOf<UUID, EditorSession>()
+
+    private val activeSessions  = mutableMapOf<UUID, EditorSession>()
     private val pendingSessions = mutableSetOf<UUID>()
-    
-    /**
-     * Start an editor session for a player
-     */
+
+    // -------------------------------------------------------------------------
+    // Start session
+    // -------------------------------------------------------------------------
+
     fun startSession(player: Player, mapName: String): Boolean {
-        // Check if map exists
         if (!mapRepository.mapExists(mapName)) {
             player.sendMessage(MSG.chatColors("&cMap '$mapName' does not exist!"))
             return false
         }
-        
-        // Check if player already has an active session
+
         if (activeSessions.containsKey(player.uniqueId) || pendingSessions.contains(player.uniqueId)) {
             player.sendMessage(MSG.chatColors("&cYou already have an active editor session!"))
             player.sendMessage(MSG.chatColors("&7Use &e/editor cancel &7to end it"))
@@ -52,42 +50,46 @@ class EditorSessionManager(
         }
 
         pendingSessions.add(player.uniqueId)
-        
-        // Create temporary world
+
         val worldName = "pillars_edit_${mapName}_${UUID.randomUUID().toString().substring(0, 8)}"
         val world = createVoidWorld(worldName)
-        
+
         if (world == null) {
-            player.sendMessage(MSG.chatColors("&cFailed to create editor world!"))
+            player.sendMessage(MSG.chatColors("&cFailed to create the editor world!"))
             pendingSessions.remove(player.uniqueId)
             return false
         }
 
-        // Load schematic if it exists
-        val schemFile = mapRepository.getMapSchematicFile(mapName)
-        val spawnY = mapRepository.loadMapSettings(mapName)
-            ?.getDouble("Settings.SpawnPoint.Y", 65.0)
-            ?: 65.0
-        val centerLoc = world.getBlockAt(0, spawnY.toInt(), 0).location
+        val schemFile   = mapRepository.getMapSchematicFile(mapName)
+        val settings    = mapRepository.loadMapSettings(mapName)
+        val centerX     = settings?.getDouble("Settings.SpawnPoint.X", 0.0) ?: 0.0
+        val centerY     = settings?.getDouble("Settings.SpawnPoint.Y", 65.0) ?: 65.0
+        val centerZ     = settings?.getDouble("Settings.SpawnPoint.Z", 0.0) ?: 0.0
+        val saveRadius  = mapRepository.getSaveRadius(mapName).toDouble()
+
+        // Paste origin = the minimum corner of the save region, matching
+        // getSaveRegionBounds() loc1 exactly. This ensures the schematic lands
+        // at the same position it was saved from, regardless of how
+        // SchematicHelper handles the clipboard's internal origin offset.
+        val pasteX      = centerX - saveRadius
+        val pasteY      = maxOf(world.minHeight.toDouble(), centerY - saveRadius)
+        val pasteZ      = centerZ - saveRadius
+        val centerLoc   = Location(world, pasteX, pasteY, pasteZ)
 
         if (schemFile.exists()) {
-            player.sendMessage(MSG.chatColors("&eLoading schematic asynchronously..."))
+            player.sendMessage(MSG.chatColors("&eLoading schematic (async)..."))
             loadSchematicAsync(schemFile)
                 .thenCompose { clipboard ->
-                    if (clipboard == null) {
-                        CompletableFuture.completedFuture(false)
-                    } else {
-                        pasteClipboardAsync(clipboard, centerLoc)
-                    }
+                    if (clipboard == null) CompletableFuture.completedFuture(false)
+                    else pasteClipboardAsync(clipboard, centerLoc)
                 }
                 .exceptionally { ex ->
-                    plugin.logger.severe("[EditorSessionManager] Failed to load schematic for $mapName: ${ex.message}")
+                    plugin.logger.severe(
+                        "[EditorSessionManager] Failed to load schematic for $mapName: ${ex.message}")
                     false
                 }
                 .whenComplete { success, _ ->
-                    runOnMain {
-                        finishSessionStart(player, mapName, world, worldName, success, true)
-                    }
+                    runOnMain { finishSessionStart(player, mapName, world, worldName, success, true) }
                 }
         } else {
             finishSessionStart(player, mapName, world, worldName, false, false)
@@ -96,29 +98,9 @@ class EditorSessionManager(
         return true
     }
 
-    private fun loadSchematicAsync(schemFile: File): CompletableFuture<Clipboard?> {
-        // File I/O is safe off-thread regardless of FAWE availability.
-        return scheduleTask(true) {
-            SchematicHelper.loadSchematic(plugin, plugin.configManager, schemFile)
-        }
-    }
-
-    private fun pasteClipboardAsync(clipboard: Clipboard, location: Location): CompletableFuture<Boolean> {
-        return scheduleTask(isFaweAvailable()) {
-            SchematicHelper.pasteClipboard(plugin, plugin.configManager, clipboard, location)
-        }
-    }
-
-    private fun saveSchematicAsync(loc1: Location, loc2: Location, schemFile: File): CompletableFuture<Boolean> {
-        return scheduleTask(isFaweAvailable()) {
-            SchematicHelper.saveSchematic(plugin, plugin.configManager, loc1, loc2, schemFile)
-        }
-    }
-
-    private fun isFaweAvailable(): Boolean {
-        // FAWE (FastAsyncWorldEdit) allows safe async schematic operations.
-        return Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
-    }
+    // -------------------------------------------------------------------------
+    // ### Fix 1 – finishSessionStart
+    // -------------------------------------------------------------------------
 
     private fun finishSessionStart(
         player: Player,
@@ -136,131 +118,88 @@ class EditorSessionManager(
 
         if (hadSchematic) {
             if (pasteSuccess) {
-                player.sendMessage(MSG.chatColors("&aLoaded existing schematic for map: &f$mapName"))
+                player.sendMessage(MSG.chatColors("&aExisting schematic loaded for map: &f$mapName"))
             } else {
                 player.sendMessage(MSG.chatColors("&cFailed to load schematic, starting with empty world"))
                 applyBedrockAnchor(world, mapName, updateSettings = false)
             }
         } else {
-            player.sendMessage(MSG.chatColors("&7No existing schematic found, starting with bedrock anchor"))
+            player.sendMessage(MSG.chatColors("&7No schematic found, starting with bedrock anchor"))
             applyBedrockAnchor(world, mapName, updateSettings = true)
         }
 
         val session = EditorSession(player, mapName, world, plugin, mapRepository)
         activeSessions[player.uniqueId] = session
 
+        // ### Fix 1: zorg dat edit mode actief is met deferHotbar=true
+        // zodat de hotbar pas wordt gegeven ná de teleport (via PlayerChangedWorldEvent).
+        val adminEditorManager = plugin.adminEditorManager
+        if (!adminEditorManager.isActive(player)) {
+            // Eerste keer: activeer edit mode met uitgestelde hotbar
+            adminEditorManager.enable(player, mapName, deferHotbar = true)
+        } else {
+            // Al actief (bijv. via /editor create → enable() al eerder aangeroepen):
+            // Reset hotbarEnabled naar false zodat onPlayerArrivedInEditWorld()
+            // de hotbar opnieuw geeft ná de teleport.
+            adminEditorManager.getState(player)?.hotbarEnabled = false
+        }
+
+        // Teleporteer naar de edit world — dit triggert PlayerChangedWorldEvent
+        // → EditorModeListener → onPlayerArrivedInEditWorld() → hotbar + berichten
         player.gameMode = GameMode.CREATIVE
         player.teleport(world.getBlockAt(0, 100, 0).location)
 
-        player.sendMessage(MSG.chatColors("&a=== Editor Session Started ==="))
-        player.sendMessage(MSG.chatColors("&eMap: &f$mapName"))
-        player.sendMessage(MSG.chatColors("&eWorld: &f$worldName"))
-        player.sendMessage(MSG.chatColors("&7RED particles show the save region"))
-        player.sendMessage(MSG.chatColors("&7GREEN particles show the play border"))
-        player.sendMessage(MSG.chatColors(""))
-        player.sendMessage(MSG.chatColors("&7Commands:"))
-        player.sendMessage(MSG.chatColors("  &e/editor save &7- Save changes"))
-        player.sendMessage(MSG.chatColors("  &e/editor resize <radius> &7- Adjust save region"))
-        player.sendMessage(MSG.chatColors("  &e/editor settings &7- Open editor settings"))
-        player.sendMessage(MSG.chatColors("  &e/editor info &7- Show session info"))
-        player.sendMessage(MSG.chatColors("  &e/editor cancel &7- Cancel without saving"))
-
-        debugLog("Started editor session for ${player.name} on map $mapName")
+        debugLog("Editor session started for ${player.name} on map $mapName")
     }
 
-    private fun applyBedrockAnchor(world: World, mapName: String, updateSettings: Boolean) {
-        world.getBlockAt(0, 0, 0).type = Material.BEDROCK
-        if (!updateSettings) {
-            return
+    // -------------------------------------------------------------------------
+    // Schematic helpers (ongewijzigd)
+    // -------------------------------------------------------------------------
+
+    private fun loadSchematicAsync(schemFile: File): CompletableFuture<Clipboard?> =
+        scheduleTask(true) {
+            SchematicHelper.loadSchematic(plugin, plugin.configManager, schemFile)
         }
 
-        val config = mapRepository.loadMapSettings(mapName) ?: return
-        config.set("Settings.SpawnPoint.X", 0.0)
-        config.set("Settings.SpawnPoint.Y", 1.0)
-        config.set("Settings.SpawnPoint.Z", 0.0)
-        mapRepository.saveMapSettings(mapName, config)
-    }
-
-    private fun <T> scheduleTask(async: Boolean, task: () -> T): CompletableFuture<T> {
-        val future = CompletableFuture<T>()
-        if (!ensurePluginEnabled(future)) return future
-        val runnable = Runnable {
-            if (!ensurePluginEnabled(future)) return@Runnable
-            try {
-                future.complete(task())
-            } catch (e: Exception) {
-                future.completeExceptionally(e)
-            }
+    private fun pasteClipboardAsync(clipboard: Clipboard, location: Location): CompletableFuture<Boolean> =
+        scheduleTask(isFaweAvailable()) {
+            SchematicHelper.pasteClipboard(plugin, plugin.configManager, clipboard, location)
         }
 
-        try {
-            if (async) {
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable)
-            } else {
-                Bukkit.getScheduler().runTask(plugin, runnable)
-            }
-        } catch (e: IllegalStateException) {
-            future.completeExceptionally(e)
+    private fun saveSchematicAsync(loc1: Location, loc2: Location, schemFile: File): CompletableFuture<Boolean> =
+        scheduleTask(isFaweAvailable()) {
+            SchematicHelper.saveSchematic(plugin, plugin.configManager, loc1, loc2, schemFile)
         }
 
-        return future
-    }
+    private fun isFaweAvailable(): Boolean =
+        Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
 
-    private fun <T> ensurePluginEnabled(future: CompletableFuture<T>): Boolean {
-        if (!plugin.isEnabled) {
-            future.completeExceptionally(IllegalStateException("Plugin disabled"))
-            return false
-        }
-        return true
-    }
+    // -------------------------------------------------------------------------
+    // Save / Cancel / End (ongewijzigd)
+    // -------------------------------------------------------------------------
 
-    private fun runOnMain(task: () -> Unit) {
-        Bukkit.getScheduler().runTask(plugin, Runnable { task() })
-    }
-
-    private fun cleanupWorld(worldName: String) {
-        val world = Bukkit.getWorld(worldName) ?: return
-        val mainWorld = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NORMAL }
-        if (mainWorld != null) {
-            world.players.forEach { it.teleport(mainWorld.spawnLocation) }
-        }
-        if (Bukkit.unloadWorld(world, false)) {
-            val worldFolder = File(Bukkit.getWorldContainer(), worldName)
-            if (worldFolder.exists()) {
-                worldFolder.deleteRecursively()
-            }
-        }
-    }
-    
-    /**
-     * Save the current session and end it
-     */
     fun saveAndEndSession(player: Player): Boolean {
-        val session = activeSessions[player.uniqueId]
-        
-        if (session == null) {
+        val session = activeSessions[player.uniqueId] ?: run {
             player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
             return false
         }
-        
+
         if (!session.isActive()) {
             player.sendMessage(MSG.chatColors("&cYour editor session is no longer active!"))
             activeSessions.remove(player.uniqueId)
             return false
         }
-        
+
         player.sendMessage(MSG.chatColors("&eSaving map changes..."))
-        
-        // Get save region bounds
+
         val (loc1, loc2) = session.getSaveRegionBounds()
-        val schemFile = mapRepository.getMapSchematicFile(session.mapName)
-        
-        // Ensure parent directory exists
+        val schemFile    = mapRepository.getMapSchematicFile(session.mapName)
         schemFile.parentFile?.mkdirs()
 
         saveSchematicAsync(loc1, loc2, schemFile)
             .exceptionally { ex ->
-                plugin.logger.severe("[EditorSessionManager] Failed to save schematic for ${session.mapName}: ${ex.message}")
+                plugin.logger.severe(
+                    "[EditorSessionManager] Failed to save schematic for ${session.mapName}: ${ex.message}")
                 false
             }
             .whenComplete { success, _ ->
@@ -274,127 +213,82 @@ class EditorSessionManager(
                     player.sendMessage(MSG.chatColors("&aSuccessfully saved: &f${session.mapName}"))
                     player.sendMessage(MSG.chatColors("&7Schematic saved to: &f${schemFile.name}"))
 
-                    val config = mapRepository.loadMapSettings(session.mapName)
-                    if (config != null) {
-                        config.set("SaveRadius", session.getSaveRadius())
+                    mapRepository.loadMapSettings(session.mapName)?.let { config ->
+                        config.set("SaveRadius",      session.getSaveRadius())
                         config.set("SchematicRadius", session.getSaveRadius())
                         mapRepository.saveMapSettings(session.mapName, config)
                     }
 
-                    debugLog("Saved map ${session.mapName}")
+                    debugLog("Map ${session.mapName} saved")
                     endSession(player, true)
                 }
             }
 
         return true
     }
-    
-    /**
-     * Cancel and end a session without saving
-     */
+
     fun cancelSession(player: Player): Boolean {
-        val session = activeSessions[player.uniqueId]
-        
-        if (session == null) {
+        activeSessions[player.uniqueId] ?: run {
             player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
             return false
         }
-        
         player.sendMessage(MSG.chatColors("&eEditor session cancelled (no changes saved)"))
         endSession(player, false)
-        
         return true
     }
-    
-    /**
-     * End a session and cleanup
-     */
+
     private fun endSession(player: Player, saveChanges: Boolean) {
-        val session = activeSessions.remove(player.uniqueId) ?: return
-        
+        val session   = activeSessions.remove(player.uniqueId) ?: return
         val worldName = session.tempWorld.name
-        
-        // End session (stops particles, etc.)
+
         session.end(saveChanges)
-        
-        // Teleport player back
         session.returnPlayerToLobby()
-        
-        // Unload and delete temporary world
+
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-            val world = Bukkit.getWorld(worldName)
-            if (world != null) {
-                // Move any remaining players
-                world.players.forEach { p ->
-                    val mainWorld = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NORMAL }
-                    if (mainWorld != null) {
-                        p.teleport(mainWorld.spawnLocation)
-                    }
-                }
-                
-                // Unload world
-                val unloaded = Bukkit.unloadWorld(world, false)
-                if (unloaded) {
-                    // Delete world folder
-                    val worldFolder = File(Bukkit.getWorldContainer(), worldName)
-                    if (worldFolder.exists()) {
-                        worldFolder.deleteRecursively()
-                        debugLog("Deleted temporary world: $worldName")
-                    }
+            val world = Bukkit.getWorld(worldName) ?: return@Runnable
+            val mainWorld = Bukkit.getWorlds().firstOrNull {
+                it.environment == World.Environment.NORMAL
+            }
+            world.players.forEach { p ->
+                if (mainWorld != null) p.teleport(mainWorld.spawnLocation)
+            }
+            if (Bukkit.unloadWorld(world, false)) {
+                val folder = File(Bukkit.getWorldContainer(), worldName)
+                if (folder.exists()) {
+                    folder.deleteRecursively()
+                    debugLog("Temporary world deleted: $worldName")
                 }
             }
-        }, 20L) // Wait 1 second before cleanup
-        
-        debugLog("Ended editor session for ${player.name}")
+        }, 20L)
+
+        debugLog("Editor session ended for ${player.name}")
     }
-    
-    /**
-     * Get active session for a player
-     */
-    fun getSession(player: Player): EditorSession? {
-        return activeSessions[player.uniqueId]
-    }
-    
-    /**
-     * Check if player has an active session
-     */
-    fun hasSession(player: Player): Boolean {
-        return activeSessions.containsKey(player.uniqueId)
-    }
-    
-    /**
-     * Resize the save region for a player's active session
-     */
+
+    // -------------------------------------------------------------------------
+    // Queries (ongewijzigd)
+    // -------------------------------------------------------------------------
+
+    fun getSession(player: Player): EditorSession?  = activeSessions[player.uniqueId]
+    fun hasSession(player: Player): Boolean         = activeSessions.containsKey(player.uniqueId)
+
     fun resizeSession(player: Player, radius: Int): Boolean {
-        val session = activeSessions[player.uniqueId]
-        
-        if (session == null) {
+        val session = activeSessions[player.uniqueId] ?: run {
             player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
             return false
         }
-        
         session.setSaveRadius(radius)
         return true
     }
-    
-    /**
-     * Show info about player's active session
-     */
+
     fun showSessionInfo(player: Player): Boolean {
-        val session = activeSessions[player.uniqueId]
-        
-        if (session == null) {
+        val session = activeSessions[player.uniqueId] ?: run {
             player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
             return false
         }
-        
         session.showInfo()
         return true
     }
-    
-    /**
-     * Cleanup all sessions (called on plugin disable)
-     */
+
     fun cleanup() {
         activeSessions.values.toList().forEach { session ->
             if (session.player.isOnline) {
@@ -403,48 +297,87 @@ class EditorSessionManager(
             }
             session.end(false)
         }
-        
         activeSessions.clear()
-        debugLog("Cleaned up all editor sessions")
+        debugLog("All editor sessions cleaned up")
     }
-    
-    /**
-     * Create a void world for editing
-     */
-    private fun createVoidWorld(worldName: String): World? {
-        return try {
-            val creator = WorldCreator(worldName)
-                .generator(VoidChunkGenerator())
-                .generateStructures(false)
-            
-            creator.createWorld()
-        } catch (e: Exception) {
-            plugin.logger.severe("Failed to create void world: ${e.message}")
-            null
+
+    // -------------------------------------------------------------------------
+    // World helpers (ongewijzigd)
+    // -------------------------------------------------------------------------
+
+    private fun applyBedrockAnchor(world: World, mapName: String, updateSettings: Boolean) {
+        world.getBlockAt(0, 0, 0).type = Material.BEDROCK
+        if (!updateSettings) return
+        mapRepository.loadMapSettings(mapName)?.let { config ->
+            config.set("Settings.SpawnPoint.X", 0.0)
+            config.set("Settings.SpawnPoint.Y", 1.0)
+            config.set("Settings.SpawnPoint.Z", 0.0)
+            mapRepository.saveMapSettings(mapName, config)
         }
     }
-    
-    /**
-     * Simple void chunk generator
-     */
+
+    private fun cleanupWorld(worldName: String) {
+        val world     = Bukkit.getWorld(worldName) ?: return
+        val mainWorld = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NORMAL }
+        if (mainWorld != null) world.players.forEach { it.teleport(mainWorld.spawnLocation) }
+        if (Bukkit.unloadWorld(world, false)) {
+            val folder = File(Bukkit.getWorldContainer(), worldName)
+            if (folder.exists()) folder.deleteRecursively()
+        }
+    }
+
+    private fun createVoidWorld(worldName: String): World? = try {
+        WorldCreator(worldName)
+            .generator(VoidChunkGenerator())
+            .generateStructures(false)
+            .createWorld()
+    } catch (e: Exception) {
+        plugin.logger.severe("Failed to create void world: ${e.message}")
+        null
+    }
+
+    private fun <T> scheduleTask(async: Boolean, task: () -> T): CompletableFuture<T> {
+        val future  = CompletableFuture<T>()
+        if (!ensurePluginEnabled(future)) return future
+        val runnable = Runnable {
+            if (!ensurePluginEnabled(future)) return@Runnable
+            try { future.complete(task()) } catch (e: Exception) { future.completeExceptionally(e) }
+        }
+        try {
+            if (async) Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable)
+            else       Bukkit.getScheduler().runTask(plugin, runnable)
+        } catch (e: IllegalStateException) {
+            future.completeExceptionally(e)
+        }
+        return future
+    }
+
+    private fun <T> ensurePluginEnabled(future: CompletableFuture<T>): Boolean {
+        if (!plugin.isEnabled) {
+            future.completeExceptionally(IllegalStateException("Plugin uitgeschakeld"))
+            return false
+        }
+        return true
+    }
+
+    private fun runOnMain(task: () -> Unit) =
+        Bukkit.getScheduler().runTask(plugin, Runnable { task() })
+
+    private fun debugLog(message: String) {
+        if (plugin.configManager.debugMode) plugin.logger.info("[EditorSessionManager] $message")
+    }
+
+    // -------------------------------------------------------------------------
+    // Void generator (ongewijzigd)
+    // -------------------------------------------------------------------------
+
     private class VoidChunkGenerator : ChunkGenerator() {
         override fun generateChunkData(
-            world: World,
-            random: java.util.Random,
-            x: Int,
-            z: Int,
-            biome: BiomeGrid
-        ): ChunkData {
-            return createChunkData(world)
-        }
-        
+            world: World, random: java.util.Random, x: Int, z: Int, biome: BiomeGrid
+        ): ChunkData = createChunkData(world)
+
         override fun canSpawn(world: World, x: Int, z: Int): Boolean = true
-        override fun getDefaultPopulators(world: World): List<org.bukkit.generator.BlockPopulator> = emptyList()
-    }
-    
-    private fun debugLog(message: String) {
-        if (plugin.configManager.debugMode) {
-            plugin.logger.info("[EditorSessionManager] $message")
-        }
+        override fun getDefaultPopulators(world: World): List<org.bukkit.generator.BlockPopulator> =
+            emptyList()
     }
 }

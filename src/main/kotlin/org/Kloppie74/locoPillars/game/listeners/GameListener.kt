@@ -319,8 +319,10 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             player.teleport(lobbySpawn)
         }
 
-        // Reset player state
-        player.gameMode = GameMode.SURVIVAL
+        // Reset player state - skip editors (creative enforcer handles their gamemode)
+        if (!plugin.adminEditorManager.isActive(player)) {
+            player.gameMode = GameMode.SURVIVAL
+        }
         player.health = 20.0
         player.foodLevel = 20
         player.saturation = 20f

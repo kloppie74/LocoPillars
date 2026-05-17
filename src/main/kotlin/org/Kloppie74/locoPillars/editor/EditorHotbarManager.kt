@@ -8,110 +8,141 @@ import org.Kloppie74.locoPillars.utils.MSG
 /**
  * EditorHotbarManager
  *
- * Responsible for giving and removing the set of editor tools from an admin's
- * hotbar when edit mode is toggled.
- *
- * Hotbar layout (slots 0–8):
+ * Redesigned hotbar layout (slots 0–8):
  * ```
- * [0] Position Tool (golden axe)      – select region corners
- * [1] Spawn Setter (name tag)         – place / update spawn points
- * [2] Schematic Tool (compass)        – manage schematic operations
- * [3] Validation Tool (book)          – run map file validation
- * [4] Config Editor (writable book)   – open settings.yml editor menu
- * [5] Border Visualizer (blaze rod)   – toggle border particles
- * [6] — empty —
- * [7] — empty —
- * [8] Exit Edit Mode (barrier)        – shortcut to disable edit mode
+ * [0] Validation Tool   (amethyst shard) – validate active map files
+ * [1] Spawn Setter      (name tag)       – place team spawn points (respects MaxTeams/PerTeam)
+ * [2] Lobby Tool        (beacon)         – set lobby spawn + spawn-area corners
+ * [3] Settings GUI      (comparator)     – open full map settings GUI
+ * [4] Save & Close      (emerald)        – save schematic + end session
+ * [5] Cancel Session    (redstone)       – cancel session without saving
+ * [6] Refresh Holograms (end crystal)    – toggle/refresh spawn-point holograms
+ * [7] Session Info      (filled map)     – print current session info to chat
+ * [8] Switch Hotbar     (nether star)    – swap back to original hotbar
  * ```
  */
 class EditorHotbarManager {
 
     companion object {
-        // NBT display names used to identify our items in event handlers.
-        const val ITEM_POSITION_TOOL = "§6Position Selection Tool"
-        const val ITEM_SPAWN_SETTER  = "§bSpawn Point Setter"
-        const val ITEM_SCHEM_TOOL    = "§dSchematic Tool"
-        const val ITEM_VALIDATE_TOOL = "§eValidation Tool"
-        const val ITEM_CONFIG_EDITOR = "§aConfig Editor"
-        const val ITEM_BORDER_VIZ    = "§3Border Visualizer"
-        const val ITEM_EXIT_EDITOR   = "§cExit Edit Mode"
+        const val ITEM_VALIDATE_TOOL  = "§eValidation Tool"
+        const val ITEM_SPAWN_SETTER   = "§bSpawn Point Setter"
+        const val ITEM_LOBBY_TOOL     = "§5Lobby Tool"
+        const val ITEM_CONFIG_EDITOR  = "§aSettings GUI"
+        const val ITEM_SAVE_CLOSE     = "§2Save & Close"
+        const val ITEM_CANCEL_SESSION = "§cCancel Session"
+        const val ITEM_HOLO_REFRESH   = "§dRefresh Holograms"
+        const val ITEM_SESSION_INFO   = "§7Session Info"
+        const val ITEM_SWITCH_HOTBAR  = "§6Switch Hotbar"
     }
 
-    /**
-     * Gives the editor hotbar to [player] in slots 0–8.
-     * Only replaces slots 0–6 and slot 8; slots 6–7 are left empty to
-     * keep some free space.
-     */
     fun giveEditorHotbar(player: Player) {
         val inv = player.inventory
-        inv.setItem(0, makeTool(Material.GOLDEN_AXE,   ITEM_POSITION_TOOL,
-            listOf("&7Left-click: set position 1",
-                   "&7Right-click: set position 2",
-                   "&7Shift+right-click: cycle mode")))
-        inv.setItem(1, makeTool(Material.NAME_TAG,      ITEM_SPAWN_SETTER,
-            listOf("&7Right-click a block to set",
-                   "&7the current team spawn point.",
-                   "&7Use &e/editor spawn &7to manage.")))
-        inv.setItem(2, makeTool(Material.COMPASS,       ITEM_SCHEM_TOOL,
-            listOf("&7Save or load the schematic",
-                    "&7for the active map.",
-                    "&7Use &e/editor edit/save/cancel &7to manage.")))
-        inv.setItem(3, makeTool(Material.BOOK,          ITEM_VALIDATE_TOOL,
-            listOf("&7Right-click to run a full",
-                   "&7validation report on the active map.")))
-        inv.setItem(4, makeTool(Material.WRITABLE_BOOK, ITEM_CONFIG_EDITOR,
-            listOf("&7Right-click to open the map",
-                   "&7settings GUI.")))
-        inv.setItem(5, makeTool(Material.BLAZE_ROD,    ITEM_BORDER_VIZ,
-            listOf("&7Right-click to toggle border",
-                   "&7particle visualisation.")))
-        inv.setItem(6, null)
-        inv.setItem(7, null)
-        inv.setItem(8, makeTool(Material.BARRIER,       ITEM_EXIT_EDITOR,
-            listOf("&cRight-click to exit edit mode.",
-                   "&7Your original hotbar will",
-                   "&7be restored.")))
+
+        // [0] Validation Tool
+        inv.setItem(0, makeTool(Material.AMETHYST_SHARD, ITEM_VALIDATE_TOOL, listOf(
+            "&7&oSlot 0  —  Validation Tool",
+            "&7Right-click: &evalidate active map",
+            "&7Checks settings.yml + region.schem for errors.",
+            "&7No map selected &8→ &7validates ALL maps."
+        )))
+
+        // [1] Spawn Setter
+        inv.setItem(1, makeTool(Material.NAME_TAG, ITEM_SPAWN_SETTER, listOf(
+            "&7&oSlot 1  —  Spawn Point Setter",
+            "&7Right-click block:  &aplace next spawn point",
+            "&7Shift + right-click: &ecycle to next team",
+            "&8Respects MaxTeams & PlayersPerTeam.",
+            "&8Auto-advances slot and team when full."
+        )))
+
+        // [2] Lobby Tool
+        inv.setItem(2, makeTool(Material.BEACON, ITEM_LOBBY_TOOL, listOf(
+            "&7&oSlot 2  —  Lobby Tool",
+            "&7Right-click block:         &aset lobby SpawnPoint",
+            "&7Left-click block:          &aset Spawn-Area Loc1",
+            "&7Shift + right-click block: &aset Spawn-Area Loc2",
+            "&7Shift + left-click:        &eclear Spawn-Area",
+            "&7Right-click air:           &7show lobby status"
+        )))
+
+        // [3] Settings GUI
+        inv.setItem(3, makeTool(Material.COMPARATOR, ITEM_CONFIG_EDITOR, listOf(
+            "&7&oSlot 3  —  Settings GUI",
+            "&7Right-click: &eopen full map settings GUI",
+            "&8All YML settings: save radius, border,",
+            "&8timers, players/teams, display name, etc."
+        )))
+
+        // [4] Save & Close
+        inv.setItem(4, makeTool(Material.EMERALD, ITEM_SAVE_CLOSE, listOf(
+            "&7&oSlot 4  —  Save & Close",
+            "&7Right-click: &asave schematic & end session",
+            "&cYou will be teleported back to the lobby.",
+            "&8Same as: &7/editor save"
+        )))
+
+        // [5] Cancel Session
+        inv.setItem(5, makeTool(Material.REDSTONE, ITEM_CANCEL_SESSION, listOf(
+            "&7&oSlot 5  —  Cancel Session",
+            "&7Right-click: &ccancel without saving",
+            "&cAll unsaved changes will be lost!",
+            "&8Same as: &7/editor cancel"
+        )))
+
+        // [6] Refresh Holograms
+        inv.setItem(6, makeTool(Material.END_CRYSTAL, ITEM_HOLO_REFRESH, listOf(
+            "&7&oSlot 6  —  Holograms",
+            "&7Right-click: &drefresh all spawn holograms",
+            "&7Left-click:  &dtoggle holograms on/off",
+            "&8Shows team + slot labels above each spawn."
+        )))
+
+        // [7] Session Info
+        inv.setItem(7, makeTool(Material.FILLED_MAP, ITEM_SESSION_INFO, listOf(
+            "&7&oSlot 7  —  Session Info",
+            "&7Right-click: &7print session info to chat",
+            "&8Map, save radius, border, timers, spawns."
+        )))
+
+        // [8] Switch Hotbar
+        inv.setItem(8, makeTool(Material.NETHER_STAR, ITEM_SWITCH_HOTBAR, listOf(
+            "&7&oSlot 8  —  Switch Hotbar",
+            "&7Right-click: &eswitch to your original hotbar",
+            "&7Your editor session stays active.",
+            "&8Use &e/editor hotbar on &8to restore editor tools.",
+            "&8Use &c/editor toggle &8to fully exit edit mode."
+        )))
 
         player.updateInventory()
     }
 
-    /**
-     * Restores [player]'s hotbar from the [snapshot] taken before edit mode was
-     * activated, and clears any remaining editor items.
-     */
     fun removeEditorHotbar(player: Player, snapshot: Map<Int, ItemStack?>) {
         val inv = player.inventory
-        for (slot in 0..8) {
-            inv.setItem(slot, snapshot[slot])
-        }
+        for (slot in 0..8) inv.setItem(slot, snapshot[slot])
         player.updateInventory()
     }
 
-    /**
-     * Returns `true` if [item] is one of the editor hotbar tools (identified by
-     * display name).
-     */
     fun isEditorItem(item: ItemStack?): Boolean {
         if (item == null || !item.hasItemMeta()) return false
-        val name = item.itemMeta.displayName
-        return name == ITEM_POSITION_TOOL
-            || name == ITEM_SPAWN_SETTER
-            || name == ITEM_SCHEM_TOOL
-            || name == ITEM_VALIDATE_TOOL
-            || name == ITEM_CONFIG_EDITOR
-            || name == ITEM_BORDER_VIZ
-            || name == ITEM_EXIT_EDITOR
+        return when (item.itemMeta?.displayName) {
+            ITEM_VALIDATE_TOOL,
+            ITEM_SPAWN_SETTER,
+            ITEM_LOBBY_TOOL,
+            ITEM_CONFIG_EDITOR,
+            ITEM_SAVE_CLOSE,
+            ITEM_CANCEL_SESSION,
+            ITEM_HOLO_REFRESH,
+            ITEM_SESSION_INFO,
+            ITEM_SWITCH_HOTBAR -> true
+            else -> false
+        }
     }
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 
     private fun makeTool(material: Material, name: String, lore: List<String>): ItemStack {
         val item = ItemStack(material)
-        val meta = item.itemMeta
-        meta?.setDisplayName(MSG.chatColors(name))
-        meta?.lore = lore.map { MSG.chatColors(it) }
+        val meta = item.itemMeta!!
+        meta.setDisplayName(MSG.chatColors(name))
+        meta.lore = lore.map { MSG.chatColors(it) }
         item.itemMeta = meta
         return item
     }

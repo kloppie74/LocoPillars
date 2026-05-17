@@ -9,6 +9,7 @@ import org.Kloppie74.locoPillars.editor.EditorFileValidator
 import org.Kloppie74.locoPillars.editor.EditorHotbarManager
 import org.Kloppie74.locoPillars.editor.EditorSettingsGui
 import org.Kloppie74.locoPillars.editor.GameFileService
+import org.Kloppie74.locoPillars.editor.LobbyLocationEditor
 import org.Kloppie74.locoPillars.editor.SpawnPointEditor
 import org.Kloppie74.locoPillars.editor.listener.EditorInteractionListener
 import org.Kloppie74.locoPillars.editor.listener.EditorModeListener
@@ -84,7 +85,7 @@ class LocoPillars : JavaPlugin() {
     lateinit var configs: List<GameConfig>
         private set
     lateinit var gameListener: GameListener
-    
+
     // Map Editor System (core: session management and file storage)
     lateinit var mapRepository: MapRepository
         private set
@@ -103,6 +104,8 @@ class LocoPillars : JavaPlugin() {
     lateinit var gameFileService: GameFileService
         private set
     lateinit var editorFileValidator: EditorFileValidator
+        private set
+    lateinit var lobbyLocationEditor: LobbyLocationEditor
         private set
 
     lateinit var hotbarItemManager: HotbarItemManager
@@ -179,9 +182,11 @@ class LocoPillars : JavaPlugin() {
             editorHotbarManager  = EditorHotbarManager()
             editorSettingsGui    = EditorSettingsGui(this, editorSessionManager)
             adminEditorManager   = AdminEditorManager(this, editorHotbarManager)
+            adminEditorManager.startCreativeModeEnforcer()
             spawnPointEditor     = SpawnPointEditor(this, mapRepository)
             gameFileService      = GameFileService(this, configManager, mapRepository)
             editorFileValidator  = EditorFileValidator(this, configManager, mapRepository)
+            lobbyLocationEditor  = LobbyLocationEditor(this, mapRepository)
             val quickSetup = gameFileService.runQuickSetup()
             logger.info("[LocoPillars] Quick setup: folders=${quickSetup.foldersCreated}, bundled=${quickSetup.bundledConfigsCopied}, legacyCfg=${quickSetup.legacyConfigsMoved}, legacySchem=${quickSetup.legacySchemsMoved}, mirrored=${quickSetup.mapTemplatesMirrored}")
             if (quickSetup.warnings.isNotEmpty()) {
@@ -194,7 +199,8 @@ class LocoPillars : JavaPlugin() {
             server.pluginManager.registerEvents(
                 EditorInteractionListener(
                     this, adminEditorManager, editorHotbarManager,
-                    spawnPointEditor, editorFileValidator, editorSessionManager, editorSettingsGui
+                    spawnPointEditor, editorFileValidator, editorSessionManager, editorSettingsGui,
+                    lobbyLocationEditor
                 ), this
             )
             logger.info("[LocoPillars] ✓ Map Editor & Admin Editor System initialized")
@@ -477,7 +483,7 @@ class LocoPillars : JavaPlugin() {
             if (::arenaManager.isInitialized) {
                 arenaManager.onDisable()
             }
-            
+
             // Cleanup editor sessions
             if (::editorSessionManager.isInitialized) {
                 logger.info("[LocoPillars] Cleaning up editor sessions...")
@@ -593,7 +599,8 @@ class LocoPillars : JavaPlugin() {
         getCommand("editor")?.let {
             val editorCmd = AdminEditorCommand(
                 this, adminEditorManager, mapRepository, editorSessionManager,
-                editorSettingsGui, spawnPointEditor, editorFileValidator, gameFileService
+                editorSettingsGui, spawnPointEditor, editorFileValidator, gameFileService,
+                lobbyLocationEditor
             )
             it.setExecutor(editorCmd)
             it.tabCompleter = editorCmd
