@@ -23,7 +23,7 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(MSG.chatColors("&cThis command can only be used by players!"))
+            sender.sendMessage(MSG.lang("general.player_only"))
             return true
         }
 
@@ -35,19 +35,19 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
         val sub = args[0].lowercase()
         val perm = subPermissions[sub] ?: ""
         if (perm.isNotEmpty() && !sender.hasPermission(perm)) {
-            sender.sendMessage(MSG.chatColors("&cYou don't have permission to use /pillars $sub!"))
+            sender.sendMessage(MSG.lang("pillars.no_permission_sub", "sub" to sub))
             return true
         }
 
         when (sub) {
             "join" -> {
                 if (args.size < 2) {
-                    sender.sendMessage(MSG.chatColors("&cUsage: /pillars join <gametype>"))
-                    sender.sendMessage(MSG.chatColors("&eAvailable game types:"))
+                    sender.sendMessage(MSG.lang("pillars.join.usage"))
+                    sender.sendMessage(MSG.lang("pillars.join.available_types_header"))
                     plugin.configs.forEach { config ->
-                        sender.sendMessage(MSG.chatColors("&7- ${config.name} (${config.getDisplayName()})"))
+                        sender.sendMessage(MSG.lang("pillars.join.available_type_entry", "name" to config.name, "display" to config.getDisplayName()))
                     }
-                    sender.sendMessage(MSG.chatColors("&7Or use &b/pillars join random &7to join any available game"))
+                    sender.sendMessage(MSG.lang("pillars.join.random_hint"))
                     return true
                 }
 
@@ -59,34 +59,13 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
                 }
                 return true
             }
-
-            "leave" -> {
-                leaveGame(sender)
-                return true
-            }
-
-            "list" -> {
-                listGames(sender)
-                return true
-            }
-
-            "status" -> {
-                showStatus(sender)
-                return true
-            }
-
-            "stats" -> {
-                showStats(sender)
-                return true
-            }
-
-            "help" -> {
-                showHelp(sender)
-                return true
-            }
-
+            "leave"  -> { leaveGame(sender); return true }
+            "list"   -> { listGames(sender); return true }
+            "status" -> { showStatus(sender); return true }
+            "stats"  -> { showStats(sender); return true }
+            "help"   -> { showHelp(sender); return true }
             else -> {
-                sender.sendMessage(MSG.chatColors("&cUnknown subcommand: &f${args[0]}"))
+                sender.sendMessage(MSG.lang("general.unknown_subcommand", "input" to args[0]))
                 showHelp(sender)
                 return true
             }
@@ -94,214 +73,169 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
     }
 
     private fun joinRandomGame(player: Player) {
-        val currentInstance = plugin.gameManager.getPlayerInstance(player)
-        if (currentInstance != null) {
-            player.sendMessage(MSG.chatColors("&cYou are already in a game! Use &e/pillars leave &cto leave your current game."))
+        if (plugin.gameManager.getPlayerInstance(player) != null) {
+            player.sendMessage(MSG.lang("pillars.join.already_in_game"))
             return
         }
 
-        val joinable: List<GameInstance> = plugin.gameManager.getAllInstances().filter {
-            it.canJoin()
-        }
-
+        val joinable: List<GameInstance> = plugin.gameManager.getAllInstances().filter { it.canJoin() }
         if (joinable.isEmpty()) {
-            player.sendMessage(MSG.chatColors("&cNo available games to join right now!"))
+            player.sendMessage(MSG.lang("pillars.join.no_games_available"))
             return
         }
 
-        val sorted = joinable.sortedWith(compareByDescending<GameInstance> { it.players.size }
-            .thenBy { it.getMinPlayers() })
-
-        val chosen = sorted.firstOrNull()
+        val chosen = joinable.sortedWith(compareByDescending<GameInstance> { it.players.size }
+            .thenBy { it.getMinPlayers() }).firstOrNull()
         if (chosen == null) {
-            player.sendMessage(MSG.chatColors("&cNo suitable game found!"))
+            player.sendMessage(MSG.lang("pillars.join.no_suitable_game"))
             return
         }
 
         val joinedInstance = plugin.gameManager.joinGame(player, chosen.arenaInstance.template.name)
         if (joinedInstance == null) {
-            player.sendMessage(MSG.chatColors("&cFailed to join game. Game may be full."))
+            player.sendMessage(MSG.lang("pillars.join.failed_game_full"))
             return
         }
 
-        player.sendMessage(MSG.chatColors("&aYou have joined a random game: &e${joinedInstance.getDisplayName()}"))
-        player.sendMessage(MSG.chatColors("&ePlayers: &b${joinedInstance.players.size}&7/&b${joinedInstance.getMaxPlayers()}"))
+        player.sendMessage(MSG.lang("pillars.join.random_joined", "game" to joinedInstance.getDisplayName()))
+        player.sendMessage(MSG.lang("pillars.join.players_count",
+            "current" to joinedInstance.players.size.toString(),
+            "max" to joinedInstance.getMaxPlayers().toString()))
         if (joinedInstance.players.size >= joinedInstance.getMinPlayers()) {
-            player.sendMessage(MSG.chatColors("&aGame will start soon!"))
+            player.sendMessage(MSG.lang("pillars.join.starting_soon"))
         } else {
             val needed = joinedInstance.getMinPlayers() - joinedInstance.players.size
-            player.sendMessage(MSG.chatColors("&eWaiting for &c$needed &emore player(s) to start..."))
+            player.sendMessage(MSG.lang("pillars.join.waiting_for_players", "needed" to needed.toString()))
         }
     }
 
     private fun joinGame(player: Player, gameType: String) {
-        val currentInstance = plugin.gameManager.getPlayerInstance(player)
-        if (currentInstance != null) {
-            player.sendMessage(MSG.chatColors("&cYou are already in a game! Use &e/pillars leave &cto leave your current game."))
+        if (plugin.gameManager.getPlayerInstance(player) != null) {
+            player.sendMessage(MSG.lang("pillars.join.already_in_game"))
             return
         }
 
         val config = plugin.configs.firstOrNull { it.name.equals(gameType, ignoreCase = true) }
         if (config == null) {
-            player.sendMessage(MSG.chatColors("&cGame type '&f$gameType&c' not found!"))
-            player.sendMessage(MSG.chatColors("&eAvailable game types:"))
-            plugin.configs.forEach { availableConfig ->
-                player.sendMessage(MSG.chatColors("&7- ${availableConfig.name} (${availableConfig.getDisplayName()})"))
-            }
+            player.sendMessage(MSG.lang("pillars.join.type_not_found", "type" to gameType))
+            player.sendMessage(MSG.lang("pillars.join.available_types_header"))
+            plugin.configs.forEach { player.sendMessage(MSG.lang("pillars.join.available_type_entry", "name" to it.name, "display" to it.getDisplayName())) }
             return
         }
 
         val instance = plugin.gameManager.joinGame(player, config.name)
         if (instance == null) {
-            player.sendMessage(MSG.chatColors("&cFailed to join game. No available instances or game is full."))
+            player.sendMessage(MSG.lang("pillars.join.failed_no_instance"))
             return
         }
 
-        player.sendMessage(MSG.chatColors("&aSuccessfully joined &e${config.getDisplayName()}&a!"))
-        player.sendMessage(MSG.chatColors("&ePlayers: &b${instance.players.size}&7/&b${instance.getMaxPlayers()}"))
-
+        player.sendMessage(MSG.lang("pillars.join.joined", "game" to config.getDisplayName()))
+        player.sendMessage(MSG.lang("pillars.join.players_count",
+            "current" to instance.players.size.toString(),
+            "max" to instance.getMaxPlayers().toString()))
         if (instance.players.size >= instance.getMinPlayers()) {
-            player.sendMessage(MSG.chatColors("&aGame will start soon!"))
+            player.sendMessage(MSG.lang("pillars.join.starting_soon"))
         } else {
             val needed = instance.getMinPlayers() - instance.players.size
-            player.sendMessage(MSG.chatColors("&eWaiting for &c$needed &emore player(s) to start..."))
+            player.sendMessage(MSG.lang("pillars.join.waiting_for_players", "needed" to needed.toString()))
         }
     }
 
     private fun leaveGame(player: Player) {
-        val success = plugin.gameManager.leaveGame(player)
-        if (!success) {
-            player.sendMessage(MSG.chatColors("&cYou are not in a game!"))
+        if (!plugin.gameManager.leaveGame(player)) {
+            player.sendMessage(MSG.lang("pillars.leave.not_in_game"))
         }
     }
 
     private fun listGames(player: Player) {
-        player.sendMessage(MSG.chatColors("&6=== Available Game Types ==="))
-
+        player.sendMessage(MSG.lang("pillars.list.header"))
         if (plugin.configs.isEmpty()) {
-            player.sendMessage(MSG.chatColors("&cNo game types available!"))
+            player.sendMessage(MSG.lang("pillars.list.no_types"))
             return
         }
-
         plugin.configs.forEach { config ->
             val instances = plugin.gameManager.getInstancesByGameType(config.name)
-            val availableInstances = instances.count { it.canJoin() }
-            val activeGames = instances.count { it.state == GameState.ACTIVE }
-
-            player.sendMessage(MSG.chatColors("&e${config.name} &7(${config.getDisplayName()})"))
-            player.sendMessage(MSG.chatColors("&7  Available: &b$availableInstances &7| Active: &b$activeGames"))
-            player.sendMessage(MSG.chatColors("&7  Players: &b${config.getMinPlayers()}-${config.getMaxPlayers()} &7| Teams: &b${config.getMaxTeams()}"))
+            player.sendMessage(MSG.lang("pillars.list.type_entry", "name" to config.name, "display" to config.getDisplayName()))
+            player.sendMessage(MSG.lang("pillars.list.type_stats",
+                "available" to instances.count { it.canJoin() }.toString(),
+                "active" to instances.count { it.state == GameState.ACTIVE }.toString()))
+            player.sendMessage(MSG.lang("pillars.list.type_player_info",
+                "min" to config.getMinPlayers().toString(),
+                "max" to config.getMaxPlayers().toString(),
+                "teams" to config.getMaxTeams().toString()))
         }
-
-        player.sendMessage(MSG.chatColors("&7Use &e/pillars join <gametype> &7to join a game!"))
-        player.sendMessage(MSG.chatColors("&7Or use &b/pillars join random &7to join any available game"))
+        player.sendMessage(MSG.lang("pillars.list.join_hint"))
+        player.sendMessage(MSG.lang("pillars.list.random_hint"))
     }
 
     private fun showStatus(player: Player) {
-        val currentInstance = plugin.gameManager.getPlayerInstance(player)
-
-        if (currentInstance == null) {
-            player.sendMessage(MSG.chatColors("&eYou are not currently in a game."))
-            player.sendMessage(MSG.chatColors("&7Use &e/pillars list &7to see available games!"))
+        val instance = plugin.gameManager.getPlayerInstance(player)
+        if (instance == null) {
+            player.sendMessage(MSG.lang("pillars.status.not_in_game"))
+            player.sendMessage(MSG.lang("pillars.status.not_in_game_hint"))
             return
         }
+        player.sendMessage(MSG.lang("pillars.status.header"))
+        player.sendMessage(MSG.lang("pillars.status.game", "game" to instance.getDisplayName()))
+        player.sendMessage(MSG.lang("pillars.status.state", "state" to instance.state.toString()))
+        player.sendMessage(MSG.lang("pillars.status.players",
+            "current" to instance.players.size.toString(),
+            "max" to instance.getMaxPlayers().toString()))
+        player.sendMessage(MSG.lang("pillars.status.world", "world" to instance.arenaInstance.world.name))
+        player.sendMessage(MSG.lang("pillars.status.instance_id", "id" to instance.id.toString()))
 
-        player.sendMessage(MSG.chatColors("&6=== Game Status ==="))
-        player.sendMessage(MSG.chatColors("&eGame: &b${currentInstance.getDisplayName()}"))
-        player.sendMessage(MSG.chatColors("&eState: &b${currentInstance.state}"))
-        player.sendMessage(MSG.chatColors("&ePlayers: &b${currentInstance.players.size}&7/&b${currentInstance.getMaxPlayers()}"))
-        player.sendMessage(MSG.chatColors("&eWorld: &b${currentInstance.arenaInstance.world.name}"))
-        player.sendMessage(MSG.chatColors("&eInstance ID: &b${currentInstance.id}"))
-
-        when (currentInstance.state) {
+        when (instance.state) {
             GameState.WAITING -> {
-                val needed = currentInstance.getMinPlayers() - currentInstance.players.size
-                if (needed > 0) {
-                    player.sendMessage(MSG.chatColors("&7Waiting for &c$needed &7more player(s) to start..."))
-                } else {
-                    player.sendMessage(MSG.chatColors("&aReady to start!"))
-                }
+                val needed = instance.getMinPlayers() - instance.players.size
+                if (needed > 0) player.sendMessage(MSG.lang("pillars.status.waiting_for_players", "needed" to needed.toString()))
+                else            player.sendMessage(MSG.lang("pillars.status.ready_to_start"))
             }
-            GameState.STARTING -> {
-                player.sendMessage(MSG.chatColors("&aGame is starting..."))
-            }
-            GameState.ACTIVE -> {
-                player.sendMessage(MSG.chatColors("&cGame is active! Fight!"))
-            }
-            GameState.ENDED -> {
-                player.sendMessage(MSG.chatColors("&eGame has ended."))
-            }
-            GameState.RESETTING -> {
-                player.sendMessage(MSG.chatColors("&7Game is resetting..."))
-            }
+            GameState.STARTING  -> player.sendMessage(MSG.lang("pillars.status.starting"))
+            GameState.ACTIVE    -> player.sendMessage(MSG.lang("pillars.status.active"))
+            GameState.ENDED     -> player.sendMessage(MSG.lang("pillars.status.ended"))
+            GameState.RESETTING -> player.sendMessage(MSG.lang("pillars.status.resetting"))
         }
     }
 
     private fun showStats(player: Player) {
-        player.sendMessage(MSG.chatColors("&6=== Server Statistics ==="))
-
-        val totalInstances = plugin.gameManager.getAllInstances().size
-        val availableInstances = plugin.gameManager.getAvailableInstances().size
-        val activeGames = plugin.gameManager.getActiveGames().size
-        val totalWorlds = plugin.worldManager.getAllArenaWorlds().size
-
-        player.sendMessage(MSG.chatColors("&eTotal Instances: &b$totalInstances"))
-        player.sendMessage(MSG.chatColors("&eAvailable Instances: &b$availableInstances"))
-        player.sendMessage(MSG.chatColors("&eActive Games: &b$activeGames"))
-        player.sendMessage(MSG.chatColors("&eArena Worlds: &b$totalWorlds"))
-        player.sendMessage(MSG.chatColors("&eGame Types: &b${plugin.configs.size}"))
+        player.sendMessage(MSG.lang("pillars.stats.header"))
+        player.sendMessage(MSG.lang("pillars.stats.total_instances",     "count" to plugin.gameManager.getAllInstances().size.toString()))
+        player.sendMessage(MSG.lang("pillars.stats.available_instances", "count" to plugin.gameManager.getAvailableInstances().size.toString()))
+        player.sendMessage(MSG.lang("pillars.stats.active_games",        "count" to plugin.gameManager.getActiveGames().size.toString()))
+        player.sendMessage(MSG.lang("pillars.stats.arena_worlds",        "count" to plugin.worldManager.getAllArenaWorlds().size.toString()))
+        player.sendMessage(MSG.lang("pillars.stats.game_types",          "count" to plugin.configs.size.toString()))
 
         plugin.configs.forEach { config ->
             val instances = plugin.gameManager.getInstancesByGameType(config.name)
-            val available = instances.count { it.canJoin() }
-            val active = instances.count { it.state == GameState.ACTIVE }
-            val totalPlayers = instances.sumOf { it.players.size }
-
-            player.sendMessage(MSG.chatColors("&7${config.name}: &b$available &7available, &b$active &7active, &b$totalPlayers &7players"))
+            player.sendMessage(MSG.lang("pillars.stats.type_summary",
+                "name" to config.name,
+                "available" to instances.count { it.canJoin() }.toString(),
+                "active" to instances.count { it.state == GameState.ACTIVE }.toString(),
+                "players" to instances.sumOf { it.players.size }.toString()))
         }
     }
 
     private fun showHelp(player: Player) {
-        player.sendMessage(MSG.chatColors("&6=== Pillars of Fortune Commands ==="))
+        player.sendMessage(MSG.lang("pillars.help.header"))
         if (player.hasPermission(subPermissions["join"]!!)) {
-            player.sendMessage(MSG.chatColors("&e/pillars join <gametype> &7- Join a game"))
-            player.sendMessage(MSG.chatColors("&e/pillars join random &7- Join any available game"))
+            player.sendMessage(MSG.lang("pillars.help.join"))
+            player.sendMessage(MSG.lang("pillars.help.join_random"))
         }
-        if (player.hasPermission(subPermissions["leave"]!!)) {
-            player.sendMessage(MSG.chatColors("&e/pillars leave &7- Leave your current game"))
-        }
-        if (player.hasPermission(subPermissions["list"]!!)) {
-            player.sendMessage(MSG.chatColors("&e/pillars list &7- List available game types"))
-        }
-        if (player.hasPermission(subPermissions["status"]!!)) {
-            player.sendMessage(MSG.chatColors("&e/pillars status &7- Show your current game status"))
-        }
-        if (player.hasPermission(subPermissions["stats"]!!)) {
-            player.sendMessage(MSG.chatColors("&e/pillars stats &7- Show server statistics"))
-        }
-        if (player.hasPermission(subPermissions["help"]!!)) {
-            player.sendMessage(MSG.chatColors("&e/pillars help &7- Show this help message"))
-        }
+        if (player.hasPermission(subPermissions["leave"]!!))  player.sendMessage(MSG.lang("pillars.help.leave"))
+        if (player.hasPermission(subPermissions["list"]!!))   player.sendMessage(MSG.lang("pillars.help.list"))
+        if (player.hasPermission(subPermissions["status"]!!)) player.sendMessage(MSG.lang("pillars.help.status"))
+        if (player.hasPermission(subPermissions["stats"]!!))  player.sendMessage(MSG.lang("pillars.help.server_stats"))
+        if (player.hasPermission(subPermissions["help"]!!))   player.sendMessage(MSG.lang("pillars.help.help"))
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (sender !is Player) return emptyList()
-
-        // Only show subcommands player has permission for
         val availableSubCmds = subPermissions.filter { sender.hasPermission(it.value) }.keys.toList()
-
         return when (args.size) {
-            1 -> {
-                availableSubCmds.filter { it.startsWith(args[0], ignoreCase = true) }
-            }
-            2 -> {
-                if (args[0].equals("join", ignoreCase = true) && sender.hasPermission(subPermissions["join"]!!)) {
-                    val types = plugin.configs.map { it.name } + "random"
-                    types.filter { it.startsWith(args[1], ignoreCase = true) }
-                } else {
-                    emptyList()
-                }
-            }
+            1 -> availableSubCmds.filter { it.startsWith(args[0], ignoreCase = true) }
+            2 -> if (args[0].equals("join", ignoreCase = true) && sender.hasPermission(subPermissions["join"]!!)) {
+                (plugin.configs.map { it.name } + "random").filter { it.startsWith(args[1], ignoreCase = true) }
+            } else emptyList()
             else -> emptyList()
         }
     }

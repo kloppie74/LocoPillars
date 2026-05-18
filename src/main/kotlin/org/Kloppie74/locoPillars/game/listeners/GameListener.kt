@@ -1,6 +1,5 @@
 package org.Kloppie74.locoPillars.game.listeners
 
-import org.bukkit.ChatColor
 import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.event.EventHandler
@@ -20,6 +19,7 @@ import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.data.GameState
+import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
@@ -120,7 +120,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
         when (instance.state) {
             GameState.WAITING, GameState.STARTING -> {
                 event.isCancelled = true
-                attacker?.sendMessage("${ChatColor.RED}PvP is not allowed yet!")
+                attacker?.sendMessage(MSG.lang("gameplay.pvp_not_allowed"))
             }
 
             GameState.ACTIVE -> {
@@ -167,7 +167,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             GameState.ACTIVE -> {
                 when (event.cause) {
                     EntityDamageEvent.DamageCause.VOID -> {
-                        player.sendMessage("${ChatColor.RED}You fell into the void!")
+                        player.sendMessage(MSG.lang("gameplay.void_fell"))
                         gameplayManager.handleDamageTaken(player, event.finalDamage)
                     }
                     EntityDamageEvent.DamageCause.FALL -> {
@@ -364,7 +364,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             // Check if game is active and player is not spectator
             if (instance.state != GameState.ACTIVE || SpectatorUtils.isSpectator(player, plugin)) {
                 event.isCancelled = true
-                player.sendMessage("${ChatColor.RED}You cannot break blocks while the game is not active!")
+                player.sendMessage(MSG.lang("gameplay.block_break_not_active"))
                 return
             }
 
@@ -373,7 +373,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
                 val blockLoc = event.block.location
                 if (isPlayerInCageArea(player, blockLoc)) {
                     event.isCancelled = true
-                    player.sendMessage("${ChatColor.RED}You cannot break cage blocks until the game starts!")
+                    player.sendMessage(MSG.lang("gameplay.block_break_cage"))
                     return
                 }
             }
@@ -390,7 +390,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
 
             if (deltaX > buildRange || deltaZ > buildRange || blockLoc.y > maxY) {
                 event.isCancelled = true
-                player.sendMessage("${ChatColor.RED}You cannot break blocks outside the game area!")
+                player.sendMessage(MSG.lang("gameplay.block_break_out_of_bounds"))
                 return
             }
 
@@ -401,7 +401,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
 
                 if (!isPlayerPlaced) {
                     event.isCancelled = true
-                    player.sendMessage("${ChatColor.RED}You can only break blocks that you placed!")
+                    player.sendMessage(MSG.lang("gameplay.block_break_player_placed_only"))
                     return
                 }
 
@@ -436,7 +436,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             // Check if game is active and player is not spectator
             if (instance.state != GameState.ACTIVE || SpectatorUtils.isSpectator(player, plugin)) {
                 event.isCancelled = true
-                player.sendMessage("${ChatColor.RED}You cannot place blocks while the game is not active!")
+                player.sendMessage(MSG.lang("gameplay.block_place_not_active"))
                 return
             }
 
@@ -452,7 +452,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
 
             if (deltaX > buildRange || deltaZ > buildRange || blockLoc.y > maxY) {
                 event.isCancelled = true
-                player.sendMessage("${ChatColor.RED}You cannot place blocks outside the game area!")
+                player.sendMessage(MSG.lang("gameplay.block_place_out_of_bounds"))
                 return
             }
 
@@ -488,7 +488,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             instance.state == GameState.ACTIVE &&
             !SpectatorUtils.isSpectator(player, plugin)) {
             player.health = 0.0
-            player.sendMessage("${ChatColor.RED}You fell into the void!")
+            player.sendMessage(MSG.lang("gameplay.void_fell"))
             return
         }
 
@@ -508,7 +508,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
                 val safeLocation = origin.clone()
                 safeLocation.y = origin.y + 10
                 player.teleport(safeLocation)
-                player.sendMessage("${ChatColor.RED}You cannot go outside the game area!")
+                player.sendMessage(MSG.lang("gameplay.out_of_bounds"))
             }
         }
     }
@@ -543,7 +543,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
         when (instance.state) {
             GameState.WAITING, GameState.STARTING -> {
                 event.isCancelled = true
-                player.sendMessage("${ChatColor.RED}You cannot drop items right now!")
+                player.sendMessage(MSG.lang("gameplay.cannot_drop_items"))
             }
             GameState.ACTIVE -> {
                 // Allow item dropping during active game
@@ -569,7 +569,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             if (toWorld != gameWorld) {
                 if (event.cause == PlayerTeleportEvent.TeleportCause.COMMAND) {
                     event.isCancelled = true
-                    player.sendMessage("${ChatColor.RED}You cannot teleport while in a game! Use /pillars leave to leave the game.")
+                    player.sendMessage(MSG.lang("gameplay.cannot_teleport"))
                 }
             }
         }

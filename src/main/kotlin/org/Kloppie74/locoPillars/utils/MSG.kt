@@ -5,6 +5,13 @@ import java.lang.StringBuilder
 
 object MSG {
 
+    /**
+     * Shortcut to retrieve a message from language.yml by key with optional {placeholder} replacements.
+     */
+    fun lang(key: String, vararg placeholders: Pair<String, String>): String {
+        return org.Kloppie74.locoPillars.LocoPillars.instance.languageManager.get(key, *placeholders)
+    }
+
     fun chatColors(message: String?): String {
         if (message == null) return ""
 

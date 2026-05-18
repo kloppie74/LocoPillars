@@ -51,8 +51,7 @@ class AdminEditorManager(
                 if (!player.isOnline) return@forEach
                 if (player.gameMode != GameMode.CREATIVE) {
                     player.gameMode = GameMode.CREATIVE
-                    player.sendActionBar(MSG.chatColors(
-                        "&e⚡ Edit mode active — gamemode restored to Creative."))
+                    player.sendActionBar(MSG.lang("editor.mode.enforcer_restored"))
                 }
             }
         }, 20L, 20L)
@@ -91,9 +90,8 @@ class AdminEditorManager(
         deferHotbar: Boolean = false
     ) {
         if (isActive(player)) {
-            player.sendMessage(MSG.chatColors(
-                "&eEdit mode is already active! Use &e/editor toggle &eto exit."))
-            player.sendMessage(MSG.chatColors("&7Need help? Use &e/editor help &7or &e/editor info"))
+            player.sendMessage(MSG.lang("editor.mode.already_active"))
+            player.sendMessage(MSG.lang("editor.mode.already_active_help"))
             return
         }
 
@@ -156,7 +154,7 @@ class AdminEditorManager(
      */
     fun disable(player: Player): Boolean {
         val state = activeModes.remove(player.uniqueId) ?: run {
-            player.sendMessage(MSG.chatColors("&cEdit mode is not active!"))
+            player.sendMessage(MSG.lang("editor.mode.not_active"))
             return false
         }
 
@@ -164,8 +162,8 @@ class AdminEditorManager(
         player.gameMode    = state.originalGameMode
         player.allowFlight = state.originalAllowFlight
 
-        player.sendMessage(MSG.chatColors("&c✦ Edit Mode &cdeactivated."))
-        player.sendMessage(MSG.chatColors("&7Your original hotbar has been restored."))
+        player.sendMessage(MSG.lang("editor.mode.deactivated"))
+        player.sendMessage(MSG.lang("editor.mode.hotbar_restored"))
 
         debugLog("Edit mode disabled for ${player.name} na ${state.activeDurationSeconds()}s")
         return true
@@ -190,14 +188,13 @@ class AdminEditorManager(
 
         if (enabled) {
             hotbarManager.giveEditorHotbar(player)
-            player.sendMessage(MSG.chatColors("&aEditor hotbar enabled."))
-            player.sendMessage(MSG.chatColors(
-                "&7Tip: Use slot 8 (Barrier) or &e/editor toggle &7to leave edit mode."))
+            player.sendMessage(MSG.lang("editor.hotbar.enabled"))
+            player.sendMessage(MSG.lang("editor.hotbar.enabled_hint"))
         } else {
             for (slot in 0..8) player.inventory.setItem(slot, null)
             player.updateInventory()
-            player.sendMessage(MSG.chatColors("&eEditor hotbar hidden."))
-            player.sendMessage(MSG.chatColors("&7Use &a/editor hotbar on &7to show it again."))
+            player.sendMessage(MSG.lang("editor.hotbar.hidden"))
+            player.sendMessage(MSG.lang("editor.hotbar.hidden_hint"))
         }
 
         state.hotbarEnabled = enabled
@@ -231,20 +228,17 @@ class AdminEditorManager(
     // -------------------------------------------------------------------------
 
     private fun sendEnableMessages(player: Player, mapName: String?) {
-        player.sendMessage(MSG.chatColors("&a✦ &lEdit Mode Activated"))
-        player.sendMessage(MSG.chatColors(
-            "&7You are now in Creative mode and your editor hotbar is ready."))
+        player.sendMessage(MSG.lang("editor.mode.activated_title"))
+        player.sendMessage(MSG.lang("editor.mode.activated_creative"))
         if (mapName != null) {
-            player.sendMessage(MSG.chatColors("&7Selected map: &e$mapName"))
-            player.sendMessage(MSG.chatColors(
-                "&7Tip: use &e/editor settings &7to configure map parameters."))
+            player.sendMessage(MSG.lang("editor.mode.activated_map", "name" to mapName))
+            player.sendMessage(MSG.lang("editor.mode.activated_tip_settings"))
         } else {
-            player.sendMessage(MSG.chatColors("&7Step 1: &e/editor map <name> &7— select a map"))
-            player.sendMessage(MSG.chatColors("&7Step 2: &e/editor edit     &7— open the edit world"))
-            player.sendMessage(MSG.chatColors("&7Step 3: &e/editor settings  &7— configure parameters"))
+            player.sendMessage(MSG.lang("editor.mode.activated_step1"))
+            player.sendMessage(MSG.lang("editor.mode.activated_step2"))
+            player.sendMessage(MSG.lang("editor.mode.activated_step3"))
         }
-        player.sendMessage(MSG.chatColors(
-            "&7Use &e/editor help &7for all commands, or &e/editor toggle &7to exit."))
+        player.sendMessage(MSG.lang("editor.mode.activated_help_tip"))
     }
 
     private fun debugLog(message: String) {

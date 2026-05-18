@@ -11,18 +11,18 @@ import org.bukkit.entity.Player
 class HideOthersCommand : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         val player = sender as? Player ?: run {
-            sender.sendMessage(MSG.chatColors("&cOnly players can use this command!"))
+            sender.sendMessage(MSG.lang("vanish.only_players"))
             return true
         }
 
         if (args.isNotEmpty()) {
             if (!player.hasPermission("locopillars.hideothers.others")) {
-                player.sendMessage(MSG.chatColors("&cYou do not have permission to toggle hideOthers for other players."))
+                player.sendMessage(MSG.lang("vanish.hideothers.no_permission"))
                 return true
             }
             val target = Bukkit.getPlayer(args[0])
             if (target == null) {
-                player.sendMessage(MSG.chatColors("&cPlayer not found or not online."))
+                player.sendMessage(MSG.lang("vanish.player_not_found"))
                 return true
             }
             toggleHideOthers(target, player)
@@ -37,15 +37,14 @@ class HideOthersCommand : CommandExecutor {
         val currentState = VanishManager.isHideOthers(target)
         val newState = !currentState
 
-        // Use VanishManager which handles all visibility updates automatically
         VanishManager.setHideOthers(target, newState)
 
         if (newState) {
-            target.sendMessage(MSG.chatColors("&aYou are now hiding other players in this world."))
-            executor?.sendMessage(MSG.chatColors("&aYou have enabled hideOthers for &6${target.name}."))
+            target.sendMessage(MSG.lang("vanish.hideothers.enabled_self"))
+            executor?.sendMessage(MSG.lang("vanish.hideothers.enabled_other", "target" to target.name))
         } else {
-            target.sendMessage(MSG.chatColors("&cYou are no longer hiding other players."))
-            executor?.sendMessage(MSG.chatColors("&cYou have disabled hideOthers for &6${target.name}."))
+            target.sendMessage(MSG.lang("vanish.hideothers.disabled_self"))
+            executor?.sendMessage(MSG.lang("vanish.hideothers.disabled_other", "target" to target.name))
         }
     }
 }

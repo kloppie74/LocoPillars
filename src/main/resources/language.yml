@@ -1,0 +1,572 @@
+# ============================================================
+#  LocoPillars — language.yml
+#
+#  Alle berichten die in de Minecraft-chat verschijnen voor
+#  spelers staan hier. Console-/debug-berichten staan NIET
+#  in dit bestand en zijn hardcoded.
+#
+#  Kleurcodes: gebruik & voor kleurcodes (&a, &c, &e, ...)
+#  Placeholders: {player}, {game}, {count}, {name}, enz.
+# ============================================================
+
+# ─────────────────────────────────────────────────────────────
+# ALGEMEEN
+# ─────────────────────────────────────────────────────────────
+general:
+  player_only: "&cThis command can only be used by players!"
+  no_permission: "&cYou do not have permission to use this command!"
+  unknown_subcommand: "&cUnknown subcommand: &f{input}"
+  player_not_found: "&cPlayer not found or not online."
+  database_error: "&cDatabase error occurred. Please try again."
+
+# ─────────────────────────────────────────────────────────────
+# SPELER JOIN (fout bij inloggen)
+# ─────────────────────────────────────────────────────────────
+player_join:
+  setup_error: "&c[LocoPillars] An error occurred while setting up your profile."
+  setup_error_contact: "&c[LocoPillars] Please contact an administrator if this persists."
+
+# ─────────────────────────────────────────────────────────────
+# /pillars COMMAND
+# ─────────────────────────────────────────────────────────────
+pillars:
+  no_permission_sub: "&cYou don't have permission to use /pillars {sub}!"
+
+  # join
+  join:
+    usage: "&cUsage: /pillars join <gametype>"
+    available_types_header: "&eAvailable game types:"
+    available_type_entry: "&7- {name} ({display})"
+    random_hint: "&7Or use &b/pillars join random &7to join any available game"
+    already_in_game: "&cYou are already in a game! Use &e/pillars leave &cto leave your current game."
+    no_games_available: "&cNo available games to join right now!"
+    no_suitable_game: "&cNo suitable game found!"
+    failed_game_full: "&cFailed to join game. Game may be full."
+    failed_no_instance: "&cFailed to join game. No available instances or game is full."
+    type_not_found: "&cGame type '&f{type}&c' not found!"
+    random_joined: "&aYou have joined a random game: &e{game}"
+    joined: "&aSuccessfully joined &e{game}&a!"
+    players_count: "&ePlayers: &b{current}&7/&b{max}"
+    starting_soon: "&aGame will start soon!"
+    waiting_for_players: "&eWaiting for &c{needed} &emore player(s) to start..."
+
+  # leave
+  leave:
+    not_in_game: "&cYou are not in a game!"
+
+  # list
+  list:
+    header: "&6=== Available Game Types ==="
+    no_types: "&cNo game types available!"
+    type_entry: "&e{name} &7({display})"
+    type_stats: "&7  Available: &b{available} &7| Active: &b{active}"
+    type_player_info: "&7  Players: &b{min}-{max} &7| Teams: &b{teams}"
+    join_hint: "&7Use &e/pillars join <gametype> &7to join a game!"
+    random_hint: "&7Or use &b/pillars join random &7to join any available game"
+
+  # status
+  status:
+    not_in_game: "&eYou are not currently in a game."
+    not_in_game_hint: "&7Use &e/pillars list &7to see available games!"
+    header: "&6=== Game Status ==="
+    game: "&eGame: &b{game}"
+    state: "&eState: &b{state}"
+    players: "&ePlayers: &b{current}&7/&b{max}"
+    world: "&eWorld: &b{world}"
+    instance_id: "&eInstance ID: &b{id}"
+    waiting_for_players: "&7Waiting for &c{needed} &7more player(s) to start..."
+    ready_to_start: "&aReady to start!"
+    starting: "&aGame is starting..."
+    active: "&cGame is active! Fight!"
+    ended: "&eGame has ended."
+    resetting: "&7Game is resetting..."
+
+  # stats
+  stats:
+    header: "&6=== Server Statistics ==="
+    total_instances: "&eTotal Instances: &b{count}"
+    available_instances: "&eAvailable Instances: &b{count}"
+    active_games: "&eActive Games: &b{count}"
+    arena_worlds: "&eArena Worlds: &b{count}"
+    game_types: "&eGame Types: &b{count}"
+    type_summary: "&7{name}: &b{available} &7available, &b{active} &7active, &b{players} &7players"
+
+  # help
+  help:
+    header: "&6=== Pillars of Fortune Commands ==="
+    join: "&e/pillars join <gametype> &7- Join a game"
+    join_random: "&e/pillars join random &7- Join any available game"
+    leave: "&e/pillars leave &7- Leave your current game"
+    list: "&e/pillars list &7- List available game types"
+    status: "&e/pillars status &7- Show your current game status"
+    server_stats: "&e/pillars stats &7- Show server statistics"
+    help: "&e/pillars help &7- Show this help message"
+
+# ─────────────────────────────────────────────────────────────
+# GAME — JOIN / LEAVE BROADCASTS
+# ─────────────────────────────────────────────────────────────
+game:
+  join:
+    broadcast: "&a{player} joined the game! ({current}/{max})"
+    welcome: "&aYou joined {game}!"
+    error_db: "&cDatabase error occurred. Please try again."
+    error_no_game: "&cNo available games found for type: {type}"
+    error_full: "&cThis game is full!"
+    error_teleport: "&cError: Failed to teleport to game area"
+    error_spawn_null: "&cError: Invalid spawn location (world is null)"
+    error_spawn_mismatch: "&cError: Spawn location world mismatch"
+    error_spawn_boundary: "&cError: Spawn area outside game boundaries!"
+
+  leave:
+    broadcast: "&e{player} left the game! ({current}/{max})"
+    success: "&aYou left the game!"
+    cancelled_start: "&cNot enough players! Game start cancelled."
+
+  # Countdown (lobby)
+  countdown:
+    cancelled: "&cNot enough players! Countdown cancelled."
+    starting_in: "&aGame starting in {seconds} seconds!"
+    title_starting: "&aGame starting in:"
+    title_countdown: "&f{seconds}"
+
+  # Cage countdown
+  cage:
+    opening_in: "&aCages open in {seconds} seconds!"
+    opened: "&aGates opened! The battle begins!"
+    go_title: "&aGO!"
+
+  # Start / end
+  start:
+    started: "&aGame started! Fight for victory!"
+
+  end:
+    game_over: "&6=== GAME OVER ==="
+    reason: "&e{reason}"
+    time_up: "Time's up! Game ended in a draw!"
+    no_players: "No players remaining!"
+    winner_elimination: "{winner} wins by elimination!"
+    winner_team: "{team} wins!"
+    game_ended: "Game ended"
+
+  # Timer broadcasts (chat)
+  timer:
+    ending_in: "&e⏰ Game ending in: {time}"
+
+  # Team assignment
+  team:
+    assigned: "&aYou are on team: {team}"
+
+  # Player eliminated
+  elimination:
+    broadcast: "&c{player} has been eliminated!"
+    self: "&cYou have been eliminated! Better luck next time!"
+
+# ─────────────────────────────────────────────────────────────
+# GAME — ACTION BAR (in-game timer boven hotbar)
+# ─────────────────────────────────────────────────────────────
+actionbar:
+  waiting: "&e⏳ Waiting for {needed} more player(s)"
+  starting: "&a🚀 Game starting soon..."
+  active_timer: "&c⏰ Game: {time}"
+  active_timer_fallback: "&c⏰ Game: Active"
+  active_separator: "&8 | "
+  active_items: "&6🎁 Items: {seconds}s"
+  active_players: "&b👥 Players: {count}"
+  ended: "&6🏆 Game Ended!"
+  resetting: "&7🔄 Resetting..."
+
+# ─────────────────────────────────────────────────────────────
+# GAME — GAMEPLAY REGELS (blocks, pvp, grenzen)
+# ─────────────────────────────────────────────────────────────
+gameplay:
+  pvp_not_allowed: "&cPvP is not allowed yet!"
+  void_fell: "&cYou fell into the void!"
+  block_break_not_active: "&cYou cannot break blocks while the game is not active!"
+  block_break_cage: "&cYou cannot break cage blocks until the game starts!"
+  block_break_out_of_bounds: "&cYou cannot break blocks outside the game area!"
+  block_break_player_placed_only: "&cYou can only break blocks that you placed!"
+  block_place_not_active: "&cYou cannot place blocks while the game is not active!"
+  block_place_out_of_bounds: "&cYou cannot place blocks outside the game area!"
+  out_of_bounds: "&cYou cannot go outside the game area!"
+  cannot_drop_items: "&cYou cannot drop items right now!"
+  cannot_teleport: "&cYou cannot teleport while in a game! Use /pillars leave to leave the game."
+
+# ─────────────────────────────────────────────────────────────
+# VANISH COMMANDS
+# ─────────────────────────────────────────────────────────────
+vanish:
+  only_players: "&cOnly players can use this command!"
+  no_permission_others: "&cYou do not have permission to vanish other players."
+  player_not_found: "&cPlayer not found or not online."
+
+  # /vanish
+  vanished_self: "&aYou are now vanished."
+  vanished_other: "&aYou have vanished &6{target}."
+  unvanished_self: "&cYou are no longer vanished."
+  unvanished_other: "&6{target} &cis no longer vanished."
+
+  # /hideme
+  hideme:
+    no_permission: "&cYou do not have permission to toggle hideMe for other players."
+    enabled_self: "&aYou are now hidden from other players."
+    enabled_other: "&aYou have hidden &6{target} &afrom other players."
+    disabled_self: "&cYou are now visible to other players again."
+    disabled_other: "&6{target} &cis now visible to other players again."
+
+  # /hideothers
+  hideothers:
+    no_permission: "&cYou do not have permission to toggle hideOthers for other players."
+    enabled_self: "&aYou are now hiding other players in this world."
+    enabled_other: "&aYou have enabled hideOthers for &6{target}."
+    disabled_self: "&cYou are no longer hiding other players."
+    disabled_other: "&cYou have disabled hideOthers for &6{target}."
+
+  # /showothers
+  showothers:
+    usage: "&cUsage: /showothers <player>"
+    load_error: "&cCould not load your vanish settings. Please try again."
+    require_hideothers: "&cYou must enable hideOthers before you can show specific players."
+    now_visible: "&aYou can now see &6{target}&a."
+    now_hidden: "&cYou can no longer see &6{target}&c."
+    update_failed: "&cFailed to update visibility for &6{target}&c. Please try again."
+    generic_error: "&cAn error occurred while updating visibility. Please try again."
+
+# ─────────────────────────────────────────────────────────────
+# /editor COMMAND (admin only)
+# ─────────────────────────────────────────────────────────────
+editor:
+  player_only: "&cThis command is player-only!"
+  no_permission: "&cYou do not have permission to use this command!"
+  unknown_subcommand: "&cUnknown sub-command: {input}"
+  map_not_found: "&cMap '{name}' does not exist!"
+  available_maps: "&7Available maps: &e{maps}"
+
+  # Editmode status
+  mode:
+    already_active: "&eEdit mode is already active! Use &e/editor toggle &eto exit."
+    already_active_help: "&7Need help? Use &e/editor help &7or &e/editor info"
+    not_active: "&cEdit mode is not active."
+    not_active_start: "&cEdit mode is not active yet. Start with &e/editor edit <map>&c."
+    enforcer_restored: "&e⚡ Edit mode active — gamemode restored to Creative."
+
+    # Activeren
+    activated_title: "&a♦ &lEdit Mode Activated"
+    activated_creative: "&7You are now in Creative mode and your editor hotbar is ready."
+    activated_map: "&7Selected map: &e{name}"
+    activated_tip_settings: "&7Tip: use &e/editor settings &7to configure map parameters."
+    activated_step1: "&7Step 1: &e/editor map <name> &7— select a map"
+    activated_step2: "&7Step 2: &e/editor edit     &7— open the edit world"
+    activated_step3: "&7Step 3: &e/editor settings  &7— configure parameters"
+    activated_help_tip: "&7Use &e/editor help &7for all commands, or &e/editor toggle &7to exit."
+
+    # Deactiveren
+    deactivated: "&c♦ Edit Mode &cdeactivated."
+    hotbar_restored: "&7Your original hotbar has been restored."
+    auto_enabled: "&7Edit mode was auto-enabled."
+
+  # /editor info
+  info:
+    header: "&6=== Edit Mode Info ==="
+    duration: "&eDuration:     &f{seconds}s"
+    active_map: "&eActive map:   &f{map}"
+    active_map_none: "&7(none)"
+    hotbar_status: "&eCustom hotbar: &f{status}"
+    session_active: "&eEditor session: &aactive &7(world: {world})"
+    session_none: "&eEditor session: &7none"
+    save_radius: "&eSave radius: &f{radius}"
+    border_size: "&eBorder size: &f{size}"
+
+  # /editor map
+  map:
+    current: "&eActive map: &f{name}"
+    none_selected: "&7No map selected. Use &e/editor map <name>"
+    cleared: "&7Active map selection cleared."
+    set: "&aActive map set to: &f{name}"
+    set_hint: "&7Use &e/editor edit &7to start editing this map."
+
+  # /editor create
+  create:
+    usage: "&cUsage: /editor create <name>"
+    invalid_name: "&cInvalid map name! Only letters, numbers, dashes and underscores."
+    already_exists: "&cMap '{name}' already exists!"
+    creating: "&eCreating map: &f{name}&e…"
+    failed: "&c✗ Failed to create map '{name}'. Check console."
+    success: "&a✓ Map '{name}' created!"
+    teleported: "&a✓ Teleported to the edit world for &e{name}&a."
+    build_hint: "&7Build your map, then &e/editor save &7when done."
+    tools_hint: "&7Tip: &e/editor settings &7| &e/editor lobby &7| &e/editor spawn"
+    teleport_failed: "&cCould not teleport — use &e/editor edit {name} &cto retry."
+
+  # /editor edit
+  edit:
+    usage: "&cUsage: /editor edit <name>"
+    usage_tip: "&7Tip: first select a map with &e/editor map <name>&7, then use &e/editor edit"
+    available_maps: "&7Available maps: &e{maps}"
+    settings_tip: "&7Tip: open advanced controls with &e/editor settings"
+
+  # /editor delete
+  delete:
+    usage: "&cUsage: /editor delete <name>"
+    deleting: "&cDeleting map: &f{name}&c…"
+    header: "&6=== Deleted: {name} ==="
+    file_deleted: "&a✓ &f{file} &adeleted"
+    file_not_deleted: "&e⚠ &f{file} &ecould not be deleted"
+    file_not_present: "&7— &f{file} &7was not present"
+    folder_not_deleted: "&e⚠ &f{folder} &ecould not be fully deleted"
+    failed: "&c✗ Failed to delete maps/{name}/. Check console."
+
+  # /editor list
+  list:
+    no_maps: "&eNo maps found!"
+    create_hint: "&7Use &e/editor create <name> &7to create a map."
+    header: "&6=== Available Maps ({count}) ==="
+    entry: "{status} &e{name} &7(radius: {radius}){lobby_tag}"
+    lobby_tag_yes: " &a[lobby]"
+    lobby_tag_no: " &7[no lobby]"
+    error_entry: "    &c- {error}"
+    warning_entry: "    &e⚠ {warning}"
+    edit_hint: "&7Use &e/editor map <name> &7then &e/editor edit &7to edit a map."
+
+  # /editor save
+  save:
+    no_session: "&cYou don't have an active editor session!"
+    no_session_hint: "&7Use &e/editor edit &7to start one."
+    synced: "&a✓ {name} synced to Data/ — ready for games."
+    sync_retry: "&7Run &e/editor setup {name} &7to retry syncing."
+
+  # /editor cancel
+  cancel:
+    no_session: "&cYou don't have an active editor session!"
+
+  # /editor resize
+  resize:
+    no_session: "&cYou don't have an active editor session!"
+    no_session_hint: "&7Use &e/editor edit &7to start one."
+    usage: "&cUsage: /editor resize <radius>"
+    current_radius: "&7Current radius: &e{radius} &7| Recommended: 20–200"
+
+  # /editor settings (GUI)
+  settings:
+    no_session: "&cYou don't have an active editor session!"
+    no_session_hint: "&7Use &e/editor edit &7to start one."
+    no_session_short: "&cNo active editor session! Use &e/editor edit &cfirst."
+    start_session_hint: "&cStart a session first: &e/editor edit"
+
+  # /editor hotbar
+  hotbar:
+    status: "&eEditor hotbar: &f{status}"
+    status_hint: "&7Use: &e/editor hotbar <on|off|toggle|status>"
+    enabled: "&aEditor hotbar enabled."
+    enabled_hint: "&7Tip: Use slot 8 (Barrier) or &e/editor toggle &7to leave edit mode."
+    hidden: "&eEditor hotbar hidden."
+    hidden_hint: "&7Use &a/editor hotbar on &7to show it again."
+    usage: "&cUsage: /editor hotbar <on|off|toggle|status>"
+
+  # Editor hotbar interaction (switch hotbar item - slot 8)
+  hotbar_switch:
+    hidden: "&6♦ &eEditor hotbar hidden — original items restored."
+    restore_hint: "&8› Use &e/editor hotbar on &8to get editor tools back."
+    exit_hint: "&8› Use &c/editor toggle &8to fully exit edit mode."
+
+  # /editor holograms
+  holograms:
+    no_session: "&cNo active editor session. Use &e/editor edit &cfirst."
+    status: "&eSpawn holograms: &f{status}"
+    status_hint: "&7Use: &e/editor holograms <on|off|refresh|status>"
+    usage: "&cUsage: /editor holograms <on|off|refresh|status>"
+
+  # /editor setup
+  setup:
+    running: "&eRunning setup for &f{name}&e…"
+    header_map: "&6=== Setup: {name} ==="
+    ready: "&a✓ {name} is ready for games."
+    header_quick: "&6=== Editor Quick Setup ==="
+    games_path: "&7Data/Games path:  &f{path}"
+    schems_path: "&7Data/Schems path: &f{path}"
+    folders_created: "&7Folders created:             &f{count}"
+    configs_copied: "&7Bundled configs copied:      &f{count}"
+    configs_migrated: "&7Legacy configs migrated:     &f{count}"
+    schems_migrated: "&7Legacy schems migrated:      &f{count}"
+    templates_mirrored: "&7Maps mirrored to templates:  &f{count}"
+    readiness: "&7Template readiness: &f{ready}/{total} ready"
+    readiness_entry_ready: "&7- &e{name}&7: &aREADY"
+    readiness_entry_missing: "&7- &e{name}&7: &cMISSING"
+    readiness_more: "&7… and {count} more."
+    warnings_header: "&eWarnings:"
+    warning_entry: "&e- {warning}"
+    doctor_hint: "&7Run &e/editor doctor &7for a detailed readiness report."
+    success: "&aSetup completed successfully."
+
+  # /editor doctor
+  doctor:
+    header: "&6=== Editor Doctor: Data Template Readiness ==="
+    games_path: "&7Data/Games:  &f{path}"
+    schems_path: "&7Data/Schems: &f{path}"
+    readiness: "&7Ready templates: &f{ready}/{total}"
+    no_configs: "&cNo game configs found in Data/Games."
+    no_configs_hint: "&7Use &e/editor setup &7or add .yml files manually."
+    entry_ready: "&e{name}&7 -> &aREADY"
+    entry_missing: "&e{name}&7 -> &cMISSING_SCHEM"
+    entry_expected: "&7  Expected: Data/Schems/{name}.schem"
+
+  # /editor validate
+  validate:
+    header_single: "&6=== Validation: {name} ==="
+    header_all: "&6=== Validation Report (all {count} maps) ==="
+    header_all_hotbar: "&6=== Validation Report — All Maps ({count}) ==="
+    no_maps: "&7No maps found."
+    valid: "&a✓ Map is valid"
+    errors_header: "&c✗ Errors ({count}):"
+    errors_header_short: "&c✗ Errors:"
+    error_entry: "  &c- {error}"
+    warnings_header: "&eWarnings ({count}):"
+    warnings_header_short: "&eWarnings:"
+    warning_entry: "  &e- {warning}"
+
+  # /editor files
+  files:
+    header: "&6=== Files: {name} ==="
+    settings_present: "&7settings.yml: &a✓ ({size}B)"
+    settings_missing: "&7settings.yml: &c✗ missing"
+    schem_present: "&7region.schem: &a✓ ({size}B)"
+    schem_missing: "&7region.schem: &c✗ missing"
+    header_all: "&6=== Map Files ({count}) ==="
+    no_maps: "&7No maps found."
+    entry: "&e{name} &7- {yml} &7{schem}"
+
+  # /editor lobby
+  lobby:
+    no_active_map: "&cNo active map. Use &e/editor map <name> &cfirst."
+    no_active_map_short: "&cNo active map! Use &e/editor map <name> &cfirst."
+    spawn_cleared: "&eSpawnPoint cleared for &f{name}&e."
+    spawn_clear_failed: "&c✗ Failed to clear SpawnPoint."
+    spawn_set: "&a✓ Lobby SpawnPoint set at your location: &b({x}, {y}, {z}) &7yaw:&f{yaw}"
+    spawn_set_failed: "&c✗ Failed to save SpawnPoint. Check console."
+    spawn_set_short: "&a✓ Lobby SpawnPoint &8→ &b({x}, {y}, {z}) &7yaw:&f{yaw}"
+    spawn_set_short_failed: "&c✗ Failed to save SpawnPoint."
+    area_cleared: "&eSpawn-Area cleared for &f{name}&e."
+    area_clear_failed: "&c✗ Failed to clear Spawn-Area."
+    area_saved: "&a✓ Spawn-Area saved for &e{name}&a."
+    area_saved_short: "&a✓ Spawn-Area saved:"
+    area_loc1: "  &7Loc1 &8→ &b({x}, {y}, {z})"
+    area_loc2: "  &7Loc2 &8→ &b({x}, {y}, {z})"
+    area_save_failed: "&c✗ Failed to save Spawn-Area."
+    area_save_failed_check: "&c✗ Failed to save Spawn-Area. Check console."
+    area_set_header: "&6=== Set Spawn-Area ==="
+    area_set_option_a: "&7Option A — use the &5Lobby Tool &7(slot 6):"
+    area_set_left: "  &7Left-click a block          → set Loc1"
+    area_set_shift_right: "  &7Shift+right-click a block   → set Loc2 & save"
+    area_set_option_b: "&7Option B — provide coords directly:"
+    area_set_coords: "  &e/editor lobby area set <x1> <y1> <z1> <x2> <y2> <z2>"
+    area_usage: "&7Usage: &e/editor lobby area <set|clear>"
+    loc1_set: "&aSpawn-Area Loc1 &8→ &b({x}, {y}, {z})"
+    loc1_hint: "&7Now &eShift + right-click &7another block to set Loc2."
+    loc1_required: "&cSet Loc1 first: &eleft-click &ca block."
+    pending_loc1: "&7Pending Loc1: &b({x}, {y}, {z})"
+    cleared_all: "&eAll lobby settings cleared for &f{name}&e."
+    clear_failed: "&c✗ Partial failure clearing lobby settings. Check console."
+    unknown_sub: "&cUnknown lobby sub-command: {input}"
+    unknown_sub_hint: "&7Use: &elobby &7| &elobby spawn &7| &elobby area set &7| &elobby clear"
+
+  # /editor spawn (spawn points)
+  spawn:
+    no_active_map: "&cNo active map. Use &e/editor map <name> &cfirst."
+    usage_set: "&cUsage: /editor spawn set <team> <slot>"
+    usage_remove: "&cUsage: /editor spawn remove <team> <slot>"
+    set_success: "&a✓ Spawn set: &e{team}/{slot}"
+    set_failed: "&c✗ Failed to save spawn. Check console."
+    remove_success: "&a✓ Removed spawn: &e{team}/{slot}"
+    remove_failed: "&c✗ Failed to remove spawn. Check console."
+    unknown_sub: "&cUnknown spawn sub-command: {input}"
+    unknown_sub_hint: "&7Use: &eList &7| &eset <team> <slot> &7| &eremove <team> <slot>"
+
+  # Spawn Setter (hotbar tool - slot 1)
+  spawn_setter:
+    no_map: "&cNo active map! Use &e/editor map <name> &cfirst."
+    cycled_team: "&eSpawn Setter &8→ &bTeam{team} &8/ &bPlayer1"
+    cycled_team_info: "&8({max_teams} teams × {per_team} per team)  Right-click a block to place."
+    placed: "&a✓ &e{team}&7/&e{slot} &7@ &b({x}, {y}, {z})"
+    place_failed: "&c✗ Failed to save spawn point. Check console."
+    all_done: "&a&l♦ All spawn points placed! &8({teams} × {per_team})"
+    team_done: "&7Team {team} done! Next &8→ &eTeam{next_team}/Player1 &8(Shift+click to skip)"
+    next_slot: "&7Next &8→ &e{team}/Player{slot} &8| Shift+click to switch team"
+
+  # Hotbar bescherming (action bar berichten)
+  hotbar_protection:
+    cannot_drop: "&cEditor tools cannot be dropped!"
+    cannot_move: "&cEditor tools cannot be moved!"
+
+  # Session acties (hotbar slot 4/5/7)
+  session:
+    no_session_save: "&cNo active session to save!"
+    no_session_cancel: "&cNo active session to cancel!"
+    no_session_info: "&cNo active session!"
+    saving: "&eSaving... please wait."
+
+  # /editor enable
+  enable:
+    usage: "&cUsage: /editor enable <name>"
+    enabling: "&eEnabling map: &f{name}&e..."
+    header: "&6=== Enable: {name} ==="
+    yml_written: "&a✓ &fData/Games/{name}.yml &awritten"
+    yml_failed: "&c✗ &fData/Games/{name}.yml &ccould not be written"
+    schem_written: "&a✓ &fData/Schems/{name}.schem &awritten"
+    schem_missing: "&7— &fData/Schems/{name}.schem &7not present (map has no schematic yet)"
+    warning_entry: "  &e⚠ {warning}"
+    fully_ready: "&a✓ {name} is now &lenabled&a and ready for games."
+    partial: "&e⚠ {name} enabled (partially) — check warnings above."
+
+  # /editor disable
+  disable:
+    usage: "&cUsage: /editor disable <name>"
+    header: "&6=== Disable: {name} ==="
+    yml_removed: "&a✓ &fData/Games/{name}.yml &aremoved"
+    yml_failed: "&c✗ &fData/Games/{name}.yml &ccould not be removed"
+    yml_absent: "&7— &fData/Games/{name}.yml &7was not present"
+    schem_removed: "&a✓ &fData/Schems/{name}.schem &aremoved"
+    schem_failed: "&c✗ &fData/Schems/{name}.schem &ccould not be removed"
+    schem_absent: "&7— &fData/Schems/{name}.schem &7was not present"
+    folder_removed: "&a✓ &fData/Schems/{name}/ &afolder removed"
+    folder_failed: "&c✗ &fData/Schems/{name}/ &cfolder could not be removed"
+    disabled_success: "&e✓ {name} &edisabled. Master copy in &fmaps/{name}/ &eis untouched."
+    already_disabled: "&7{name} was already disabled (nothing found in Data/)."
+    reenable_hint: "&8Re-enable anytime with &e/editor enable {name}&8."
+
+  # /editor help
+  help:
+    header: "&6=== Admin Editor — /editor ==="
+    section_mode: "&b— Edit mode —"
+    cmd_toggle: "&e/editor toggle [map]              &7Toggle edit mode"
+    cmd_map: "&e/editor map <name|clear>          &7Select active map"
+    cmd_info: "&e/editor info                      &7Show session info"
+    cmd_doctor: "&e/editor doctor                    &7Check template readiness"
+    cmd_hotbar: "&e/editor hotbar <on|off|toggle>    &7Enable/disable hotbar"
+    section_maps: "&b— Map management —"
+    cmd_create: "&e/editor create <name>             &7Create map & jump into it"
+    cmd_edit: "&e/editor edit [name]               &7Open edit session"
+    cmd_delete: "&e/editor delete <name>             &7Delete a map"
+    cmd_list: "&e/editor list                      &7List all maps"
+    cmd_save: "&e/editor save                      &7Save & auto-sync files"
+    cmd_cancel: "&e/editor cancel                    &7Cancel (no save)"
+    cmd_resize: "&e/editor resize <radius>           &7Adjust save region"
+    cmd_settings: "&e/editor settings                  &7Open settings GUI"
+    section_lobby: "&b— Lobby —"
+    cmd_lobby: "&e/editor lobby                     &7Show lobby status"
+    cmd_lobby_spawn: "&e/editor lobby spawn               &7Set lobby spawn at location"
+    cmd_lobby_spawn_clear: "&e/editor lobby spawn clear         &7Clear lobby spawn"
+    cmd_lobby_area_set: "&e/editor lobby area set            &7Guide to set spawn-area"
+    cmd_lobby_area_clear: "&e/editor lobby area clear          &7Clear spawn-area"
+    cmd_lobby_clear: "&e/editor lobby clear               &7Clear all lobby settings"
+    section_validation: "&b— Validation & files —"
+    cmd_validate: "&e/editor validate [map]            &7Validate map files"
+    cmd_files: "&e/editor files [map]               &7Show file status"
+    cmd_setup: "&e/editor setup [map]               &7Sync Data/Games & Data/Schems"
+    section_spawn: "&b— Spawn points —"
+    cmd_spawn_list: "&e/editor spawn list                &7List team spawn points"
+    cmd_spawn_set: "&e/editor spawn set <team> <slot>   &7Set spawn at location"
+    cmd_spawn_remove: "&e/editor spawn remove <t> <s>      &7Remove spawn point"
+    section_holograms: "&b— Holograms —"
+    cmd_holograms: "&e/editor holograms <on|off|refresh>&7Manage spawn holograms"
+    section_activation: "&b— Map activation —"
+    cmd_enable: "&e/editor enable <name>            &7Copy map to Data/ (make it playable)"
+    cmd_disable: "&e/editor disable <name>           &7Remove map from Data/ (keep master copy)"

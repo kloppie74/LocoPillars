@@ -12,14 +12,6 @@ import org.bukkit.entity.Player
 /**
  * Command to show specific players when hideOthers is enabled.
  *
- * CHANGELOG (v2.0):
- * - Replaced VanishManager.getState() with VanishDAO.load()
- * - Replaced VanishManager.addShowOther() with VanishDAO.addShowOther()
- * - Replaced VanishManager.removeShowOther() with VanishDAO.removeShowOther()
- * - Added proper error handling for database operations
- * - Improved null-safety checks
- * - Better error messages for players
- *
  * @author Kloppie74
  * @since 2.0-SNAPSHOT
  */
@@ -27,59 +19,54 @@ class ShowOthersCommand : CommandExecutor, TabCompleter {
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         val player = sender as? Player ?: run {
-            sender.sendMessage(MSG.chatColors("&cOnly players can use this command!"))
+            sender.sendMessage(MSG.lang("vanish.only_players"))
             return true
         }
 
         if (args.isEmpty()) {
-            player.sendMessage(MSG.chatColors("&cUsage: /showothers <player>"))
+            player.sendMessage(MSG.lang("vanish.showothers.usage"))
             return true
         }
 
         val target = Bukkit.getPlayer(args[0])
         if (target == null) {
-            player.sendMessage(MSG.chatColors("&cPlayer not found or not online."))
+            player.sendMessage(MSG.lang("vanish.player_not_found"))
             return true
         }
 
         try {
-            // Load vanish state using DAO
             val state = VanishDAO.load(player.uniqueId)
 
             if (state == null) {
-                player.sendMessage(MSG.chatColors("&cCould not load your vanish settings. Please try again."))
+                player.sendMessage(MSG.lang("vanish.showothers.load_error"))
                 return true
             }
 
-            // Check if hideOthers is enabled
             if (!state.hideOthers) {
-                player.sendMessage(MSG.chatColors("&cYou must enable hideOthers before you can show specific players."))
+                player.sendMessage(MSG.lang("vanish.showothers.require_hideothers"))
                 return true
             }
 
-            // Toggle showOthers for target player
             if (state.showOthers.contains(target.uniqueId)) {
-                // Remove from showOthers list
                 val removed = VanishDAO.removeShowOther(player.uniqueId, target.uniqueId)
                 if (removed) {
-                    player.sendMessage(MSG.chatColors("&cYou can no longer see &6${target.name}&c."))
+                    player.sendMessage(MSG.lang("vanish.showothers.now_hidden", "target" to target.name))
                 } else {
-                    player.sendMessage(MSG.chatColors("&cFailed to update visibility for &6${target.name}&c. Please try again."))
+                    player.sendMessage(MSG.lang("vanish.showothers.update_failed", "target" to target.name))
                 }
             } else {
-                // Add to showOthers list
                 val added = VanishDAO.addShowOther(player.uniqueId, target.uniqueId)
                 if (added) {
-                    player.sendMessage(MSG.chatColors("&aYou can now see &6${target.name}&a."))
+                    player.sendMessage(MSG.lang("vanish.showothers.now_visible", "target" to target.name))
                 } else {
-                    player.sendMessage(MSG.chatColors("&cFailed to update visibility for &6${target.name}&c. Please try again."))
+                    player.sendMessage(MSG.lang("vanish.showothers.update_failed", "target" to target.name))
                 }
             }
 
         } catch (e: Exception) {
             Bukkit.getLogger().severe("[ShowOthersCommand] Error for ${player.name}: ${e.message}")
             e.printStackTrace()
-            player.sendMessage(MSG.chatColors("&cAn error occurred while updating visibility. Please try again."))
+            player.sendMessage(MSG.lang("vanish.showothers.generic_error"))
         }
 
         return true

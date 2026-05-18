@@ -1,12 +1,12 @@
 package org.Kloppie74.locoPillars.events
 
 import org.bukkit.Bukkit
-import org.bukkit.ChatColor
 import org.bukkit.entity.Player
 import org.bukkit.scheduler.BukkitRunnable
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.data.GameState
+import org.Kloppie74.locoPillars.utils.MSG
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -78,7 +78,7 @@ class TimerEvent(private val plugin: LocoPillars) {
                         val seconds = timeLeft % 60
                         val timeString = if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s"
 
-                        broadcastToGame(instance, "${ChatColor.YELLOW}⏰ Game ending in: $timeString")
+                        broadcastToGame(instance, MSG.lang("game.timer.ending_in", "time" to timeString))
                         plugin.logger.info("[TimerEvent] Game timer warning: $timeString remaining")
                     }
                 }
@@ -189,39 +189,36 @@ class TimerEvent(private val plugin: LocoPillars) {
         when (instance.state) {
             GameState.WAITING -> {
                 val needed = instance.getMinPlayers() - instance.players.size
-                sb.append("${ChatColor.YELLOW}⏳ Waiting for $needed more player(s)")
+                sb.append(MSG.lang("actionbar.waiting", "needed" to needed.toString()))
             }
 
             GameState.STARTING -> {
-                sb.append("${ChatColor.GREEN}🚀 Game starting soon...")
+                sb.append(MSG.lang("actionbar.starting"))
             }
 
             GameState.ACTIVE -> {
-                // Game timer
                 gameTimers[instance.id]?.let { gameTimer ->
                     val minutes = gameTimer.timeLeft / 60
                     val seconds = gameTimer.timeLeft % 60
                     val timeString = String.format("%02d:%02d", minutes, seconds)
-                    sb.append("${ChatColor.RED}⏰ Game: $timeString")
-                } ?: sb.append("${ChatColor.RED}⏰ Game: Active")
+                    sb.append(MSG.lang("actionbar.active_timer", "time" to timeString))
+                } ?: sb.append(MSG.lang("actionbar.active_timer_fallback"))
 
-                // Item timer
                 itemTimers[instance.id]?.let { itemTimer ->
-                    sb.append("${ChatColor.GRAY} | ")
-                    sb.append("${ChatColor.GOLD}🎁 Items: ${itemTimer.timeUntilNext}s")
+                    sb.append(MSG.lang("actionbar.active_separator"))
+                    sb.append(MSG.lang("actionbar.active_items", "seconds" to itemTimer.timeUntilNext.toString()))
                 }
 
-                // Player count
-                sb.append("${ChatColor.GRAY} | ")
-                sb.append("${ChatColor.AQUA}👥 Players: ${instance.players.size}")
+                sb.append(MSG.lang("actionbar.active_separator"))
+                sb.append(MSG.lang("actionbar.active_players", "count" to instance.players.size.toString()))
             }
 
             GameState.ENDED -> {
-                sb.append("${ChatColor.GOLD}🏆 Game Ended!")
+                sb.append(MSG.lang("actionbar.ended"))
             }
 
             GameState.RESETTING -> {
-                sb.append("${ChatColor.GRAY}🔄 Resetting...")
+                sb.append(MSG.lang("actionbar.resetting"))
             }
         }
 

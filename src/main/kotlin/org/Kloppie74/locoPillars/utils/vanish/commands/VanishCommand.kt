@@ -12,18 +12,18 @@ import org.bukkit.entity.Player
 class VanishCommand(private val plugin: LocoPillars) : CommandExecutor {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         val player = sender as? Player ?: run {
-            sender.sendMessage(MSG.chatColors("&cOnly players can use this command!"))
+            sender.sendMessage(MSG.lang("vanish.only_players"))
             return true
         }
 
         if (args.isNotEmpty()) {
             if (!player.hasPermission("locopillars.vanish.others")) {
-                player.sendMessage(MSG.chatColors("&cYou do not have permission to vanish other players."))
+                player.sendMessage(MSG.lang("vanish.no_permission_others"))
                 return true
             }
             val target = Bukkit.getPlayer(args[0])
             if (target == null) {
-                player.sendMessage(MSG.chatColors("&cPlayer not found or not online."))
+                player.sendMessage(MSG.lang("vanish.player_not_found"))
                 return true
             }
             toggleVanish(target, player)
@@ -38,15 +38,14 @@ class VanishCommand(private val plugin: LocoPillars) : CommandExecutor {
         val currentState = VanishManager.isVanished(target)
         val newState = !currentState
 
-        // Use VanishManager which handles all visibility updates automatically
         VanishManager.setVanished(target, newState)
 
         if (newState) {
-            target.sendMessage(MSG.chatColors("&aYou are now vanished."))
-            executor?.sendMessage(MSG.chatColors("&aYou have vanished &6${target.name}."))
+            target.sendMessage(MSG.lang("vanish.vanished_self"))
+            executor?.sendMessage(MSG.lang("vanish.vanished_other", "target" to target.name))
         } else {
-            target.sendMessage(MSG.chatColors("&cYou are no longer vanished."))
-            executor?.sendMessage(MSG.chatColors("&6${target.name} &cis no longer vanished."))
+            target.sendMessage(MSG.lang("vanish.unvanished_self"))
+            executor?.sendMessage(MSG.lang("vanish.unvanished_other", "target" to target.name))
         }
     }
 }

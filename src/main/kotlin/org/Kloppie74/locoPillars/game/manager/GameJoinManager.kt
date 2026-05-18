@@ -1,6 +1,5 @@
 package org.Kloppie74.locoPillars.game.manager
 
-import org.bukkit.ChatColor
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.instance.GameInstance
@@ -9,12 +8,12 @@ import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.database.dao.ArenaStatsDAO
+import org.Kloppie74.locoPillars.utils.MSG
 import java.time.LocalDateTime
 import java.util.*
 
 /**
  * Manages player joining logic for game instances.
- * Updated to use DAO pattern for database operations.
  *
  * @author Kloppie74
  * @since 2.0-SNAPSHOT
@@ -27,104 +26,75 @@ class GameJoinManager(
 
     private val achievementListener get() = plugin.achievementListener
 
-    /**
-     * Main method to join a player to a game instance.
-     * Handles all database setup, validation, and game state updates.
-     */
     fun joinGame(player: Player, gameTypeName: String, gameplayManager: GameplayManager): GameInstance? {
         debugLog("Player ${player.name} attempting to join game type: $gameTypeName")
 
-        // === 1. CHECK IF ALREADY IN GAME ===
         if (playerToInstance.containsKey(player.uniqueId)) {
             debugLog("Player ${player.name} is already in a game")
-            player.sendMessage("${ChatColor.RED}You are already in a game! Use /pillars leave to leave your current game.")
+            player.sendMessage(MSG.lang("pillars.join.already_in_game"))
             return null
         }
 
-        // === 2. ENSURE PLAYER EXISTS IN DATABASE ===
         var playerId = ensurePlayerInDatabase(player) ?: run {
-            player.sendMessage("${ChatColor.RED}Database error occurred. Please try again.")
+            player.sendMessage(MSG.lang("game.join.error_db"))
             return null
         }
 
-        // === 3. FIND AVAILABLE GAME INSTANCE ===
         val instanceManager = GameInstanceManager(plugin, instances, plugin.configManager)
         val instance = instanceManager.getAvailableInstance(gameTypeName) ?: run {
             plugin.logger.warning("[GameJoinManager] No available games found for ${player.name} requesting $gameTypeName")
-            player.sendMessage("${ChatColor.RED}No available games found for type: $gameTypeName")
+            player.sendMessage(MSG.lang("game.join.error_no_game", "type" to gameTypeName))
             return null
         }
 
-        // === 4. CHECK IF INSTANCE IS FULL ===
         if (instance.players.size >= instance.getMaxPlayers()) {
             debugLog("Game instance ${instance.id} is full (${instance.players.size}/${instance.getMaxPlayers()})")
-            player.sendMessage("${ChatColor.RED}This game is full!")
+            player.sendMessage(MSG.lang("game.join.error_full"))
             return null
         }
 
-        // === 5. ADD PLAYER TO INSTANCE ===
         debugLog("Adding player ${player.name} to instance ${instance.id}")
         val wasEmpty = instance.players.isEmpty()
-
         instance.players.add(player.uniqueId)
         playerToInstance[player.uniqueId] = instance
-
         val playersAfterJoin = instance.players.size
         debugLog("Player added to instance, total players: $playersAfterJoin/${instance.getMaxPlayers()}")
 
-        if (wasEmpty) {
-            debugLog("First player joined, keeping arena available for more players")
-        }
+        if (wasEmpty) debugLog("First player joined, keeping arena available for more players")
 
-        // === 6. PREPARE PLAYER FOR GAME ===
         val playerManager = PlayerManager(plugin)
         playerManager.preparePlayerForGame(player)
         debugLog("Player ${player.name} prepared for game")
 
-        // === 7. VALIDATE AND TELEPORT TO SPAWN ===
         val spawnArea = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
-
         if (!validateSpawnArea(player, instance, spawnArea)) {
-            // Validation failed, remove player from instance
             instance.players.remove(player.uniqueId)
             playerToInstance.remove(player.uniqueId)
             return null
         }
 
-        // Log detailed teleport info if debug mode enabled
-        if (plugin.configManager.debugMode) {
-            logTeleportDebug(player, instance, spawnArea)
-        }
+        if (plugin.configManager.debugMode) logTeleportDebug(player, instance, spawnArea)
 
-        // Perform teleport
         val teleportSuccess = player.teleport(spawnArea)
-
         if (!teleportSuccess) {
             plugin.logger.severe("[GameJoinManager] ✗ Teleport FAILED for ${player.name}!")
-            player.sendMessage("${ChatColor.RED}Error: Failed to teleport to game area")
+            player.sendMessage(MSG.lang("game.join.error_teleport"))
             instance.players.remove(player.uniqueId)
             playerToInstance.remove(player.uniqueId)
             return null
         }
 
         debugLog("✓ Teleport SUCCESS for ${player.name}")
+        if (plugin.configManager.debugMode) scheduleLocationDebugLog(player)
 
-        // Debug: Log player location after 5 seconds (only in debug mode)
-        if (plugin.configManager.debugMode) {
-            scheduleLocationDebugLog(player)
-        }
-
-        // === 8. UPDATE DATABASE STATS ===
         updateDatabaseOnJoin(player, playerId, instance)
 
-        // === 9. BROADCAST JOIN MESSAGE ===
-        broadcastToGame(
-            instance,
-            "${ChatColor.GREEN}${player.name} joined the game! ($playersAfterJoin/${instance.getMaxPlayers()})"
-        )
-        player.sendMessage("${ChatColor.GREEN}You joined ${instance.getDisplayName()}!")
+        broadcastToGame(instance, MSG.lang("game.join.broadcast",
+            "player" to player.name,
+            "current" to playersAfterJoin.toString(),
+            "max" to instance.getMaxPlayers().toString()))
+        player.sendMessage(MSG.lang("game.join.welcome", "game" to instance.getDisplayName()))
 
-        // === 10. CHECK IF GAME CAN START ===
         if (playersAfterJoin >= instance.getMinPlayers() && instance.state == GameState.WAITING) {
             debugLog("Minimum players reached ($playersAfterJoin/${instance.getMinPlayers()}), starting lobby countdown")
             gameplayManager.startLobbyCountdown(instance)
@@ -132,53 +102,36 @@ class GameJoinManager(
             debugLog("Waiting for more players: $playersAfterJoin/${instance.getMinPlayers()} minimum")
         }
 
-        // === 11. UPDATE SPECTATOR VISIBILITY ===
         SpectatorUtils.removeSpectatorStatus(player, plugin)
         plugin.spectatorInventoryManager.updateVisibilityForGameInstance(instance)
 
         return instance
     }
 
-    // =================== DATABASE OPERATIONS ===================
-
-    /**
-     * Ensures player exists in database, creates if necessary.
-     * Returns playerId or null on failure.
-     */
     private fun ensurePlayerInDatabase(player: Player): String? {
         try {
             var playerId = PlayerDAO.getPlayerId(player.name)
-
             if (playerId == null) {
-                // Player doesn't exist, create new record
                 val playerRecord = PlayerDAO.create(
                     playerName = player.name,
                     displayName = player.displayName,
                     uuid = player.uniqueId.toString()
                 )
-
                 if (playerRecord != null) {
                     playerId = playerRecord.playerId
-
-                    // Create stats record
                     val statsCreated = StatsDAO.create(playerId)
-                    if (statsCreated) {
-                        debugLog("✓ Created new player in database: ${player.name} (ID: $playerId)")
-                    } else {
-                        plugin.logger.warning("[GameJoinManager] ✗ Failed to create stats for new player: ${player.name}")
-                    }
+                    if (statsCreated) debugLog("✓ Created new player in database: ${player.name} (ID: $playerId)")
+                    else plugin.logger.warning("[GameJoinManager] ✗ Failed to create stats for new player: ${player.name}")
                 } else {
                     plugin.logger.severe("[GameJoinManager] ✗ Failed to create player in database: ${player.name}")
                     return null
                 }
             } else {
-                // Player exists, update their info
                 PlayerDAO.updateDisplayName(playerId, player.displayName ?: player.name)
                 PlayerDAO.updateLastSeen(playerId, LocalDateTime.now())
                 PlayerDAO.incrementSessionCount(playerId)
                 debugLog("✓ Updated existing player in database: ${player.name} (ID: $playerId)")
             }
-
             return playerId
         } catch (ex: Exception) {
             plugin.logger.severe("[GameJoinManager] ❌ Database error for player ${player.name}: ${ex.message}")
@@ -187,64 +140,40 @@ class GameJoinManager(
         }
     }
 
-    /**
-     * Updates database stats when a player joins a game.
-     */
     private fun updateDatabaseOnJoin(player: Player, playerId: String, instance: GameInstance) {
         try {
-            // Set player as active
             val activeSet = PlayerDAO.setActiveStatus(playerId, true)
-            if (!activeSet) {
-                plugin.logger.warning("[GameJoinManager] ✗ Failed to set active status for ${player.name}")
-            }
+            if (!activeSet) plugin.logger.warning("[GameJoinManager] ✗ Failed to set active status for ${player.name}")
 
-            // Update arena stats
             val arenaName = instance.arenaInstance.config.name
             val arenaCreated = ArenaStatsDAO.createOrUpdate(arenaName, instance.getDisplayName())
-            if (arenaCreated) {
-                debugLog("✓ Updated arena stats for: $arenaName")
-            }
+            if (arenaCreated) debugLog("✓ Updated arena stats for: $arenaName")
 
-            // Create player arena stats if doesn't exist
             val playerArenaCreated = ArenaStatsDAO.createOrUpdatePlayerArenaStats(playerId, arenaName)
-            if (playerArenaCreated) {
-                debugLog("✓ Ensured player arena stats for ${player.name} in $arenaName")
-            }
+            if (playerArenaCreated) debugLog("✓ Ensured player arena stats for ${player.name} in $arenaName")
 
-            // Trigger achievement check
             achievementListener.onGamePlayed(player)
-
             debugLog("✓ Updated database stats for player join: ${player.name}")
-
         } catch (ex: Exception) {
             plugin.logger.severe("[GameJoinManager] ❌ Error updating database on join for ${player.name}: ${ex.message}")
             ex.printStackTrace()
         }
     }
 
-    // =================== SPAWN VALIDATION ===================
-
-    /**
-     * Validates that the spawn area is within game boundaries.
-     */
     private fun validateSpawnArea(player: Player, instance: GameInstance, spawnArea: org.bukkit.Location): Boolean {
-        // Check if world is null
         if (spawnArea.world == null) {
             plugin.logger.severe("[GameJoinManager] ✗ ERROR: Spawn area world is NULL!")
-            player.sendMessage("${ChatColor.RED}Error: Invalid spawn location (world is null)")
+            player.sendMessage(MSG.lang("game.join.error_spawn_null"))
             return false
         }
-
-        // Check if spawn area is in correct world
         if (spawnArea.world != instance.arenaInstance.world) {
             plugin.logger.severe("[GameJoinManager] ✗ ERROR: Spawn area world mismatch!")
             plugin.logger.severe("[GameJoinManager]   Expected: ${instance.arenaInstance.world.name}")
             plugin.logger.severe("[GameJoinManager]   Got: ${spawnArea.world?.name}")
-            player.sendMessage("${ChatColor.RED}Error: Spawn location world mismatch")
+            player.sendMessage(MSG.lang("game.join.error_spawn_mismatch"))
             return false
         }
 
-        // Check if spawn area is within game boundaries
         val origin = instance.arenaInstance.origin
         val buildRange = instance.arenaInstance.config.getBuildRange()
         val buildHeight = instance.arenaInstance.config.getBuildHeight()
@@ -258,18 +187,12 @@ class GameJoinManager(
             plugin.logger.severe("[GameJoinManager]   Spawn: x=${spawnArea.x}, y=${spawnArea.y}, z=${spawnArea.z}")
             plugin.logger.severe("[GameJoinManager]   Origin: x=${origin.x}, y=${origin.y}, z=${origin.z}")
             plugin.logger.severe("[GameJoinManager]   BuildRange: $buildRange, BuildHeight: $buildHeight")
-            player.sendMessage("${ChatColor.RED}Error: Spawn area outside game boundaries!")
+            player.sendMessage(MSG.lang("game.join.error_spawn_boundary"))
             return false
         }
-
         return true
     }
 
-    // =================== DEBUG LOGGING ===================
-
-    /**
-     * Logs detailed teleport debug information.
-     */
     private fun logTeleportDebug(player: Player, instance: GameInstance, spawnArea: org.bukkit.Location) {
         debugLog("===== TELEPORT DEBUG INFO =====")
         debugLog("Player: ${player.name}")
@@ -292,9 +215,6 @@ class GameJoinManager(
         debugLog("===============================")
     }
 
-    /**
-     * Schedules a debug log of player location after 5 seconds.
-     */
     private fun scheduleLocationDebugLog(player: Player) {
         plugin.server.scheduler.runTaskLater(plugin, Runnable {
             val refreshedPlayer = plugin.server.getPlayer(player.uniqueId)
@@ -307,37 +227,22 @@ class GameJoinManager(
             } else {
                 debugLog("[5sec later] Player ${player.name} is offline or null")
             }
-        }, 100L) // 100 ticks = 5 seconds
+        }, 100L)
     }
 
-    // =================== UTILITY METHODS ===================
-
-    /**
-     * Broadcasts a message to all players in a game instance.
-     */
     private fun broadcastToGame(instance: GameInstance, message: String) {
         val players = getPlayersInGame(instance)
         debugLog("Broadcasting to ${players.size} players: $message")
-        players.forEach { player ->
-            player.sendMessage(message)
-        }
+        players.forEach { it.sendMessage(message) }
     }
 
-    /**
-     * Gets all online players in a game instance.
-     */
     private fun getPlayersInGame(instance: GameInstance): List<Player> {
         return instance.players.mapNotNull { playerId ->
             plugin.server.getPlayer(playerId)?.takeIf { it.isOnline }
         }
     }
 
-    /**
-     * Logs debug message if debug mode is enabled.
-     */
     private fun debugLog(message: String) {
-        if (plugin.configManager.debugMode) {
-            plugin.logger.info("[GameJoinManager] $message")
-        }
+        if (plugin.configManager.debugMode) plugin.logger.info("[GameJoinManager] $message")
     }
 }

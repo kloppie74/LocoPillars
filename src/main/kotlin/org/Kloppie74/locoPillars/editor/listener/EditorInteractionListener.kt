@@ -101,8 +101,8 @@ class EditorInteractionListener(
         val mapName = adminEditorManager.getState(player)?.activeMapName
         if (mapName == null) {
             val reports = fileValidator.validateAll()
-            player.sendMessage(MSG.chatColors("&6=== Validation Report — All Maps (${reports.size}) ==="))
-            if (reports.isEmpty()) { player.sendMessage(MSG.chatColors("&7No maps found.")); return }
+            player.sendMessage(MSG.lang("editor.validate.header_all_hotbar", "count" to reports.size.toString()))
+            if (reports.isEmpty()) { player.sendMessage(MSG.lang("editor.validate.no_maps")); return }
             reports.values.forEach { r -> player.sendMessage(MSG.chatColors(r.summary())) }
         } else {
             sendValidationReport(player, fileValidator.validate(mapName))
@@ -118,7 +118,7 @@ class EditorInteractionListener(
         event.isCancelled = true
 
         val mapName = adminEditorManager.getState(player)?.activeMapName ?: run {
-            player.sendMessage(MSG.chatColors("&cNo active map! Use &e/editor map <name> &cfirst."))
+            player.sendMessage(MSG.lang("editor.spawn.no_active_map"))
             return
         }
 
@@ -126,16 +126,13 @@ class EditorInteractionListener(
         val maxTeams  = session?.getMaxTeams()       ?: 8
         val perTeam   = session?.getPlayersPerTeam() ?: 1
 
-        // Shift + right → cycle team, reset slot
         if (player.isSneaking) {
             val current = spawnSetterTeam.getOrDefault(player.uniqueId, 1)
             val next    = if (current >= maxTeams) 1 else current + 1
             spawnSetterTeam[player.uniqueId] = next
             spawnSetterSlot[player.uniqueId] = 1
-            player.sendMessage(MSG.chatColors(
-                "&eSpawn Setter &8→ &bTeam$next &8/ &bPlayer1"))
-            player.sendMessage(MSG.chatColors(
-                "&8($maxTeams teams × $perTeam per team)  Right-click a block to place."))
+            player.sendMessage(MSG.lang("editor.spawn_setter.cycled_team", "team" to next.toString()))
+            player.sendMessage(MSG.lang("editor.spawn_setter.cycled_team_info", "max_teams" to maxTeams.toString(), "per_team" to perTeam.toString()))
             return
         }
 
@@ -152,31 +149,29 @@ class EditorInteractionListener(
         }
 
         if (!spawnPointEditor.setSpawnPoint(mapName, teamKey, playerKey, location)) {
-            player.sendMessage(MSG.chatColors("&c✗ Failed to save spawn point. Check console."))
+            player.sendMessage(MSG.lang("editor.spawn_setter.place_failed"))
             return
         }
 
-        player.sendMessage(MSG.chatColors(
-            "&a✓ &e$teamKey&7/&e$playerKey &7@ &b(${location.blockX}, ${location.blockY}, ${location.blockZ})"))
+        player.sendMessage(MSG.lang("editor.spawn_setter.placed",
+            "team" to teamKey, "slot" to playerKey,
+            "x" to location.blockX.toString(), "y" to location.blockY.toString(), "z" to location.blockZ.toString()))
 
-        // Auto-advance slot → team → done
         val nextSlot = slotNum + 1
         if (nextSlot > perTeam) {
             val nextTeam = teamNum + 1
             if (nextTeam > maxTeams) {
                 spawnSetterTeam[player.uniqueId] = 1
                 spawnSetterSlot[player.uniqueId] = 1
-                player.sendMessage(MSG.chatColors("&a&l✦ All spawn points placed! &8($maxTeams × $perTeam)"))
+                player.sendMessage(MSG.lang("editor.spawn_setter.all_done", "teams" to maxTeams.toString(), "per_team" to perTeam.toString()))
             } else {
                 spawnSetterTeam[player.uniqueId] = nextTeam
                 spawnSetterSlot[player.uniqueId] = 1
-                player.sendMessage(MSG.chatColors(
-                    "&7Team $teamNum done! Next &8→ &eTeam$nextTeam/Player1 &8(Shift+click to skip)"))
+                player.sendMessage(MSG.lang("editor.spawn_setter.team_done", "team" to teamNum.toString(), "next_team" to nextTeam.toString()))
             }
         } else {
             spawnSetterSlot[player.uniqueId] = nextSlot
-            player.sendMessage(MSG.chatColors(
-                "&7Next &8→ &e$teamKey/Player$nextSlot &8| Shift+click to switch team"))
+            player.sendMessage(MSG.lang("editor.spawn_setter.next_slot", "team" to teamKey, "slot" to nextSlot.toString()))
         }
     }
 
@@ -188,70 +183,62 @@ class EditorInteractionListener(
         event.isCancelled = true
 
         val mapName = adminEditorManager.getState(player)?.activeMapName ?: run {
-            player.sendMessage(MSG.chatColors("&cNo active map! Use &e/editor map <name> &cfirst."))
+            player.sendMessage(MSG.lang("editor.lobby.no_active_map_short"))
             return
         }
 
         val block = event.clickedBlock
 
         when {
-            // Shift + left → clear lobby area
             player.isSneaking && isLeftClick(event) -> {
                 lobbyAreaLoc1.remove(player.uniqueId)
                 if (lobbyLocationEditor.clearLobbyArea(mapName))
-                    player.sendMessage(MSG.chatColors("&eSpawn-Area cleared for &f$mapName&e."))
+                    player.sendMessage(MSG.lang("editor.lobby.area_cleared", "name" to mapName))
                 else
-                    player.sendMessage(MSG.chatColors("&c✗ Failed to clear Spawn-Area."))
+                    player.sendMessage(MSG.lang("editor.lobby.area_clear_failed"))
             }
 
-            // Shift + right + block → Loc2
             player.isSneaking && event.action == Action.RIGHT_CLICK_BLOCK && block != null -> {
                 val loc1 = lobbyAreaLoc1[player.uniqueId] ?: run {
-                    player.sendMessage(MSG.chatColors("&cSet Loc1 first: &eleft-click &ca block."))
+                    player.sendMessage(MSG.lang("editor.lobby.loc1_required"))
                     return
                 }
                 val loc2 = block.location
                 if (lobbyLocationEditor.setLobbyArea(mapName, loc1, loc2)) {
                     lobbyAreaLoc1.remove(player.uniqueId)
-                    player.sendMessage(MSG.chatColors("&a✓ Spawn-Area saved:"))
-                    player.sendMessage(MSG.chatColors(
-                        "  &7Loc1 &8→ &b(${loc1.blockX}, ${loc1.blockY}, ${loc1.blockZ})"))
-                    player.sendMessage(MSG.chatColors(
-                        "  &7Loc2 &8→ &b(${loc2.blockX}, ${loc2.blockY}, ${loc2.blockZ})"))
+                    player.sendMessage(MSG.lang("editor.lobby.area_saved_short"))
+                    player.sendMessage(MSG.lang("editor.lobby.area_loc1", "x" to loc1.blockX.toString(), "y" to loc1.blockY.toString(), "z" to loc1.blockZ.toString()))
+                    player.sendMessage(MSG.lang("editor.lobby.area_loc2", "x" to loc2.blockX.toString(), "y" to loc2.blockY.toString(), "z" to loc2.blockZ.toString()))
                 } else {
-                    player.sendMessage(MSG.chatColors("&c✗ Failed to save Spawn-Area."))
+                    player.sendMessage(MSG.lang("editor.lobby.area_save_failed"))
                 }
             }
 
-            // Right + block (no sneak) → set lobby SpawnPoint
             !player.isSneaking && event.action == Action.RIGHT_CLICK_BLOCK && block != null -> {
                 val loc = block.location.add(0.5, 1.0, 0.5).also {
                     it.yaw   = player.location.yaw
                     it.pitch = player.location.pitch
                 }
                 if (lobbyLocationEditor.setLobbySpawn(mapName, loc))
-                    player.sendMessage(MSG.chatColors(
-                        "&a✓ Lobby SpawnPoint &8→ &b(${loc.blockX}, ${loc.blockY}, ${loc.blockZ}) " +
-                                "&7yaw:&f${"%.1f".format(loc.yaw)}"))
+                    player.sendMessage(MSG.lang("editor.lobby.spawn_set_short",
+                        "x" to loc.blockX.toString(), "y" to loc.blockY.toString(),
+                        "z" to loc.blockZ.toString(), "yaw" to "%.1f".format(loc.yaw)))
                 else
-                    player.sendMessage(MSG.chatColors("&c✗ Failed to save SpawnPoint."))
+                    player.sendMessage(MSG.lang("editor.lobby.spawn_set_short_failed"))
             }
 
-            // Left + block (no sneak) → set Loc1
             !player.isSneaking && event.action == Action.LEFT_CLICK_BLOCK && block != null -> {
                 lobbyAreaLoc1[player.uniqueId] = block.location
-                player.sendMessage(MSG.chatColors(
-                    "&aSpawn-Area Loc1 &8→ &b(${block.x.toInt()}, ${block.y.toInt()}, ${block.z.toInt()})"))
-                player.sendMessage(MSG.chatColors(
-                    "&7Now &eShift + right-click &7another block to set Loc2."))
+                player.sendMessage(MSG.lang("editor.lobby.loc1_set",
+                    "x" to block.x.toInt().toString(), "y" to block.y.toInt().toString(), "z" to block.z.toInt().toString()))
+                player.sendMessage(MSG.lang("editor.lobby.loc1_hint"))
             }
 
-            // Right-click air → show status
             !player.isSneaking && event.action == Action.RIGHT_CLICK_AIR -> {
                 lobbyLocationEditor.showLobbyStatus(player, mapName)
                 lobbyAreaLoc1[player.uniqueId]?.let { pending ->
-                    player.sendMessage(MSG.chatColors(
-                        "&7Pending Loc1: &b(${pending.blockX}, ${pending.blockY}, ${pending.blockZ})"))
+                    player.sendMessage(MSG.lang("editor.lobby.pending_loc1",
+                        "x" to pending.blockX.toString(), "y" to pending.blockY.toString(), "z" to pending.blockZ.toString()))
                 }
             }
         }
@@ -266,7 +253,7 @@ class EditorInteractionListener(
         event.isCancelled = true
 
         if (!editorSessionManager.hasSession(player)) {
-            player.sendMessage(MSG.chatColors("&cStart a session first: &e/editor edit"))
+            player.sendMessage(MSG.lang("editor.settings.no_session_short"))
             return
         }
         org.bukkit.Bukkit.getScheduler().runTask(plugin, Runnable { editorSettingsGui.open(player) })
@@ -281,10 +268,10 @@ class EditorInteractionListener(
         event.isCancelled = true
 
         if (!editorSessionManager.hasSession(player)) {
-            player.sendMessage(MSG.chatColors("&cNo active session to save!"))
+            player.sendMessage(MSG.lang("editor.session.no_session_save"))
             return
         }
-        player.sendMessage(MSG.chatColors("&eSaving... please wait."))
+        player.sendMessage(MSG.lang("editor.session.saving"))
         editorSessionManager.saveAndEndSession(player)
         adminEditorManager.disable(player)
     }
@@ -298,7 +285,7 @@ class EditorInteractionListener(
         event.isCancelled = true
 
         if (!editorSessionManager.hasSession(player)) {
-            player.sendMessage(MSG.chatColors("&cNo active session to cancel!"))
+            player.sendMessage(MSG.lang("editor.session.no_session_cancel"))
             return
         }
         editorSessionManager.cancelSession(player)
@@ -312,7 +299,7 @@ class EditorInteractionListener(
     private fun handleHolograms(event: PlayerInteractEvent, player: Player) {
         event.isCancelled = true
         val session = editorSessionManager.getSession(player) ?: run {
-            player.sendMessage(MSG.chatColors("&cNo active session!"))
+            player.sendMessage(MSG.lang("editor.session.no_session_info"))
             return
         }
 
@@ -333,7 +320,7 @@ class EditorInteractionListener(
 
         val session = editorSessionManager.getSession(player)
         if (session == null) {
-            player.sendMessage(MSG.chatColors("&cNo active session!"))
+            player.sendMessage(MSG.lang("editor.session.no_session_info"))
             return
         }
         session.showInfo()
@@ -351,9 +338,9 @@ class EditorInteractionListener(
         hotbarManager.removeEditorHotbar(player, state.hotbarSlotSnapshot)
         state.hotbarEnabled = false
 
-        player.sendMessage(MSG.chatColors("&6✦ &eEditor hotbar hidden — original items restored."))
-        player.sendMessage(MSG.chatColors("&8› Use &e/editor hotbar on &8to get editor tools back."))
-        player.sendMessage(MSG.chatColors("&8› Use &c/editor toggle &8to fully exit edit mode."))
+        player.sendMessage(MSG.lang("editor.hotbar_switch.hidden"))
+        player.sendMessage(MSG.lang("editor.hotbar_switch.restore_hint"))
+        player.sendMessage(MSG.lang("editor.hotbar_switch.exit_hint"))
     }
 
     // -------------------------------------------------------------------------
@@ -365,7 +352,7 @@ class EditorInteractionListener(
         if (!adminEditorManager.isActive(event.player)) return
         if (hotbarManager.isEditorItem(event.itemDrop.itemStack)) {
             event.isCancelled = true
-            event.player.sendActionBar(MSG.chatColors("&cEditor tools cannot be dropped!"))
+            event.player.sendActionBar(MSG.lang("editor.hotbar_protection.cannot_drop"))
         }
     }
 
@@ -379,7 +366,7 @@ class EditorInteractionListener(
         val cursor  = event.cursor
         if (hotbarManager.isEditorItem(clicked) || hotbarManager.isEditorItem(cursor)) {
             event.isCancelled = true
-            player.sendActionBar(MSG.chatColors("&cEditor tools cannot be moved!"))
+            player.sendActionBar(MSG.lang("editor.hotbar_protection.cannot_move"))
         }
     }
 
@@ -423,16 +410,16 @@ class EditorInteractionListener(
         event.action == Action.LEFT_CLICK_BLOCK || event.action == Action.LEFT_CLICK_AIR
 
     private fun sendValidationReport(player: Player, report: EditorFileValidator.ValidationReport) {
-        player.sendMessage(MSG.chatColors("&6=== Validation: ${report.mapName} ==="))
+        player.sendMessage(MSG.lang("editor.validate.header_single", "name" to report.mapName))
         if (report.isValid) {
-            player.sendMessage(MSG.chatColors("&a✓ Map is valid"))
+            player.sendMessage(MSG.lang("editor.validate.valid"))
         } else {
-            player.sendMessage(MSG.chatColors("&c✗ Errors (${report.errors.size}):"))
-            report.errors.forEach { player.sendMessage(MSG.chatColors("  &c- $it")) }
+            player.sendMessage(MSG.lang("editor.validate.errors_header", "count" to report.errors.size.toString()))
+            report.errors.forEach { player.sendMessage(MSG.lang("editor.validate.error_entry", "error" to it)) }
         }
         if (report.warnings.isNotEmpty()) {
-            player.sendMessage(MSG.chatColors("&eWarnings (${report.warnings.size}):"))
-            report.warnings.forEach { player.sendMessage(MSG.chatColors("  &e- $it")) }
+            player.sendMessage(MSG.lang("editor.validate.warnings_header", "count" to report.warnings.size.toString()))
+            report.warnings.forEach { player.sendMessage(MSG.lang("editor.validate.warning_entry", "warning" to it)) }
         }
         if (plugin.configManager.debugMode && report.info.isNotEmpty()) {
             report.info.forEach { player.sendMessage(MSG.chatColors("  &7- $it")) }

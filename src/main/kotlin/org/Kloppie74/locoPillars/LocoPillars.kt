@@ -26,6 +26,7 @@ import org.Kloppie74.locoPillars.commands.StatsCommand
 import org.Kloppie74.locoPillars.game.manager.SpawnAreaManager
 import org.Kloppie74.locoPillars.game.listeners.GameListener
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.LanguageManager
 import org.Kloppie74.locoPillars.database.DatabaseManager
 import org.Kloppie74.locoPillars.events.listeners.PlayerJoinListener
 import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlockEngineIntegration
@@ -70,6 +71,8 @@ class LocoPillars : JavaPlugin() {
 
     val playerIdCache = mutableMapOf<UUID, String>()
 
+    lateinit var languageManager: LanguageManager
+        private set
     lateinit var configManager: ConfigManager
         private set
     lateinit var gameManager: GameManager
@@ -140,6 +143,7 @@ class LocoPillars : JavaPlugin() {
 
     override fun onEnable() {
         instance = this
+        languageManager = LanguageManager(this)
 
         logger.info("[LocoPillars] ==========================================")
         logger.info("[LocoPillars] PILLARS OF FORTUNE - Starting Up...")

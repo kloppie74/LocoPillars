@@ -6,6 +6,7 @@ import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.Bukkit
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.database.dao.*
+import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.database.models.VanishState
 import java.time.LocalDateTime
 
@@ -146,9 +147,8 @@ class PlayerJoinListener(private val plugin: LocoPillars) : Listener {
             logger.severe("[JoinListener] Error: ${ex.message}")
             ex.printStackTrace()
 
-            // Optional: Send error message to player
-            player.sendMessage("§c[LocoPillars] An error occurred while setting up your profile.")
-            player.sendMessage("§c[LocoPillars] Please contact an administrator if this persists.")
+            player.sendMessage(MSG.lang("player_join.setup_error"))
+            player.sendMessage(MSG.lang("player_join.setup_error_contact"))
         }
     }
 }
