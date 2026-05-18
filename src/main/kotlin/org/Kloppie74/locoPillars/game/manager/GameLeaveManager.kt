@@ -10,6 +10,8 @@ import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.database.dao.ArenaStatsDAO
 import org.Kloppie74.locoPillars.utils.MSG
+import org.Kloppie74.locoPillars.game.rewards.RewardProcessor
+import org.bukkit.configuration.file.YamlConfiguration
 import java.time.LocalDateTime
 import java.util.*
 
@@ -56,6 +58,11 @@ class GameLeaveManager(
             "current" to instance.players.size.toString(),
             "max" to instance.getMaxPlayers().toString()))
         player.sendMessage(MSG.lang("game.leave.success"))
+
+        val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
+            .getConfigurationSection("Rewards")
+        val remainingPlayers = instance.players.mapNotNull { plugin.server.getPlayer(it) }
+        RewardProcessor.processLeaveRewards(plugin, player, remainingPlayers, rewardsSection)
 
         handleGameStateAfterLeave(instance, gameplayManager)
         return true

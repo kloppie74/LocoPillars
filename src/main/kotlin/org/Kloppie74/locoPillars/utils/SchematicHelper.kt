@@ -89,6 +89,7 @@ object SchematicHelper {
             val max = BlockVector3.at(pos2.blockX, pos2.blockY, pos2.blockZ)
             val region = CuboidRegion(min, max)
             val clipboard = BlockArrayClipboard(region)
+            clipboard.origin = region.minimumPoint
 
             WorldEdit.getInstance().newEditSession(weWorld).use { editSession ->
                 val copyOperation = ForwardExtentCopy(

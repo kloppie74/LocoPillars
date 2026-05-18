@@ -160,7 +160,22 @@ class GameFileService(
             warnings += "maps/$mapName/settings.yml not found — skipped Data/Games copy"
         }
 
-        if (schemSrc.exists()) {
+        // Mirror schematics/ subfolder (multi-schem) → Data/Schems/<mapName>/
+        val schemsSubfolder = File(mapFolder, "schematics")
+        if (schemsSubfolder.exists() && schemsSubfolder.isDirectory) {
+            val destFolder = File(schemsFolder, mapName)
+            destFolder.mkdirs()
+            schemsSubfolder.listFiles { f -> f.extension == "schem" }?.forEach { src ->
+                try {
+                    src.copyTo(File(destFolder, src.name), overwrite = true)
+                    schemCopied = true
+                    debugLog("Setup: copied schematics/${src.name} → Data/Schems/$mapName/${src.name}")
+                } catch (e: Exception) {
+                    warnings += "Could not copy schematics/${src.name}: ${e.message}"
+                }
+            }
+        } else if (schemSrc.exists()) {
+            // Fallback: legacy single region.schem
             try {
                 schemSrc.copyTo(schemDest, overwrite = true)
                 schemCopied = true
@@ -169,7 +184,7 @@ class GameFileService(
                 warnings += "Could not copy region.schem to Data/Schems: ${e.message}"
             }
         } else {
-            warnings += "maps/$mapName/region.schem not found — Data/Schems copy skipped"
+            warnings += "maps/$mapName: no schematics/ folder and no region.schem — Data/Schems copy skipped"
         }
 
         return SingleMapSetupResult(
@@ -272,12 +287,24 @@ class GameFileService(
                 val targetConfig = File(gamesFolder, "$mapName.yml")
                 if (!targetConfig.exists()) { settings.copyTo(targetConfig, overwrite = false); mirrored++ }
             }
-            val region = File(mapFolder, "region.schem")
-            if (region.exists()) {
-                val targetSchem = File(schemsFolder, "$mapName.schem")
-                if (!targetSchem.exists()) { region.copyTo(targetSchem, overwrite = false); mirrored++ }
-            } else if (settings.exists()) {
-                warnings += "Map '$mapName' has settings.yml but no region.schem."
+            val schemsSubfolder = File(mapFolder, "schematics")
+            if (schemsSubfolder.exists() && schemsSubfolder.isDirectory) {
+                val destFolder = File(schemsFolder, mapName)
+                if (!destFolder.exists()) {
+                    destFolder.mkdirs()
+                    schemsSubfolder.listFiles { f -> f.extension == "schem" }?.forEach { src ->
+                        src.copyTo(File(destFolder, src.name), overwrite = false)
+                    }
+                    mirrored++
+                }
+            } else {
+                val region = File(mapFolder, "region.schem")
+                if (region.exists()) {
+                    val targetSchem = File(schemsFolder, "$mapName.schem")
+                    if (!targetSchem.exists()) { region.copyTo(targetSchem, overwrite = false); mirrored++ }
+                } else if (settings.exists()) {
+                    warnings += "Map '$mapName' has settings.yml but no region.schem."
+                }
             }
         }
         return mirrored

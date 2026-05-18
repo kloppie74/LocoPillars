@@ -24,6 +24,8 @@ import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.game.instance.GameInstance
+import org.Kloppie74.locoPillars.game.rewards.RewardProcessor
+import org.bukkit.configuration.file.YamlConfiguration
 import java.time.LocalDateTime
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -261,6 +263,11 @@ class GameListener(private val plugin: LocoPillars) : Listener {
                 }
             }
         }
+
+        val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
+            .getConfigurationSection("Rewards")
+        val remainingPlayers = instance.players.mapNotNull { plugin.server.getPlayer(it) }
+        RewardProcessor.processKillRewards(plugin, attacker, victim, remainingPlayers, rewardsSection)
     }
 
     // =================== PLAYER JOIN/QUIT ===================

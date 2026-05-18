@@ -22,6 +22,8 @@ import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.database.dao.ArenaStatsDAO
+import org.Kloppie74.locoPillars.game.rewards.RewardProcessor
+import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
 import java.util.*
 import kotlin.collections.HashMap
@@ -195,6 +197,11 @@ class GameplayManager(
         timerEvent.startGameTimer(instance, gameTimer)
         updateGameStartStats(instance)
         markGameStart(instance)
+
+        val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
+            .getConfigurationSection("Rewards")
+        RewardProcessor.processStartRewards(plugin, playersInGame(instance), rewardsSection)
+
         debugLog("Game ${instance.id} started successfully")
     }
 
@@ -564,6 +571,11 @@ class GameplayManager(
                 spectateListener?.refreshPlayer(player)
             }
         }
+
+        val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
+            .getConfigurationSection("Rewards")
+        val spectators = instance.players.mapNotNull { Bukkit.getPlayer(it) }.filter { it !in winners }
+        RewardProcessor.processEndRewards(plugin, winners, spectators, rewardsSection)
 
         val spectateListener = plugin.spectateListener
         instance.players.forEach { uuid ->

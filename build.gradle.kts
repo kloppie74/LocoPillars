@@ -15,6 +15,7 @@ repositories {
     maven("https://oss.sonatype.org/content/repositories/releases/")
     maven("https://repo.codemc.io/repository/maven-public/")
     maven("https://maven.enginehub.org/repo/")
+    maven("https://intellectualsites.github.io/download/snapshots/")
 }
 
 configurations.all {
@@ -38,6 +39,13 @@ dependencies {
         exclude(group = "org.apache.logging.log4j")
     }
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.10") {
+        exclude(group = "org.apache.logging.log4j")
+    }
+    // FastAsyncWorldEdit — compileOnly so SchematicHelper can detect FAWE at runtime
+    compileOnly("com.intellectualsites.fastasyncworldedit:fastasyncworldedit-core:2.12.4") {
+        exclude(group = "org.apache.logging.log4j")
+    }
+    compileOnly("com.intellectualsites.fastasyncworldedit:fastasyncworldedit-bukkit:2.12.4") {
         exclude(group = "org.apache.logging.log4j")
     }
     compileOnly("com.sk89q.worldguard:worldguard-core:7.0.12") {

@@ -1,5 +1,6 @@
 package org.Kloppie74.locoPillars.utils.teams
 
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.scoreboard.Scoreboard
@@ -45,8 +46,8 @@ class TeamManager(private val plugin: LocoPillars) {
                 val scoreboard = getPlayerScoreboard(viewer)
                 val teamName = generateTeamName(TAB_TEAM_PREFIX, targetPlayer.name)
                 val team = getOrCreateTeam(scoreboard, teamName)
-                team.prefix = prefix
-                team.suffix = suffix
+                team.prefix(LegacyComponentSerializer.legacySection().deserialize(prefix))
+                team.suffix(LegacyComponentSerializer.legacySection().deserialize(suffix))
                 if (!team.hasEntry(targetPlayer.name)) team.addEntry(targetPlayer.name)
                 trackTeam(viewer.uniqueId, teamName)
                 debugLog("Applied tab team for ${targetPlayer.name} to ${viewer.name}'s scoreboard")
@@ -64,8 +65,8 @@ class TeamManager(private val plugin: LocoPillars) {
         // FIXED: Use UNIQUE team name that doesn't conflict with tab teams!
         val teamName = generateTeamName(SIDEBAR_TEAM_PREFIX, "${player.name}_${slotId}")
         val team = getOrCreateTeam(scoreboard, teamName)
-        team.prefix = prefix
-        team.suffix = suffix
+        team.prefix(LegacyComponentSerializer.legacySection().deserialize(prefix))
+        team.suffix(LegacyComponentSerializer.legacySection().deserialize(suffix))
         if (!team.hasEntry(entry)) {
             team.addEntry(entry)
         }

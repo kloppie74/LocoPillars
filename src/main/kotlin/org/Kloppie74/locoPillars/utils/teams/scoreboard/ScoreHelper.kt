@@ -1,8 +1,10 @@
 package org.Kloppie74.locoPillars.utils.teams.scoreboard
 
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
 import org.bukkit.entity.Player
+import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
 import org.bukkit.scoreboard.Objective
 import org.bukkit.scoreboard.Scoreboard
@@ -78,7 +80,7 @@ class ScoreHelper private constructor(private val player: Player) {
         val safeTitle = title ?: ""
         if (safeTitle == currentTitle) return
         try {
-            sidebar.displayName = safeTitle.take(128)
+            sidebar.displayName(LegacyComponentSerializer.legacySection().deserialize(safeTitle.take(128)))
             currentTitle = safeTitle
             debugLog("Set title for ${player.name}: '$safeTitle'")
         } catch (e: Exception) {
@@ -180,13 +182,13 @@ class ScoreHelper private constructor(private val player: Player) {
             try { it.unregister() } catch (_: Exception) {}
         }
         val obj = try {
-            scoreboard.registerNewObjective(objName, "dummy", "Scoreboard")
+            scoreboard.registerNewObjective(
+                objName,
+                Criteria.DUMMY,
+                LegacyComponentSerializer.legacySection().deserialize("Scoreboard")
+            )
         } catch (e: Exception) {
-            try {
-                scoreboard.registerNewObjective(objName, "dummy")
-            } catch (e2: Exception) {
-                throw RuntimeException("Failed to create sidebar objective for ${player.name}: ${e2.message}")
-            }
+            throw RuntimeException("Failed to create sidebar objective for ${player.name}: ${e.message}")
         }
         debugLog("Created sidebar objective '$objName' for ${player.name}")
         return obj

@@ -171,12 +171,33 @@ class EditorSessionManager(
             SchematicHelper.saveSchematic(plugin, plugin.configManager, loc1, loc2, schemFile)
         }
 
-    private fun isFaweAvailable(): Boolean =
-        Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
+    private fun isFaweAvailable(): Boolean {
+        val provider = plugin.configManager.worldEditProvider
+        val faweInstalled = Bukkit.getPluginManager().getPlugin("FastAsyncWorldEdit") != null
+        return when (provider) {
+            "FAWE"       -> faweInstalled
+            "WORLDEDIT"  -> false
+            else         -> faweInstalled // AUTO
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Save / Cancel / End (ongewijzigd)
     // -------------------------------------------------------------------------
+
+    /**
+     * Save a schematic from the current session's save region to an arbitrary file.
+     * Callback is invoked on the main thread with the success boolean.
+     */
+    fun saveSchematicToFile(player: Player, loc1: org.bukkit.Location, loc2: org.bukkit.Location, schemFile: java.io.File, callback: (Boolean) -> Unit) {
+        schemFile.parentFile?.mkdirs()
+        saveSchematicAsync(loc1, loc2, schemFile)
+            .exceptionally { ex ->
+                plugin.logger.severe("[EditorSessionManager] Failed to save schematic to ${schemFile.name}: ${ex.message}")
+                false
+            }
+            .whenComplete { success, _ -> runOnMain { callback(success ?: false) } }
+    }
 
     fun saveAndEndSession(player: Player): Boolean {
         val session = activeSessions[player.uniqueId] ?: run {

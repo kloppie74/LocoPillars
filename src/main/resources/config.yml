@@ -54,6 +54,12 @@ database:
   cache-size: 1000
   cache-expiration-minutes: 30
 
+# WorldEdit / FAWE provider settings
+worldedit:
+  # Which WorldEdit implementation to use for schematic operations.
+  # Options: AUTO (use FAWE if installed, otherwise WorldEdit), WORLDEDIT, FAWE
+  provider: AUTO
+
 # Performance related settings
 performance:
   # Maximum number of schematics that can be pasted simultaneously

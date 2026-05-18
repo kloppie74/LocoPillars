@@ -33,7 +33,7 @@ class LanguageManager(private val plugin: LocoPillars) {
         }
         var result = raw
         for ((name, value) in placeholders) {
-            result = result.replace("{$name}", value)
+            result = result?.replace("{$name}", value)
         }
         return MSG.chatColors(result)
     }

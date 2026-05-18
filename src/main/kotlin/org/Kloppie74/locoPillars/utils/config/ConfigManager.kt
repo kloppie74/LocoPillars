@@ -24,6 +24,8 @@ class ConfigManager(private val plugin: JavaPlugin) {
         private set
     var enableProgressBar: Boolean = true
         private set
+    var worldEditProvider: String = "AUTO"
+        private set
     var autoSave: Boolean = true
         private set
     var autoSaveInterval: Long = 6000L // 5 minutes in ticks
@@ -137,6 +139,7 @@ class ConfigManager(private val plugin: JavaPlugin) {
         instanceDistance = config.getInt("game.instance-distance", 1000)
         maxConcurrentSchemPastes = config.getInt("performance.max-concurrent-schem-pastes", 5)
         schemPasteTimeout = config.getLong("performance.schem-paste-timeout", 30000L)
+        worldEditProvider = config.getString("worldedit.provider", "AUTO")?.uppercase() ?: "AUTO"
         enableProgressBar = config.getBoolean("ui.enable-progress-bar", true)
         autoSave = config.getBoolean("world.auto-save", true)
         autoSaveInterval = config.getLong("world.auto-save-interval", 6000L)

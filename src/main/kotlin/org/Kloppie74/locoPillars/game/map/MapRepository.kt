@@ -245,10 +245,39 @@ class MapRepository(
     }
     
     /**
-     * Get the schematic file for a map
+     * Get the primary schematic file for a map (legacy region.schem, used for single-schem saves).
      */
     fun getMapSchematicFile(mapName: String): File {
         return File(mapsFolder, "$mapName/region.schem")
+    }
+
+    /**
+     * Get the schematics subfolder for a map (multi-schematic support).
+     */
+    fun getMapSchematicsFolder(mapName: String): File {
+        return File(mapsFolder, "$mapName/schematics")
+    }
+
+    /**
+     * Get a numbered schematic file inside the schematics/ subfolder.
+     */
+    fun getMapSchematicFile(mapName: String, id: Int): File {
+        return File(getMapSchematicsFolder(mapName), "$id.schem")
+    }
+
+    /**
+     * List all numbered schematics for a map (from the schematics/ subfolder).
+     * Falls back to [region.schem] if no schematics/ folder exists.
+     */
+    fun getMapSchematicFiles(mapName: String): List<File> {
+        val schemsFolder = getMapSchematicsFolder(mapName)
+        if (schemsFolder.exists() && schemsFolder.isDirectory) {
+            val files = schemsFolder.listFiles { f -> f.extension == "schem" && f.nameWithoutExtension.toIntOrNull() != null }
+                ?: emptyArray()
+            if (files.isNotEmpty()) return files.sortedBy { it.nameWithoutExtension.toIntOrNull() ?: 0 }
+        }
+        val legacy = getMapSchematicFile(mapName)
+        return if (legacy.exists()) listOf(legacy) else emptyList()
     }
     
     /**

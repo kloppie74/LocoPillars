@@ -115,7 +115,9 @@ class AdminEditorCommand(
             "validate"  -> handleValidate(sender, args)
             "files"     -> handleFiles(sender, args)
             // Spawn points
-            "spawn"     -> handleSpawn(sender, args)
+            "spawn"      -> handleSpawn(sender, args)
+            "schematic"  -> handleSchematic(sender, args)
+            "rewards"    -> handleRewards(sender, args)
             "enable"    -> handleMapEnable(sender, args)
             "disable"   -> handleMapDisable(sender, args)
             "help", null -> showHelp(sender)
@@ -739,6 +741,157 @@ class AdminEditorCommand(
     }
 
     // -------------------------------------------------------------------------
+    // Schematic (multi-schem support)
+    // -------------------------------------------------------------------------
+
+    private fun handleSchematic(player: Player, args: Array<out String>) {
+        val mapName = args.getOrNull(1) ?: adminEditorManager.getState(player)?.activeMapName ?: run {
+            player.sendMessage(MSG.lang("editor.schematic.usage"))
+            return
+        }
+        if (!mapRepository.mapExists(mapName)) {
+            player.sendMessage(MSG.lang("editor.map_not_found", "name" to mapName)); suggestMaps(player); return
+        }
+        val idArg = args.getOrNull(2)
+        if (idArg == null) {
+            // List existing schematics
+            val files = mapRepository.getMapSchematicFiles(mapName)
+            if (files.isEmpty()) {
+                player.sendMessage(MSG.lang("editor.schematic.none", "name" to mapName))
+            } else {
+                player.sendMessage(MSG.lang("editor.schematic.list_header", "name" to mapName, "count" to files.size.toString()))
+                files.forEach { f -> player.sendMessage(MSG.lang("editor.schematic.list_entry", "file" to f.name)) }
+            }
+            player.sendMessage(MSG.lang("editor.schematic.usage_save"))
+            return
+        }
+        val id = idArg.toIntOrNull()
+        if (id == null || id < 1) {
+            player.sendMessage(MSG.lang("editor.schematic.invalid_id"))
+            return
+        }
+        if (!editorSessionManager.hasSession(player)) {
+            player.sendMessage(MSG.lang("editor.schematic.no_session"))
+            return
+        }
+        val session = editorSessionManager.getSession(player) ?: return
+        val (loc1, loc2) = session.getSaveRegionBounds()
+        val schemsFolder = mapRepository.getMapSchematicsFolder(mapName)
+        schemsFolder.mkdirs()
+        val schemFile = mapRepository.getMapSchematicFile(mapName, id)
+
+        player.sendMessage(MSG.lang("editor.schematic.saving", "id" to id.toString(), "name" to mapName))
+        editorSessionManager.saveSchematicToFile(player, loc1, loc2, schemFile) { success ->
+            if (success) {
+                player.sendMessage(MSG.lang("editor.schematic.saved", "id" to id.toString(), "name" to mapName))
+                val result = gameFileService.runSetupForMap(mapName)
+                if (result.warnings.isNotEmpty()) {
+                    result.warnings.forEach { player.sendMessage(MSG.lang("editor.schematic.sync_warning", "msg" to it)) }
+                }
+            } else {
+                player.sendMessage(MSG.lang("editor.schematic.save_failed", "id" to id.toString()))
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Rewards management in editor
+    // -------------------------------------------------------------------------
+
+    private fun handleRewards(player: Player, args: Array<out String>) {
+        val mapName = args.getOrNull(1) ?: adminEditorManager.getState(player)?.activeMapName ?: run {
+            player.sendMessage(MSG.lang("editor.rewards.usage"))
+            return
+        }
+        if (!mapRepository.mapExists(mapName)) {
+            player.sendMessage(MSG.lang("editor.map_not_found", "name" to mapName)); suggestMaps(player); return
+        }
+        val sub = args.getOrNull(2)?.lowercase()
+        when (sub) {
+            "list", null -> showRewardsList(player, mapName)
+            "add-message" -> {
+                val target = args.getOrNull(3) ?: run { player.sendMessage(MSG.lang("editor.rewards.add_message_usage")); return }
+                val message = args.drop(4).joinToString(" ").ifBlank { run { player.sendMessage(MSG.lang("editor.rewards.add_message_usage")); return } }
+                addRewardEntry(player, mapName, target, "messages", message)
+            }
+            "add-command" -> {
+                val target = args.getOrNull(3) ?: run { player.sendMessage(MSG.lang("editor.rewards.add_command_usage")); return }
+                val command = args.drop(4).joinToString(" ").ifBlank { run { player.sendMessage(MSG.lang("editor.rewards.add_command_usage")); return } }
+                addRewardEntry(player, mapName, target, "commands", command)
+            }
+            "clear" -> {
+                val target = args.getOrNull(3) ?: run { player.sendMessage(MSG.lang("editor.rewards.clear_usage")); return }
+                clearRewardSection(player, mapName, target)
+            }
+            else -> player.sendMessage(MSG.lang("editor.rewards.usage"))
+        }
+    }
+
+    private fun showRewardsList(player: Player, mapName: String) {
+        val settings = mapRepository.loadMapSettings(mapName) ?: run {
+            player.sendMessage(MSG.lang("editor.rewards.load_error")); return
+        }
+        player.sendMessage(MSG.lang("editor.rewards.list_header", "name" to mapName))
+        listOf("OnStartGameRewards", "OnKillRewards", "OnLeaveRewards", "OnEndGameRewards").forEach { section ->
+            val msgs = settings.getStringList("$section.messages")
+            val cmds = settings.getStringList("$section.commands")
+            if (msgs.isNotEmpty() || cmds.isNotEmpty()) {
+                player.sendMessage(MSG.lang("editor.rewards.section_header", "section" to section))
+                msgs.forEach { player.sendMessage(MSG.lang("editor.rewards.message_entry", "msg" to it)) }
+                cmds.forEach { player.sendMessage(MSG.lang("editor.rewards.command_entry", "cmd" to it)) }
+            }
+        }
+    }
+
+    private fun addRewardEntry(player: Player, mapName: String, target: String, type: String, value: String) {
+        val settings = mapRepository.loadMapSettings(mapName) ?: run {
+            player.sendMessage(MSG.lang("editor.rewards.load_error")); return
+        }
+        val path = resolveRewardPath(target, type)
+        if (path == null) {
+            player.sendMessage(MSG.lang("editor.rewards.unknown_target", "target" to target)); return
+        }
+        val list = settings.getStringList(path).toMutableList()
+        list.add(value)
+        settings.set(path, list)
+        settings.set(resolveRewardPath(target, "enabled") ?: return, true)
+        mapRepository.saveMapSettings(mapName, settings)
+        val key = if (type == "messages") "editor.rewards.message_added" else "editor.rewards.command_added"
+        player.sendMessage(MSG.lang(key, "value" to value, "target" to target))
+    }
+
+    private fun clearRewardSection(player: Player, mapName: String, target: String) {
+        val settings = mapRepository.loadMapSettings(mapName) ?: run {
+            player.sendMessage(MSG.lang("editor.rewards.load_error")); return
+        }
+        val basePath = rewardTargetToYamlPath(target)
+        if (basePath == null) {
+            player.sendMessage(MSG.lang("editor.rewards.unknown_target", "target" to target)); return
+        }
+        settings.set("$basePath.messages", emptyList<String>())
+        settings.set("$basePath.commands", emptyList<String>())
+        mapRepository.saveMapSettings(mapName, settings)
+        player.sendMessage(MSG.lang("editor.rewards.cleared", "target" to target))
+    }
+
+    private fun resolveRewardPath(target: String, type: String): String? {
+        val base = rewardTargetToYamlPath(target) ?: return null
+        return "$base.$type"
+    }
+
+    private fun rewardTargetToYamlPath(target: String): String? = when (target.lowercase()) {
+        "start"             -> "OnStartGameRewards"
+        "kill.killer"       -> "OnKillRewards.killed_by_player.killer"
+        "kill.victim"       -> "OnKillRewards.killed_by_player.killed_player"
+        "kill.remaining"    -> "OnKillRewards.killed_by_player.remaining_players"
+        "leave.player"      -> "OnLeaveRewards.left_player"
+        "leave.remaining"   -> "OnLeaveRewards.remaining_players"
+        "end.winner"        -> "OnEndGameRewards.winners"
+        "end.spectator"     -> "OnEndGameRewards.spectators"
+        else                -> null
+    }
+
+    // -------------------------------------------------------------------------
     // Help
     // -------------------------------------------------------------------------
 
@@ -792,7 +945,8 @@ class AdminEditorCommand(
             1 -> listOf(
                 "toggle", "map", "info", "doctor", "hotbar", "holograms", "setup",
                 "create", "edit", "delete", "list", "save", "cancel", "resize", "settings",
-                "lobby", "validate", "files", "spawn", "enable", "disable", "help"
+                "lobby", "validate", "files", "spawn", "schematic", "rewards",
+                "enable", "disable", "help"
             ).filter { it.startsWith(args[0], ignoreCase = true) }
 
             2 -> when (args[0].lowercase()) {
@@ -800,7 +954,7 @@ class AdminEditorCommand(
                     mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
                 "map" -> (mutableListOf("clear") + mapRepository.getAllMapNames())
                     .filter { it.startsWith(args[1], ignoreCase = true) }
-                "validate", "files", "setup", "enable", "disable" ->
+                "validate", "files", "setup", "enable", "disable", "schematic", "rewards" ->
                     mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
                 "hotbar"    -> listOf("on", "off", "toggle", "status").filter { it.startsWith(args[1], ignoreCase = true) }
                 "holograms" -> listOf("on", "off", "refresh", "status").filter { it.startsWith(args[1], ignoreCase = true) }
@@ -822,6 +976,10 @@ class AdminEditorCommand(
                     listOf("clear").filter { it.startsWith(args[2], ignoreCase = true) }
                 args[0].equals("lobby", ignoreCase = true) && args[1].equals("area", ignoreCase = true) ->
                     listOf("set", "clear").filter { it.startsWith(args[2], ignoreCase = true) }
+                args[0].equals("schematic", ignoreCase = true) ->
+                    listOf("1", "2", "3", "4", "5").filter { it.startsWith(args[2]) }
+                args[0].equals("rewards", ignoreCase = true) ->
+                    listOf("list", "add-message", "add-command", "clear").filter { it.startsWith(args[2], ignoreCase = true) }
                 else -> emptyList()
             }
 

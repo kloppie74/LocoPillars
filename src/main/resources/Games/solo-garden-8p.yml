@@ -123,75 +123,52 @@ Events:
       Enabled: true
 Rewards:
   OnStartGameRewards:
-    Enabled: true
-    Rewards:
-    - '[MESSAGE:PLAYER] '
-    - "[MESSAGE:PLAYER] \t\t&6&lMacMC Pillars"
-    - '[MESSAGE:PLAYER] '
-    - '[MESSAGE:PLAYER] &7Teaming is &cnot &7allowed!'
-    - '[MESSAGE:PLAYER] &7Have fun! May the best player win.'
-    - '[MESSAGE:PLAYER] '
-    - "[MESSAGE:PLAYER] \t\t&6Play.MacMC.net"
-    - '[MESSAGE:PLAYER] '
+    enabled: true
+    messages:
+      - ' '
+      - '      &6&lMacMC Pillars'
+      - ' '
+      - '&7Teaming is &cnot &7allowed!'
+      - '&7Have fun! May the best player win.'
+      - ' '
+      - '      &6Play.MacMC.net'
+      - ' '
+    commands: []
   OnKillRewards:
-    Enabled: true
-    Rewards:
-      Killed-By-Player:
-        Enabled: true
-        Rewards:
-          Killed-Player:
-            Enabled: true
-            Rewards:
-            - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &c${death}, &fyou have been eliminated
-              by &c${killer}&f. &aBetter luck next time!'
-          Killer:
-            Enabled: true
-            Rewards:
-            - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &aExcellent work, &f${killer}!&f
-              You have defeated &c${death}&f!'
-            - '[COMMAND:CONSOLE] mpa givexp ${player} 4'
-          Remaining-Players:
-            Enabled: true
-            Rewards:
-            - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &cA competitor has fallen! ${killer}
-              eliminated ${death}.'
-      Not-Killed-By-Player:
-        Enabled: true
-        Rewards:
-          Killed-Player:
-            Enabled: true
-            Rewards:
-            - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &c${death}, &fyou have been eliminated!
-              &aBetter luck next time!'
-            - '[COMMAND:CONSOLE] mpa givexp ${player} 3'
-          Remaining-Players:
-            Enabled: true
-            Rewards:
-            - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &cA competitor has fallen! ${death}
-              eliminated ${death}.'
+    enabled: true
+    killed_by_player:
+      killer:
+        messages:
+          - '&#7FFC5D&l[PILLARS] &aExcellent work, &f%killer%&f! You have defeated &c%death%&f!'
+        commands:
+          - 'mpa givexp %player% 4'
+      killed_player:
+        messages:
+          - '&#7FFC5D&l[PILLARS] &c%death%, &fyou have been eliminated by &c%killer%&f. &aBetter luck next time!'
+        commands: []
+      remaining_players:
+        messages:
+          - '&#7FFC5D&l[PILLARS] &cA competitor has fallen! %killer% eliminated %death%.'
+        commands: []
   OnLeaveRewards:
-    Enabled: true
-    Rewards:
-      left-Player:
-        Enabled: true
-        Rewards:
-        - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &fFarewell ${player}, you have left
-          the battle!'
-      Remaining-Players:
-        Enabled: true
-        Rewards:
-        - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &a${leftplayer}&c has left!'
+    enabled: true
+    left_player:
+      messages:
+        - '&#7FFC5D&l[PILLARS] &fFarewell %player%, you have left the battle!'
+      commands: []
+    remaining_players:
+      messages:
+        - '&#7FFC5D&l[PILLARS] &a%leftplayer%&c has left!'
+      commands: []
   OnEndGameRewards:
-    Enabled: true
-    Rewards:
-      Spectators:
-        Enabled: true
-        Rewards:
-        - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &fThe match is over, &c${player}.'
-      Winners:
-        Enabled: true
-        Rewards:
-        - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &aCongratulations ${player}, you are
-          victorious!'
-        - '[MESSAGE:PLAYER] #7FFC5D&l[PILLARS] &a${winnerteamname}won the game!'
-        - '[COMMAND:CONSOLE] mpa givexp ${player} 7'
+    enabled: true
+    winners:
+      messages:
+        - '&#7FFC5D&l[PILLARS] &aCongratulations %player%, you are victorious!'
+        - '&#7FFC5D&l[PILLARS] &a%winnerteamname% won the game!'
+      commands:
+        - 'mpa givexp %player% 7'
+    spectators:
+      messages:
+        - '&#7FFC5D&l[PILLARS] &fThe match is over, &c%player%.'
+      commands: []
