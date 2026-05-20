@@ -47,7 +47,7 @@ class TabManager(private val plugin: LocoPillars) {
         } ?: mapOf()
 
         displayMode = tabSection.getString("Display-Mode", "AUTO").toString()
-        displayPerGameInstance = tabSection.getBoolean("display-online-player-list-per-gameinstance", false)
+        displayPerGameInstance = tabSection.getBoolean("display-online-player-list-per-gameinstance", true)
 
         val modesSection = tabSection.getConfigurationSection("Player-Prefix-Suffix")
         val map = mutableMapOf<String, Pair<String, String>>()

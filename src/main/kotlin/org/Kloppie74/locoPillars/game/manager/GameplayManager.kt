@@ -448,10 +448,12 @@ class GameplayManager(
 
         updatePlayerEliminationStats(player, instance)
 
+        // Restore state FIRST (clears god-mode, flight, etc. from any previous game/spectator session),
+        // THEN apply spectator mode so the dead player can watch the rest of the game.
+        playerManager.restorePlayerState(player)
         SpectatorUtils.setPlayerAsSpectator(player, plugin)
         val gameLobbySpawn = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
         player.teleport(gameLobbySpawn)
-        playerManager.restorePlayerState(player)
 
         val spectateListener = plugin.spectateListener
         instance.players.forEach { uuid ->
@@ -497,19 +499,16 @@ class GameplayManager(
     }
 
     fun handlePlayerKill(killer: Player, victim: Player) {
+        // Only record the kill here. The victim's death is recorded by updatePlayerEliminationStats()
+        // when the actual PlayerDeathEvent fires — recording it here too would double-count deaths.
         try {
             val killerId = PlayerDAO.getPlayerId(killer.name)
-            val victimId = PlayerDAO.getPlayerId(victim.name)
             if (killerId != null) {
                 val killAdded = StatsDAO.addKill(killerId)
                 if (killAdded) { debugLog("✓ Recorded kill for ${killer.name}"); achievementListener.onKillPlayer(killer) }
             } else plugin.logger.warning("[GameplayManager] ✗ Could not find killerId for ${killer.name}")
-            if (victimId != null) {
-                val deathAdded = StatsDAO.addDeath(victimId)
-                if (deathAdded) { debugLog("✓ Recorded death for ${victim.name}"); achievementListener.onDeath(victim) }
-            } else plugin.logger.warning("[GameplayManager] ✗ Could not find victimId for ${victim.name}")
         } catch (ex: Exception) {
-            plugin.logger.severe("[GameplayManager] ❌ Error updating kill/death stats: ${ex.message}")
+            plugin.logger.severe("[GameplayManager] ❌ Error updating kill stats: ${ex.message}")
             ex.printStackTrace()
         }
     }
@@ -565,9 +564,8 @@ class GameplayManager(
         if (winners.isNotEmpty()) {
             winners.forEach { winner ->
                 onGameWon(winner, durationSeconds)
-                winner.gameMode = GameMode.ADVENTURE
-                winner.isInvulnerable = true
                 winner.fallDistance = 0f
+                // Do NOT set isInvulnerable here — restorePlayerState() handles full cleanup below
             }
             winners.forEach { winner ->
                 onFastestWin(winner, durationSeconds)
@@ -580,7 +578,8 @@ class GameplayManager(
         losers.forEach { loser ->
             onGameLost(loser, durationSeconds)
             onLossStreak(loser)
-            SpectatorUtils.setPlayerAsSpectator(loser, plugin)
+            // Do NOT call setPlayerAsSpectator here: the player is still in playerToInstance so the
+            // guard would block it. State is restored via restorePlayerState() below.
             val gameLobbySpawn = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
             loser.teleport(gameLobbySpawn)
         }
@@ -604,9 +603,15 @@ class GameplayManager(
 
         val spectateListener = plugin.spectateListener
         instance.players.forEach { uuid ->
-            val p = Bukkit.getPlayer(uuid)
-            if (p != null) spectateListener?.refreshPlayer(p)
+            // Remove from instance map BEFORE notifying tab systems, so they see the player as "in lobby"
             playerToInstance.remove(uuid)
+            val p = Bukkit.getPlayer(uuid)
+            if (p != null) {
+                spectateListener?.refreshPlayer(p)
+                // Notify tab/visibility systems that all players are returning to lobby
+                plugin.teamsListener.onPlayerLeaveGame(p)
+                plugin.spectateListener.onPlayerGameStatusChange(p)
+            }
         }
         instance.players.clear()
 

@@ -15,7 +15,6 @@ class TimerEvent(private val plugin: LocoPillars) {
     private val gameTimers = ConcurrentHashMap<UUID, GameTimerInfo>()
     private val itemTimers = ConcurrentHashMap<UUID, ItemTimerInfo>()
 
-    // Timer info classes
     data class GameTimerInfo(
         val instance: GameInstance,
         val totalTime: Int,
@@ -31,9 +30,7 @@ class TimerEvent(private val plugin: LocoPillars) {
     )
 
     init {
-        // Start the action bar update task
         startActionBarUpdater()
-        plugin.logger.info("[TimerEvent] Timer system initialized")
     }
 
     private fun startActionBarUpdater() {
@@ -41,13 +38,12 @@ class TimerEvent(private val plugin: LocoPillars) {
             override fun run() {
                 updateAllActionBars()
             }
-        }.runTaskTimer(plugin, 0L, 20L) // Update every second
+        }.runTaskTimer(plugin, 0L, 20L)
     }
 
     fun startGameTimer(instance: GameInstance, gameTimeSeconds: Int) {
-        plugin.logger.info("[TimerEvent] Starting game timer for instance ${instance.id}: ${gameTimeSeconds}s")
+        debugLog("Starting game timer for instance ${instance.id}: ${gameTimeSeconds}s")
 
-        // Cancel existing timer if any
         stopGameTimer(instance.id)
 
         val timer = object : BukkitRunnable() {
@@ -55,20 +51,18 @@ class TimerEvent(private val plugin: LocoPillars) {
 
             override fun run() {
                 if (instance.state != GameState.ACTIVE) {
-                    plugin.logger.info("[TimerEvent] Game timer cancelled - game no longer active")
+                    debugLog("Game timer cancelled - game no longer active")
                     stopGameTimer(instance.id)
                     return
                 }
 
-                // Update timer info
                 gameTimers[instance.id]?.let { timerInfo ->
                     timerInfo.timeLeft = timeLeft
                 }
 
                 when {
                     timeLeft <= 0 -> {
-                        plugin.logger.info("[TimerEvent] Game timer expired for instance ${instance.id}")
-                        // Notify GameManager that time is up
+                        debugLog("Game timer expired for instance ${instance.id}")
                         plugin.gameManager.endGameByTimer(instance)
                         stopGameTimer(instance.id)
                         return
@@ -77,9 +71,8 @@ class TimerEvent(private val plugin: LocoPillars) {
                         val minutes = timeLeft / 60
                         val seconds = timeLeft % 60
                         val timeString = if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s"
-
                         broadcastToGame(instance, MSG.lang("game.timer.ending_in", "time" to timeString))
-                        plugin.logger.info("[TimerEvent] Game timer warning: $timeString remaining")
+                        debugLog("Game timer warning: $timeString remaining for instance ${instance.id}")
                     }
                 }
 
@@ -89,14 +82,11 @@ class TimerEvent(private val plugin: LocoPillars) {
 
         timer.runTaskTimer(plugin, 0L, 20L)
         gameTimers[instance.id] = GameTimerInfo(instance, gameTimeSeconds, gameTimeSeconds, timer)
-
-        plugin.logger.info("[TimerEvent] Game timer started for instance ${instance.id}")
     }
 
     fun startItemTimer(instance: GameInstance, itemIntervalSeconds: Int) {
-        plugin.logger.info("[TimerEvent] Starting item timer for instance ${instance.id}: every ${itemIntervalSeconds}s")
+        debugLog("Starting item timer for instance ${instance.id}: every ${itemIntervalSeconds}s")
 
-        // Cancel existing timer if any
         stopItemTimer(instance.id)
 
         val timer = object : BukkitRunnable() {
@@ -104,22 +94,18 @@ class TimerEvent(private val plugin: LocoPillars) {
 
             override fun run() {
                 if (instance.state != GameState.ACTIVE) {
-                    plugin.logger.info("[TimerEvent] Item timer cancelled - game no longer active")
+                    debugLog("Item timer cancelled - game no longer active")
                     stopItemTimer(instance.id)
                     return
                 }
 
-                // Update timer info
                 itemTimers[instance.id]?.let { timerInfo ->
                     timerInfo.timeUntilNext = timeUntilNext
                 }
 
-                when {
-                    timeUntilNext <= 0 -> {
-                        // Give items to players
-                        plugin.gameManager.giveItemsToPlayers(instance)
-                        timeUntilNext = itemIntervalSeconds
-                    }
+                if (timeUntilNext <= 0) {
+                    plugin.gameManager.giveItemsToPlayers(instance)
+                    timeUntilNext = itemIntervalSeconds
                 }
 
                 timeUntilNext--
@@ -128,15 +114,13 @@ class TimerEvent(private val plugin: LocoPillars) {
 
         timer.runTaskTimer(plugin, 0L, 20L)
         itemTimers[instance.id] = ItemTimerInfo(instance, itemIntervalSeconds, itemIntervalSeconds, timer)
-
-        plugin.logger.info("[TimerEvent] Item timer started for instance ${instance.id}")
     }
 
     fun stopGameTimer(instanceId: UUID) {
         gameTimers[instanceId]?.let { timerInfo ->
             timerInfo.timer.cancel()
             gameTimers.remove(instanceId)
-            plugin.logger.info("[TimerEvent] Game timer stopped for instance $instanceId")
+            debugLog("Game timer stopped for instance $instanceId")
         }
     }
 
@@ -144,21 +128,17 @@ class TimerEvent(private val plugin: LocoPillars) {
         itemTimers[instanceId]?.let { timerInfo ->
             timerInfo.timer.cancel()
             itemTimers.remove(instanceId)
-            plugin.logger.info("[TimerEvent] Item timer stopped for instance $instanceId")
+            debugLog("Item timer stopped for instance $instanceId")
         }
     }
 
     fun stopAllTimers(instanceId: UUID) {
         stopGameTimer(instanceId)
         stopItemTimer(instanceId)
-        plugin.logger.info("[TimerEvent] All timers stopped for instance $instanceId")
     }
 
     private fun updateAllActionBars() {
-        // Update action bars for all players in games
-        val allInstances = plugin.gameManager.getAllInstances()
-
-        allInstances.forEach { instance ->
+        plugin.gameManager.getAllInstances().forEach { instance ->
             updateActionBarForInstance(instance)
         }
     }
@@ -171,13 +151,11 @@ class TimerEvent(private val plugin: LocoPillars) {
 
         players.forEach { player ->
             try {
-                // Send action bar message
                 player.spigot().sendMessage(
                     net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
                     *net.md_5.bungee.api.chat.TextComponent.fromLegacyText(actionBarText)
                 )
             } catch (e: Exception) {
-                // Fallback for older versions
                 player.sendMessage(actionBarText)
             }
         }
@@ -232,44 +210,25 @@ class TimerEvent(private val plugin: LocoPillars) {
     }
 
     private fun broadcastToGame(instance: GameInstance, message: String) {
-        val players = getPlayersInGame(instance)
-        players.forEach { player ->
-            player.sendMessage(message)
-        }
+        getPlayersInGame(instance).forEach { it.sendMessage(message) }
     }
 
     fun cleanup() {
-        plugin.logger.info("[TimerEvent] Cleaning up timers...")
-
-        // Cancel all game timers
-        gameTimers.values.forEach { timerInfo ->
-            timerInfo.timer.cancel()
-        }
+        gameTimers.values.forEach { it.timer.cancel() }
         gameTimers.clear()
-
-        // Cancel all item timers
-        itemTimers.values.forEach { timerInfo ->
-            timerInfo.timer.cancel()
-        }
+        itemTimers.values.forEach { it.timer.cancel() }
         itemTimers.clear()
-
-        plugin.logger.info("[TimerEvent] Timer cleanup completed")
     }
 
-    // Utility methods for GameManager integration
-    fun getGameTimeLeft(instanceId: UUID): Int? {
-        return gameTimers[instanceId]?.timeLeft
-    }
+    fun getGameTimeLeft(instanceId: UUID): Int? = gameTimers[instanceId]?.timeLeft
 
-    fun getItemTimeLeft(instanceId: UUID): Int? {
-        return itemTimers[instanceId]?.timeUntilNext
-    }
+    fun getItemTimeLeft(instanceId: UUID): Int? = itemTimers[instanceId]?.timeUntilNext
 
-    fun hasActiveGameTimer(instanceId: UUID): Boolean {
-        return gameTimers.containsKey(instanceId)
-    }
+    fun hasActiveGameTimer(instanceId: UUID): Boolean = gameTimers.containsKey(instanceId)
 
-    fun hasActiveItemTimer(instanceId: UUID): Boolean {
-        return itemTimers.containsKey(instanceId)
+    fun hasActiveItemTimer(instanceId: UUID): Boolean = itemTimers.containsKey(instanceId)
+
+    private fun debugLog(message: String) {
+        if (plugin.configManager.debugMode) plugin.logger.info("[TimerEvent] $message")
     }
 }

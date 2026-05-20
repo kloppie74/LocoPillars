@@ -11,12 +11,8 @@ import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
-import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.VanishDAO
 import org.Kloppie74.locoPillars.game.instance.GameInstance
-import org.Kloppie74.locoPillars.utils.vanish.VanishManager
-import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
-import org.Kloppie74.locoPillars.utils.spectator.SpectatorVisibilityManager
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -201,16 +197,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun shouldDeferToOtherSystems(viewer: Player, target: Player): Boolean {
         try {
-            // Get player IDs for database lookups
-            val viewerPlayerId = PlayerDAO.getPlayerId(viewer.name)
-            val targetPlayerId = PlayerDAO.getPlayerId(target.name)
-
-            if (viewerPlayerId == null || targetPlayerId == null) {
-                debugLog("Could not find player IDs for ${viewer.name} or ${target.name} - deferring")
-                return true
-            }
-
-            // Check vanish system using DAO
+            // Only defer to vanish system when the vanish state has active flags.
             val viewerVanishState = try {
                 VanishDAO.load(viewer.uniqueId)
             } catch (e: Exception) {
@@ -225,7 +212,6 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
                 null
             }
 
-            // If vanish system is active for either player, defer
             if (viewerVanishState != null && (viewerVanishState.vanished || viewerVanishState.hideMe ||
                         viewerVanishState.hideOthers || viewerVanishState.showOthers.isNotEmpty())) {
                 debugLog("Vanish system active for viewer ${viewer.name} - deferring")
@@ -238,21 +224,12 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
                 return true
             }
 
-            // Check spectator system
-            val viewerIsSpectator = SpectatorUtils.isSpectator(viewer, plugin)
-            val targetIsSpectator = SpectatorUtils.isSpectator(target, plugin)
-
-            if ((viewerIsSpectator && targetIsSpectator && SpectatorVisibilityManager.isHidingSpectators(viewer)) ||
-                (targetIsSpectator && SpectatorVisibilityManager.isHidingSpectators(viewer))
-            ) {
-                debugLog("Spectator visibility system active - deferring")
-                return true
-            }
+            // Do NOT defer for spectators — game-instance isolation must apply to dead-in-game players.
 
             return false
         } catch (e: Exception) {
             debugLog("[ProtocolTabVisibility] Error checking other visibility systems: ${e.message}")
-            return true // Defer on error to be safe
+            return false // Do not skip game-instance filtering on error
         }
     }
 

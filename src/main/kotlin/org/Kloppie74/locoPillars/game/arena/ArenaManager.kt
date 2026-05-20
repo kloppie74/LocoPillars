@@ -426,26 +426,35 @@ class ArenaManager(
 
         debugLog("Using schematic: ${selectedSchematic.name}")
 
-        // Load clipboard to read its saved origin (= minimum corner of the editor save region).
-        // Paste such that clipboard.origin aligns with (instance.origin.x + clip.x, clip.y, instance.origin.z + clip.z).
-        // This ensures block X/Z coordinates in the game world match their absolute editor coordinates
-        // (+ each instance's grid offset), and block Y is fully preserved.
+        // The sponge schematic format stores clipboard.origin as an offset from the minimum corner.
+        // Because we save with clipboard.origin = minimumPoint, that offset is always (0,0,0),
+        // so clipboard.origin is (0,0,0) after loading — it cannot be trusted for paste positioning.
+        //
+        // Mirror the editor's formula exactly:
+        //   pasteX = instanceGridX + spawnCenterX - saveRadius
+        //   pasteY = world.minHeight
+        //   pasteZ = instanceGridZ + spawnCenterZ - saveRadius
+        // This puts block (spawnCenterX, Y, spawnCenterZ) at (instanceGridX + spawnCenterX, Y, instanceGridZ + spawnCenterZ)
+        // which is exactly where getSpawnTeleportLocation() sends the player.
         val clipboard = org.Kloppie74.locoPillars.utils.SchematicHelper.loadSchematic(plugin, configManager, selectedSchematic)
         if (clipboard == null) {
             plugin.logger.severe("[ArenaManager] ✗ Failed to load schematic for ${instance.template.name} (${instance.id})")
             return
         }
 
-        val clipOrigin = clipboard.origin
+        val centerX    = instance.config.getSpawnCenterX()
+        val centerZ    = instance.config.getSpawnCenterZ()
+        val saveRadius = instance.config.getSaveRadius()
+
         val pasteLocation = Location(
             instance.world,
-            instance.origin.x + clipOrigin.x,
-            clipOrigin.y.toDouble(),
-            instance.origin.z + clipOrigin.z
+            instance.origin.x + centerX - saveRadius,
+            instance.world.minHeight.toDouble(),
+            instance.origin.z + centerZ - saveRadius
         )
 
-        debugLog("Clipboard origin: (${clipOrigin.x}, ${clipOrigin.y}, ${clipOrigin.z})")
-        debugLog("Paste location:   (${pasteLocation.x}, ${pasteLocation.y}, ${pasteLocation.z})")
+        debugLog("SpawnCenter=($centerX, $centerZ) saveRadius=$saveRadius")
+        debugLog("Paste location: (${pasteLocation.x}, ${pasteLocation.y}, ${pasteLocation.z})")
 
         val success = org.Kloppie74.locoPillars.utils.SchematicHelper.pasteClipboard(
             plugin, configManager, clipboard, pasteLocation

@@ -56,6 +56,10 @@ object GlobalVisibilityTicker {
         startTicker()
     }
 
+    private fun debugLog(message: String) {
+        if (plugin.configManager.debugMode) plugin.logger.info("[GlobalVisibilityTicker] $message")
+    }
+
     fun shutdown() {
         ticker?.cancel()
         ticker = null
@@ -90,7 +94,7 @@ object GlobalVisibilityTicker {
 
         // Check priority conflicts
         if (hasHigherPriorityActive(playerUUID, priority)) {
-            plugin.logger.info("[GlobalVisibilityTicker] Skipping $priority update for ${player.name} - higher priority active")
+            debugLog("Skipping $priority update for ${player.name} - higher priority active")
             return
         }
 
@@ -102,18 +106,17 @@ object GlobalVisibilityTicker {
         if (newPriorityLevel >= currentPriorityLevel) {
             updateQueue[playerUUID] = UpdateRequest(currentTime, priority, reason)
 
-            // Set priority flags
             when (priority) {
                 "VANISH_UPDATE" -> {
                     vanishPriorityPlayers[playerUUID] = currentTime
-                    plugin.logger.info("[GlobalVisibilityTicker] Queued $priority update for ${player.name}: $reason")
+                    debugLog("Queued $priority update for ${player.name}: $reason")
                 }
                 "SPECTATOR_UPDATE" -> {
                     spectatorPriorityPlayers[playerUUID] = currentTime
-                    plugin.logger.info("[GlobalVisibilityTicker] Queued $priority update for ${player.name}: $reason")
+                    debugLog("Queued $priority update for ${player.name}: $reason")
                 }
                 "PROTOCOL_TAB_UPDATE" -> {
-                    plugin.logger.info("[GlobalVisibilityTicker] Queued ProtocolLib $priority update for ${player.name}: $reason")
+                    debugLog("Queued ProtocolLib $priority update for ${player.name}: $reason")
                 }
             }
         }
@@ -142,46 +145,29 @@ object GlobalVisibilityTicker {
         queueUpdateWithPriority(player, "SPECTATOR_UPDATE", reason)
     }
 
-    /**
-     * CRITICAL FIX: Clear specific player from queue to prevent overrides
-     */
     fun clearPlayerFromQueue(player: Player) {
         val removed = updateQueue.remove(player.uniqueId)
-        if (removed != null) {
-            plugin.logger.info("[GlobalVisibilityTicker] Cleared queued update for ${player.name} (was: ${removed.priority})")
-        }
+        if (removed != null) debugLog("Cleared queued update for ${player.name} (was: ${removed.priority})")
     }
 
-    /**
-     * CRITICAL FIX: Mark player as having vanish priority
-     */
     fun markPlayerAsVanishPriority(player: Player) {
         vanishPriorityPlayers[player.uniqueId] = System.currentTimeMillis()
-        plugin.logger.info("[GlobalVisibilityTicker] Marked ${player.name} as vanish priority")
+        debugLog("Marked ${player.name} as vanish priority")
     }
 
-    /**
-     * CRITICAL FIX: Clear vanish priority flag
-     */
     fun clearVanishPriorityFlag(player: Player) {
         vanishPriorityPlayers.remove(player.uniqueId)
-        plugin.logger.info("[GlobalVisibilityTicker] Cleared vanish priority for ${player.name}")
+        debugLog("Cleared vanish priority for ${player.name}")
     }
 
-    /**
-     * Mark player as having spectator priority
-     */
     fun markPlayerAsSpectatorPriority(player: Player) {
         spectatorPriorityPlayers[player.uniqueId] = System.currentTimeMillis()
-        plugin.logger.info("[GlobalVisibilityTicker] Marked ${player.name} as spectator priority")
+        debugLog("Marked ${player.name} as spectator priority")
     }
 
-    /**
-     * Clear spectator priority flag
-     */
     fun clearSpectatorPriorityFlag(player: Player) {
         spectatorPriorityPlayers.remove(player.uniqueId)
-        plugin.logger.info("[GlobalVisibilityTicker] Cleared spectator priority for ${player.name}")
+        debugLog("Cleared spectator priority for ${player.name}")
     }
 
     /**
@@ -227,7 +213,7 @@ object GlobalVisibilityTicker {
 
             // Check if player has higher priority active and this is not that priority
             if (hasHigherPriorityActive(entry.key, entry.value.priority)) {
-                plugin.logger.info("[GlobalVisibilityTicker] Skipping ${entry.value.priority} update for ${player.name} - higher priority active")
+                debugLog("Skipping ${entry.value.priority} update for ${player.name} - higher priority active")
                 iterator.remove()
                 continue
             }
@@ -269,13 +255,13 @@ object GlobalVisibilityTicker {
         val expiredVanish = vanishPriorityPlayers.entries.filter { currentTime - it.value > 5000L }
         expiredVanish.forEach {
             vanishPriorityPlayers.remove(it.key)
-            plugin.logger.info("[GlobalVisibilityTicker] Auto-cleared expired vanish priority for player ${it.key}")
+            debugLog("Auto-cleared expired vanish priority for player ${it.key}")
         }
 
         val expiredSpectator = spectatorPriorityPlayers.entries.filter { currentTime - it.value > 3000L }
         expiredSpectator.forEach {
             spectatorPriorityPlayers.remove(it.key)
-            plugin.logger.info("[GlobalVisibilityTicker] Auto-cleared expired spectator priority for player ${it.key}")
+            debugLog("Auto-cleared expired spectator priority for player ${it.key}")
         }
     }
 
@@ -311,7 +297,7 @@ object GlobalVisibilityTicker {
                     protocolTabUpdates.forEach { player ->
                         protocolTabManager.updateTabVisibilityForPlayer(player)
                     }
-                    plugin.logger.info("[GlobalVisibilityTicker] Updated ProtocolLib tab visibility for ${protocolTabUpdates.size} players")
+                    debugLog("Updated ProtocolLib tab visibility for ${protocolTabUpdates.size} players")
                 }
             } catch (e: Exception) {
                 plugin.logger.warning("[GlobalVisibilityTicker] Error updating ProtocolLib tab visibility: ${e.message}")

@@ -5,11 +5,15 @@ import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 
 class PlayerManager(private val plugin: LocoPillars) {
 
     fun preparePlayerForGame(player: Player) {
         debugLog("Preparing ${player.name} for game")
+
+        // Remove from spectator map first so state is clean
+        SpectatorUtils.clearCache(player)
 
         player.gameMode = GameMode.SURVIVAL
         player.health = 20.0
@@ -19,6 +23,14 @@ class PlayerManager(private val plugin: LocoPillars) {
         player.enderChest.clear()
         player.exp = 0f
         player.level = 0
+
+        // Reset flight/combat state that may persist from previous games or spectator mode
+        player.isInvulnerable = false
+        player.allowFlight = false
+        player.isFlying = false
+        player.isCollidable = true
+        player.fallDistance = 0f
+        player.fireTicks = 0
 
         // Clear potion effects
         player.activePotionEffects.forEach { effect ->
@@ -36,6 +48,17 @@ class PlayerManager(private val plugin: LocoPillars) {
         player.foodLevel = 20
         player.saturation = 20f
         player.inventory.clear()
+        player.enderChest.clear()
+        player.exp = 0f
+        player.level = 0
+
+        // Reset ALL persistent state flags — these are NOT reset by setting gameMode
+        player.isInvulnerable = false
+        player.allowFlight = false
+        player.isFlying = false
+        player.isCollidable = true
+        player.fallDistance = 0f
+        player.fireTicks = 0
 
         // Clear potion effects
         player.activePotionEffects.forEach { effect ->

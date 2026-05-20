@@ -13,7 +13,6 @@ import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.event.player.PlayerItemHeldEvent
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerQuitEvent
-import org.bukkit.event.entity.PlayerDeathEvent as EntityPlayerDeathEvent
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.hotbar.HotbarItemManager
 import org.Kloppie74.locoPillars.utils.hotbar.SpeedGui
@@ -92,25 +91,6 @@ class SpectateListener(
             SpectatorUtils.handleWorldChange(player, fromWorld, toWorld, plugin)
             updateVisibilityForPlayer(player)
         }, 5L)
-    }
-
-    // ==================== DEATH EVENT ====================
-
-    @EventHandler(priority = EventPriority.HIGH)
-    fun onPlayerDeath(event: EntityPlayerDeathEvent) {
-        val player = event.entity
-        val instance = plugin.gameManager.getPlayerInstance(player)
-
-        if (instance != null) {
-            // Player died in a game - they should become a spectator in that game
-            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-                // Set as spectator in the game world
-                SpectatorUtils.setPlayerAsSpectator(player, plugin)
-
-                // Update visibility for the whole game instance
-                plugin.spectatorInventoryManager.updateVisibilityForGameInstance(instance)
-            }, 1L)
-        }
     }
 
     // ==================== INTERACTION EVENTS ====================

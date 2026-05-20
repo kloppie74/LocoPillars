@@ -26,7 +26,6 @@ import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.rewards.RewardProcessor
 import org.bukkit.configuration.file.YamlConfiguration
-import java.time.LocalDateTime
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -64,7 +63,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             // Clear placed blocks
             clearPlayerPlacedBlocks(instance.id, player.uniqueId)
 
-            // Handle death through game manager
+            // Handle death through game manager (also records stats and sets spectator mode)
             plugin.gameManager.handlePlayerDeath(player)
 
             // Refresh spectator visibility
@@ -74,28 +73,6 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             }
             spectateListener?.refreshPlayer(player)
             plugin.spectatorInventoryManager.updateVisibilityForGameInstance(instance)
-
-            // === DATABASE: Track death stat ===
-            try {
-                val playerId = PlayerDAO.getPlayerId(player.name)
-                if (playerId != null) {
-                    // Add death to stats
-                    val deathAdded = StatsDAO.addDeath(playerId)
-                    if (deathAdded) {
-                        plugin.logger.info("[GameListener] ✓ Recorded death for ${player.name} (ID: $playerId)")
-                    } else {
-                        plugin.logger.warning("[GameListener] ✗ Failed to record death for ${player.name}")
-                    }
-
-                    // Trigger achievement check
-                    plugin.achievementListener.onDeath(player)
-                } else {
-                    plugin.logger.warning("[GameListener] ✗ Could not find playerId for ${player.name}")
-                }
-            } catch (ex: Exception) {
-                plugin.logger.severe("[GameListener] ❌ Error recording death for ${player.name}: ${ex.message}")
-                ex.printStackTrace()
-            }
 
             // Reset killstreak
             playerKillStreaks[player.uniqueId] = 0
@@ -191,24 +168,8 @@ class GameListener(private val plugin: LocoPillars) : Listener {
      * Handles kill logic including killstreaks, multi-kills, and database stats.
      */
     private fun handlePlayerKill(attacker: Player, victim: Player, instance: GameInstance) {
-        // Handle kill through gameplay manager
+        // Handle kill through gameplay manager (also records stats)
         gameplayManager.handlePlayerKill(attacker, victim)
-
-        // === DATABASE: Track kill stat ===
-        try {
-            val attackerPlayerId = PlayerDAO.getPlayerId(attacker.name)
-            if (attackerPlayerId != null) {
-                // Add kill and update killstreak
-                val killAdded = StatsDAO.addKill(attackerPlayerId)
-                if (killAdded) {
-                    plugin.logger.info("[GameListener] ✓ Recorded kill for ${attacker.name}")
-                } else {
-                    plugin.logger.warning("[GameListener] ✗ Failed to record kill for ${attacker.name}")
-                }
-            }
-        } catch (ex: Exception) {
-            plugin.logger.severe("[GameListener] ❌ Error recording kill for ${attacker.name}: ${ex.message}")
-        }
 
         // === KILLSTREAK TRACKING ===
         val now = System.currentTimeMillis()
@@ -225,42 +186,9 @@ class GameListener(private val plugin: LocoPillars) : Listener {
 
         if (timeSinceLastKill <= 5000) { // 5 seconds window for multi-kills
             when (streak) {
-                2 -> {
-                    gameplayManager.onDoubleKill(attacker)
-                    try {
-                        val playerId = PlayerDAO.getPlayerId(attacker.name)
-                        if (playerId != null) {
-                            StatsDAO.incrementStat(playerId, "double_kills")
-                            plugin.logger.info("[GameListener] ✓ Double kill for ${attacker.name}")
-                        }
-                    } catch (ex: Exception) {
-                        plugin.logger.severe("[GameListener] ❌ Error recording double kill: ${ex.message}")
-                    }
-                }
-                3 -> {
-                    gameplayManager.onTripleKill(attacker)
-                    try {
-                        val playerId = PlayerDAO.getPlayerId(attacker.name)
-                        if (playerId != null) {
-                            StatsDAO.incrementStat(playerId, "triple_kills")
-                            plugin.logger.info("[GameListener] ✓ Triple kill for ${attacker.name}")
-                        }
-                    } catch (ex: Exception) {
-                        plugin.logger.severe("[GameListener] ❌ Error recording triple kill: ${ex.message}")
-                    }
-                }
-                4 -> {
-                    gameplayManager.onQuadKill(attacker)
-                    try {
-                        val playerId = PlayerDAO.getPlayerId(attacker.name)
-                        if (playerId != null) {
-                            StatsDAO.incrementStat(playerId, "quad_kills")
-                            plugin.logger.info("[GameListener] ✓ Quad kill for ${attacker.name}")
-                        }
-                    } catch (ex: Exception) {
-                        plugin.logger.severe("[GameListener] ❌ Error recording quad kill: ${ex.message}")
-                    }
-                }
+                2 -> gameplayManager.onDoubleKill(attacker)
+                3 -> gameplayManager.onTripleKill(attacker)
+                4 -> gameplayManager.onQuadKill(attacker)
             }
         }
 
@@ -285,26 +213,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             clearPlayerPlacedBlocks(instance.id, player.uniqueId)
         }
 
-        // === DATABASE: Track game quit ===
-        try {
-            val playerId = PlayerDAO.getPlayerId(player.name)
-            if (playerId != null && instance != null && instance.state == GameState.ACTIVE) {
-                // Only count as quit if they left during active game
-                val quitIncremented = StatsDAO.incrementStat(playerId, "games_quit")
-                if (quitIncremented) {
-                    plugin.logger.info("[GameListener] ✓ Recorded game quit for ${player.name}")
-                } else {
-                    plugin.logger.warning("[GameListener] ✗ Failed to record game quit for ${player.name}")
-                }
-
-                // Handle quit through gameplay manager
-                gameplayManager.onGameQuit(player)
-            }
-        } catch (ex: Exception) {
-            plugin.logger.severe("[GameListener] ❌ Error recording quit for ${player.name}: ${ex.message}")
-        }
-
-        // Leave game
+        // Leave game — GameLeaveManager handles all stats and DB writes
         plugin.gameManager.leaveGame(player)
 
         // Refresh spectator visibility for all instances
@@ -333,21 +242,16 @@ class GameListener(private val plugin: LocoPillars) : Listener {
         player.health = 20.0
         player.foodLevel = 20
         player.saturation = 20f
+        // Reset persistent flags that survive server restarts or previous sessions
+        player.isInvulnerable = false
+        player.allowFlight = false
+        player.isFlying = false
+        player.isCollidable = true
+        player.exp = 0f
+        player.level = 0
+        player.fireTicks = 0
         player.activePotionEffects.forEach { effect ->
             player.removePotionEffect(effect.type)
-        }
-
-        // === DATABASE: Update last seen ===
-        try {
-            val playerId = PlayerDAO.getPlayerId(player.name)
-            if (playerId != null) {
-                val updated = PlayerDAO.updateLastSeen(playerId, LocalDateTime.now())
-                if (updated) {
-                    plugin.logger.info("[GameListener] ✓ Updated last seen for ${player.name}")
-                }
-            }
-        } catch (ex: Exception) {
-            plugin.logger.severe("[GameListener] ❌ Error updating last seen for ${player.name}: ${ex.message}")
         }
 
         // Refresh spectator visibility
@@ -428,9 +332,6 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             } catch (ex: Exception) {
                 plugin.logger.warning("[GameListener] Error tracking block break: ${ex.message}")
             }
-
-            // Track through gameplay manager
-            gameplayManager.handleDamageDealt(player, 0.0) // Placeholder for block break tracking
         }
     }
 
@@ -476,9 +377,6 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             } catch (ex: Exception) {
                 plugin.logger.warning("[GameListener] Error tracking block place: ${ex.message}")
             }
-
-            // Track through gameplay manager
-            gameplayManager.handleDamageDealt(player, 0.0) // Placeholder for block place tracking
         }
     }
 

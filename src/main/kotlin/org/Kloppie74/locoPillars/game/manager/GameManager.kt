@@ -45,18 +45,28 @@ class GameManager(private val plugin: LocoPillars) {
         val instance = joinManager.joinGame(player, gameTypeName, gameplayManager)
         if (instance != null) {
             SpectatorUtils.removeSpectatorStatus(player, plugin)
+            // Notify tab/visibility systems that this player joined a game
+            plugin.teamsListener.onPlayerJoinGame(player)
+            plugin.spectateListener.onPlayerGameStatusChange(player)
         }
         return instance
     }
 
     fun leaveGame(player: Player): Boolean {
         val success = leaveManager.leaveGame(player, gameplayManager)
-        SpectatorUtils.removeSpectatorStatus(player, plugin)
+        // Notify tab/visibility systems that this player is now in lobby
+        plugin.teamsListener.onPlayerLeaveGame(player)
+        plugin.spectateListener.onPlayerGameStatusChange(player)
         return success
     }
 
     fun handlePlayerDeath(player: Player): Boolean {
-        return gameplayManager.handlePlayerDeath(player, playerToInstance, playerManager)
+        val result = gameplayManager.handlePlayerDeath(player, playerToInstance, playerManager)
+        if (result) {
+            // Player is now a spectator — update tab visibility so they're filtered correctly
+            plugin.teamsListener.onPlayerLeaveGame(player)
+        }
+        return result
     }
 
     fun endGameByTimer(instance: GameInstance) {

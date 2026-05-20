@@ -30,7 +30,7 @@ object SpectatorVisibilityManager {
         setHidingSpectators(player, newState)
 
         // FIXED: Use non-conflicting priority for spectator visibility updates
-        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "toggle_spectator_visibility")
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "toggle_spectator_visibility")
 
         val message = if (newState) {
             "&7Spectators are now &chidden&7."
@@ -45,7 +45,7 @@ object SpectatorVisibilityManager {
      */
     @JvmStatic
     fun updateSpectatorVisibility(spectator: Player, plugin: LocoPillars) {
-        GlobalVisibilityTicker.queueUpdateWithPriority(spectator, "SPECTATOR", "update_spectator_visibility")
+        GlobalVisibilityTicker.queueUpdateWithPriority(spectator, "SPECTATOR_UPDATE", "update_spectator_visibility")
     }
 
     /**
@@ -54,7 +54,7 @@ object SpectatorVisibilityManager {
     @JvmStatic
     fun restoreNormalVisibility(player: Player, plugin: LocoPillars) {
         VISIBILITY_CACHE.remove(player.uniqueId)
-        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "restore_normal_visibility")
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "restore_normal_visibility")
     }
 
     /**
@@ -66,7 +66,7 @@ object SpectatorVisibilityManager {
 
         // FIXED: Queue updates with proper priority for all players in the instance
         allPlayers.forEach { player ->
-            GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "game_instance_update")
+            GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "game_instance_update")
         }
     }
 
@@ -76,9 +76,9 @@ object SpectatorVisibilityManager {
     @JvmStatic
     fun setSpectatorVisibility(target: Player, hideFrom: List<Player>, showTo: List<Player>, plugin: LocoPillars) {
         // FIXED: Queue updates for all affected players with proper priority
-        GlobalVisibilityTicker.queueUpdateWithPriority(target, "SPECTATOR", "set_spectator_visibility_target")
+        GlobalVisibilityTicker.queueUpdateWithPriority(target, "SPECTATOR_UPDATE", "set_spectator_visibility_target")
         (hideFrom + showTo).forEach { player ->
-            GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "set_spectator_visibility_viewer")
+            GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "set_spectator_visibility_viewer")
         }
     }
 
@@ -114,7 +114,7 @@ object SpectatorVisibilityManager {
         VISIBILITY_CACHE[player.uniqueId] = hiding
 
         // FIXED: Queue visibility update with proper priority
-        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "set_hiding_spectators")
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "set_hiding_spectators")
     }
 
     /**

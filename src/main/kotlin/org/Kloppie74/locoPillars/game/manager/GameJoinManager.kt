@@ -160,9 +160,8 @@ class GameJoinManager(
                     return null
                 }
             } else {
+                // Only update display name here — last_seen and session_count are handled by PlayerJoinListener
                 PlayerDAO.updateDisplayName(playerId, player.displayName ?: player.name)
-                PlayerDAO.updateLastSeen(playerId, LocalDateTime.now())
-                PlayerDAO.incrementSessionCount(playerId)
                 debugLog("✓ Updated existing player in database: ${player.name} (ID: $playerId)")
             }
             return playerId

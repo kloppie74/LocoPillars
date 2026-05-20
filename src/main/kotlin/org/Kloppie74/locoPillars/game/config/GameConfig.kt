@@ -82,6 +82,24 @@ class GameConfig(
         return (settings["LobbyEnabled"] as? Boolean) ?: true
     }
 
+    fun getSpawnCenterX(): Double {
+        val settings = configMap["Settings"] as? Map<*, *> ?: return 0.0
+        val sp = settings["SpawnPoint"] as? Map<*, *> ?: return 0.0
+        return (sp["X"] as? Number)?.toDouble() ?: 0.0
+    }
+
+    fun getSpawnCenterZ(): Double {
+        val settings = configMap["Settings"] as? Map<*, *> ?: return 0.0
+        val sp = settings["SpawnPoint"] as? Map<*, *> ?: return 0.0
+        return (sp["Z"] as? Number)?.toDouble() ?: 0.0
+    }
+
+    fun getSaveRadius(): Int {
+        return (configMap["SaveRadius"] as? Number)?.toInt()
+            ?: (configMap["SchematicRadius"] as? Number)?.toInt()
+            ?: 50
+    }
+
     fun getSpawnTeleportLocation(origin: Location): Location {
         val settings = configMap["Settings"] as? Map<String, Any> ?: return origin
         val spawnPoint = settings["SpawnPoint"] as? Map<String, Any> ?: return origin

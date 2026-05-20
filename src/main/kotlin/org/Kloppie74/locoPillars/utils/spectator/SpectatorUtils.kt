@@ -31,7 +31,7 @@ object SpectatorUtils {
         plugin.hotbarItemManager.givePlayerItems(player)
 
         // FIXED: Use non-conflicting priority for spectator updates
-        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "set_as_spectator")
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "set_as_spectator")
 
         player.sendMessage(MSG.chatColors("&7You are now a &espectator&7."))
     }
@@ -56,7 +56,7 @@ object SpectatorUtils {
         plugin.hotbarItemManager.givePlayerItems(player)
 
         // FIXED: Use non-conflicting priority for spectator updates
-        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR", "remove_spectator_status")
+        GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "remove_spectator_status")
     }
 
     /**
@@ -86,7 +86,7 @@ object SpectatorUtils {
         } else {
             plugin.hotbarItemManager.givePlayerItems(player)
             // FIXED: Use non-conflicting priority for world change updates
-            GlobalVisibilityTicker.queueUpdateWithPriority(player, "WORLD_CHANGE", "spectator_world_change")
+            GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "spectator_world_change")
         }
     }
 

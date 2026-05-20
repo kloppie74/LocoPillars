@@ -41,10 +41,8 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
         val player = event.player
 
         try {
-            // Load or create vanish state
             val existingState = VanishDAO.load(player.uniqueId)
             if (existingState == null) {
-                // Create default vanish state for new player
                 val defaultState = org.Kloppie74.locoPillars.database.models.VanishState(
                     playerId = player.uniqueId.toString(),
                     vanished = false,
@@ -53,12 +51,10 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
                     showOthers = mutableSetOf()
                 )
                 VanishDAO.create(player.uniqueId, defaultState)
-                plugin.logger.info("[VanishListener] ✓ Created default vanish state for ${player.name}")
-            } else {
-                plugin.logger.info("[VanishListener] ✓ Loaded vanish state for ${player.name}")
+                debugLog("Created default vanish state for ${player.name}")
             }
         } catch (e: Exception) {
-            plugin.logger.severe("[VanishListener] ❌ Error loading vanish state for ${player.name}: ${e.message}")
+            plugin.logger.severe("[VanishListener] Error loading vanish state for ${player.name}: ${e.message}")
             e.printStackTrace()
         }
 
@@ -74,14 +70,12 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
         val player = event.player
 
         try {
-            // Load current state and save it (in case it changed during session)
             val state = VanishDAO.load(player.uniqueId)
             if (state != null) {
                 VanishDAO.save(player.uniqueId, state)
-                plugin.logger.info("[VanishListener] ✓ Saved vanish state for ${player.name}")
             }
         } catch (e: Exception) {
-            plugin.logger.severe("[VanishListener] ❌ Error saving vanish state for ${player.name}: ${e.message}")
+            plugin.logger.severe("[VanishListener] Error saving vanish state for ${player.name}: ${e.message}")
             e.printStackTrace()
         }
 
@@ -221,18 +215,16 @@ class VanishListener(private val plugin: LocoPillars) : Listener {
         }
     }
 
-    /**
-     * Cleanup: remove all bossbars (useful on plugin disable).
-     */
     fun cleanup() {
         try {
-            bossBars.values.forEach { bossBar ->
-                bossBar.removeAll()
-            }
+            bossBars.values.forEach { it.removeAll() }
             bossBars.clear()
-            plugin.logger.info("[VanishListener] ✓ Cleaned up all bossbars")
         } catch (e: Exception) {
-            plugin.logger.warning("[VanishListener] ✗ Error during cleanup: ${e.message}")
+            plugin.logger.warning("[VanishListener] Error during cleanup: ${e.message}")
         }
+    }
+
+    private fun debugLog(message: String) {
+        if (plugin.configManager.debugMode) plugin.logger.info("[VanishListener] $message")
     }
 }
