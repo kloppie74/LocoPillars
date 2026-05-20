@@ -81,6 +81,7 @@ class EditorInteractionListener(
             EditorHotbarManager.ITEM_VALIDATE_TOOL  -> handleValidate(event, player)
             EditorHotbarManager.ITEM_SPAWN_SETTER   -> handleSpawnSetter(event, player)
             EditorHotbarManager.ITEM_LOBBY_TOOL     -> handleLobbyTool(event, player)
+            EditorHotbarManager.ITEM_LOBBY_DISABLED -> handleLobbyToggleEnable(event, player)
             EditorHotbarManager.ITEM_CONFIG_EDITOR  -> handleSettingsGui(event, player)
             EditorHotbarManager.ITEM_SAVE_CLOSE     -> handleSaveClose(event, player)
             EditorHotbarManager.ITEM_CANCEL_SESSION -> handleCancelSession(event, player)
@@ -190,6 +191,17 @@ class EditorInteractionListener(
         val block = event.clickedBlock
 
         when {
+            player.isSneaking && event.action == Action.LEFT_CLICK_AIR -> {
+                if (lobbyLocationEditor.setLobbyEnabled(mapName, false)) {
+                    hotbarManager.updateLobbySlot(player, false)
+                    player.sendMessage(MSG.chatColors("&c⚠ Lobby DISABLED for &f$mapName&c."))
+                    player.sendMessage(MSG.chatColors("&7Players will now spawn directly in their cage on join."))
+                    player.sendMessage(MSG.chatColors("&7Click the &cred barrier &7in slot 2 to re-enable the lobby."))
+                } else {
+                    player.sendMessage(MSG.chatColors("&cFailed to save lobby state. Is the map loaded?"))
+                }
+            }
+
             player.isSneaking && isLeftClick(event) -> {
                 lobbyAreaLoc1.remove(player.uniqueId)
                 if (lobbyLocationEditor.clearLobbyArea(mapName))
@@ -241,6 +253,26 @@ class EditorInteractionListener(
                         "x" to pending.blockX.toString(), "y" to pending.blockY.toString(), "z" to pending.blockZ.toString()))
                 }
             }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Slot 2 — Lobby Disabled (toggle-enable handler)
+    // -------------------------------------------------------------------------
+
+    private fun handleLobbyToggleEnable(event: PlayerInteractEvent, player: Player) {
+        event.isCancelled = true
+        val mapName = adminEditorManager.getState(player)?.activeMapName ?: run {
+            player.sendMessage(MSG.lang("editor.lobby.no_active_map_short"))
+            return
+        }
+        if (lobbyLocationEditor.setLobbyEnabled(mapName, true)) {
+            hotbarManager.updateLobbySlot(player, true)
+            player.sendMessage(MSG.chatColors("&a✔ Lobby ENABLED for &f$mapName&a."))
+            player.sendMessage(MSG.chatColors("&7Players will use the shared waiting area on join."))
+            player.sendMessage(MSG.chatColors("&7Configure &eSpawnPoint &7and &eSpawn-Area &7with the Lobby Tool (slot 2)."))
+        } else {
+            player.sendMessage(MSG.chatColors("&cFailed to save lobby state. Is the map loaded?"))
         }
     }
 

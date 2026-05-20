@@ -121,6 +121,7 @@ class AdminEditorManager(
         if (!deferHotbar) {
             // Geen world-switch verwacht → hotbar direct geven
             hotbarManager.giveEditorHotbar(player)
+            syncLobbySlot(player, mapName)
             state.hotbarEnabled = true
             sendEnableMessages(player, mapName)
         }
@@ -143,6 +144,7 @@ class AdminEditorManager(
         if (state.hotbarEnabled) return   // al gegeven via het directe pad
 
         hotbarManager.giveEditorHotbar(player)
+        syncLobbySlot(player, state.activeMapName)
         state.hotbarEnabled = true
         sendEnableMessages(player, state.activeMapName)
         debugLog("Hotbar given to ${player.name} after world switch.")
@@ -188,6 +190,7 @@ class AdminEditorManager(
 
         if (enabled) {
             hotbarManager.giveEditorHotbar(player)
+            syncLobbySlot(player, state.activeMapName)
             player.sendMessage(MSG.lang("editor.hotbar.enabled"))
             player.sendMessage(MSG.lang("editor.hotbar.enabled_hint"))
         } else {
@@ -226,6 +229,12 @@ class AdminEditorManager(
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private fun syncLobbySlot(player: Player, mapName: String?) {
+        if (mapName == null) return
+        val enabled = plugin.lobbyLocationEditor.getLobbyEnabled(mapName)
+        hotbarManager.updateLobbySlot(player, enabled)
+    }
 
     private fun sendEnableMessages(player: Player, mapName: String?) {
         player.sendMessage(MSG.lang("editor.mode.activated_title"))

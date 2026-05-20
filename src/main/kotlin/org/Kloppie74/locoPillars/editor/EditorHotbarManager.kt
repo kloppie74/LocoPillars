@@ -24,15 +24,16 @@ import org.Kloppie74.locoPillars.utils.MSG
 class EditorHotbarManager {
 
     companion object {
-        const val ITEM_VALIDATE_TOOL  = "§eValidation Tool"
-        const val ITEM_SPAWN_SETTER   = "§bSpawn Point Setter"
-        const val ITEM_LOBBY_TOOL     = "§5Lobby Tool"
-        const val ITEM_CONFIG_EDITOR  = "§aSettings GUI"
-        const val ITEM_SAVE_CLOSE     = "§2Save & Close"
-        const val ITEM_CANCEL_SESSION = "§cCancel Session"
-        const val ITEM_HOLO_REFRESH   = "§dRefresh Holograms"
-        const val ITEM_SESSION_INFO   = "§7Session Info"
-        const val ITEM_SWITCH_HOTBAR  = "§6Switch Hotbar"
+        const val ITEM_VALIDATE_TOOL   = "§eValidation Tool"
+        const val ITEM_SPAWN_SETTER    = "§bSpawn Point Setter"
+        const val ITEM_LOBBY_TOOL      = "§5Lobby Tool"
+        const val ITEM_LOBBY_DISABLED  = "§cLobby: DISABLED"
+        const val ITEM_CONFIG_EDITOR   = "§aSettings GUI"
+        const val ITEM_SAVE_CLOSE      = "§2Save & Close"
+        const val ITEM_CANCEL_SESSION  = "§cCancel Session"
+        const val ITEM_HOLO_REFRESH    = "§dRefresh Holograms"
+        const val ITEM_SESSION_INFO    = "§7Session Info"
+        const val ITEM_SWITCH_HOTBAR   = "§6Switch Hotbar"
     }
 
     fun giveEditorHotbar(player: Player) {
@@ -55,15 +56,8 @@ class EditorHotbarManager {
             "&8Auto-advances slot and team when full."
         )))
 
-        // [2] Lobby Tool
-        inv.setItem(2, makeTool(Material.BEACON, ITEM_LOBBY_TOOL, listOf(
-            "&7&oSlot 2  —  Lobby Tool",
-            "&7Right-click block:         &aset lobby SpawnPoint",
-            "&7Left-click block:          &aset Spawn-Area Loc1",
-            "&7Shift + right-click block: &aset Spawn-Area Loc2",
-            "&7Shift + left-click:        &eclear Spawn-Area",
-            "&7Right-click air:           &7show lobby status"
-        )))
+        // [2] Lobby Tool — actual item depends on lobby state; start with enabled version
+        updateLobbySlot(player, enabled = true)
 
         // [3] Settings GUI
         inv.setItem(3, makeTool(Material.COMPARATOR, ITEM_CONFIG_EDITOR, listOf(
@@ -116,6 +110,36 @@ class EditorHotbarManager {
         player.updateInventory()
     }
 
+    /**
+     * Updates slot 2 to reflect the current lobby state.
+     * Call this after giving the hotbar and whenever the lobby toggle is flipped.
+     */
+    fun updateLobbySlot(player: Player, enabled: Boolean) {
+        val item = if (enabled) {
+            makeTool(Material.BEACON, ITEM_LOBBY_TOOL, listOf(
+                "&7&oSlot 2  —  Lobby Tool",
+                "&aLobby: ENABLED",
+                "&7Right-click block:         &aset lobby SpawnPoint",
+                "&7Left-click block:          &aset Spawn-Area Loc1",
+                "&7Shift + right-click block: &aset Spawn-Area Loc2",
+                "&7Shift + left-click block:  &eclear Spawn-Area",
+                "&7Right-click air:           &7show lobby status",
+                "&7Shift + left-click air:    &cdisable lobby"
+            ))
+        } else {
+            makeTool(Material.BARRIER, ITEM_LOBBY_DISABLED, listOf(
+                "&7&oSlot 2  —  Lobby Toggle",
+                "&cLobby: DISABLED",
+                "&7Players spawn directly in their cage on join.",
+                "&7No shared waiting area will be used.",
+                " ",
+                "&7Right-click: &aenable lobby"
+            ))
+        }
+        player.inventory.setItem(2, item)
+        player.updateInventory()
+    }
+
     fun removeEditorHotbar(player: Player, snapshot: Map<Int, ItemStack?>) {
         val inv = player.inventory
         for (slot in 0..8) inv.setItem(slot, snapshot[slot])
@@ -128,6 +152,7 @@ class EditorHotbarManager {
             ITEM_VALIDATE_TOOL,
             ITEM_SPAWN_SETTER,
             ITEM_LOBBY_TOOL,
+            ITEM_LOBBY_DISABLED,
             ITEM_CONFIG_EDITOR,
             ITEM_SAVE_CLOSE,
             ITEM_CANCEL_SESSION,

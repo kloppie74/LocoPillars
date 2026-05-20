@@ -80,6 +80,36 @@ class LobbyLocationEditor(
     // Read
     // -------------------------------------------------------------------------
 
+    // -------------------------------------------------------------------------
+    // Read / Write — LobbyEnabled
+    // -------------------------------------------------------------------------
+
+    /** Returns whether the lobby waiting area is enabled for [mapName]. Defaults to `true`. */
+    fun getLobbyEnabled(mapName: String): Boolean {
+        val config = mapRepository.loadMapSettings(mapName) ?: return true
+        return config.getBoolean("Settings.LobbyEnabled", true)
+    }
+
+    /**
+     * Saves the lobby enabled/disabled state to `Settings.LobbyEnabled` in
+     * [mapName]'s `settings.yml`.
+     * @return `true` on success.
+     */
+    fun setLobbyEnabled(mapName: String, enabled: Boolean): Boolean {
+        val config = mapRepository.loadMapSettings(mapName) ?: run {
+            plugin.logger.warning("[LobbyLocationEditor] Cannot set LobbyEnabled: settings missing for $mapName")
+            return false
+        }
+        config.set("Settings.LobbyEnabled", enabled)
+        val saved = mapRepository.saveMapSettings(mapName, config)
+        debugLog("Set LobbyEnabled=$enabled for $mapName")
+        return saved
+    }
+
+    // -------------------------------------------------------------------------
+    // Read — SpawnPoint / Spawn-Area
+    // -------------------------------------------------------------------------
+
     /** Returns the current lobby spawn point for [mapName], or `null` if not set. */
     fun getLobbySpawn(mapName: String): LobbySpawn? {
         val config = mapRepository.loadMapSettings(mapName) ?: return null
@@ -189,6 +219,14 @@ class LobbyLocationEditor(
      */
     fun showLobbyStatus(player: Player, mapName: String) {
         player.sendMessage(MSG.chatColors("&6=== Lobby Settings: $mapName ==="))
+
+        val lobbyEnabled = getLobbyEnabled(mapName)
+        if (lobbyEnabled) {
+            player.sendMessage(MSG.chatColors("&eLobby: &a✓ ENABLED &7(players use shared waiting area)"))
+        } else {
+            player.sendMessage(MSG.chatColors("&eLobby: &c✗ DISABLED &7(players spawn directly in cage)"))
+            player.sendMessage(MSG.chatColors("  &7Toggle: &eShift + left-click air &7with the Lobby Tool"))
+        }
 
         val spawn = getLobbySpawn(mapName)
         if (spawn != null) {
