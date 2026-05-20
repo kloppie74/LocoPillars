@@ -6,6 +6,7 @@ import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.arena.ArenaManager
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.events.TimerEvent
+import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import java.util.*
 
@@ -42,6 +43,17 @@ class GameManager(private val plugin: LocoPillars) {
     }
 
     fun joinGame(player: Player, gameTypeName: String): GameInstance? {
+        if (player.isDead) {
+            try {
+                player.spigot().respawn()
+            } catch (_: Exception) {
+            }
+            if (player.isDead) {
+                player.sendMessage(MSG.chatColors("&cRespawn eerst en probeer daarna opnieuw."))
+                return null
+            }
+        }
+
         val instance = joinManager.joinGame(player, gameTypeName, gameplayManager)
         if (instance != null) {
             SpectatorUtils.removeSpectatorStatus(player, plugin)

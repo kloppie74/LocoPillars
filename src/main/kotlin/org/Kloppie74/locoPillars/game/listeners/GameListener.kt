@@ -84,10 +84,31 @@ class GameListener(private val plugin: LocoPillars) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerRespawn(event: PlayerRespawnEvent) {
-        val respawnLoc = plugin.gameManager.getAndClearDeadRespawnLocation(event.player.uniqueId)
+        val player = event.player
+        val respawnLoc = plugin.gameManager.getAndClearDeadRespawnLocation(player.uniqueId)
         if (respawnLoc != null) {
             event.respawnLocation = respawnLoc
         }
+
+        val activeSpectatorInstance = plugin.gameManager.getAllInstances().firstOrNull { instance ->
+            instance.state == GameState.ACTIVE && instance.spectators.contains(player.uniqueId)
+        } ?: return
+
+        // Re-apply spectator state and visibility after respawn to prevent floating/visible dead players.
+        plugin.server.scheduler.runTaskLater(plugin, Runnable {
+            if (!player.isOnline) return@Runnable
+            if (plugin.gameManager.getPlayerInstance(player) != null) return@Runnable
+            if (!activeSpectatorInstance.spectators.contains(player.uniqueId)) return@Runnable
+            if (activeSpectatorInstance.state != GameState.ACTIVE) return@Runnable
+            SpectatorUtils.setPlayerAsSpectator(player, plugin)
+            activeSpectatorInstance.players
+                .mapNotNull { plugin.server.getPlayer(it) }
+                .forEach { alivePlayer ->
+                    alivePlayer.hidePlayer(plugin, player)
+                    player.showPlayer(plugin, alivePlayer)
+                }
+            plugin.spectateListener?.refreshPlayer(player)
+        }, 1L)
     }
 
     // =================== DAMAGE HANDLING ===================

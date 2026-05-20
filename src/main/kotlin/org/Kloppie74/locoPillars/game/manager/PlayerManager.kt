@@ -12,6 +12,7 @@ class PlayerManager(private val plugin: LocoPillars) {
 
     fun preparePlayerForGame(player: Player) {
         debugLog("Preparing ${player.name} for game")
+        forceRespawnIfDead(player)
 
         // Remove from spectator map first so state is clean
         SpectatorUtils.clearCache(player)
@@ -50,6 +51,7 @@ class PlayerManager(private val plugin: LocoPillars) {
 
     fun restorePlayerState(player: Player) {
         debugLog("Restoring state for ${player.name}")
+        forceRespawnIfDead(player)
 
         player.gameMode = GameMode.SURVIVAL
         player.health = 20.0
@@ -74,6 +76,16 @@ class PlayerManager(private val plugin: LocoPillars) {
         }
 
         debugLog("Player state restored for ${player.name}")
+    }
+
+    private fun forceRespawnIfDead(player: Player) {
+        if (!player.isDead) return
+        try {
+            player.spigot().respawn()
+            debugLog("Forced respawn for ${player.name}")
+        } catch (ex: Exception) {
+            plugin.logger.warning("[PlayerManager] Failed to force respawn ${player.name}: ${ex.message}")
+        }
     }
 
     private fun debugLog(message: String) {
