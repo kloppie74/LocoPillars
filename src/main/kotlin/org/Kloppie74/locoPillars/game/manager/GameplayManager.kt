@@ -41,14 +41,21 @@ class GameplayManager(
     private val timerEvent: TimerEvent,
     private val configManager: ConfigManager
 ) {
+    companion object {
+        private const val MAX_RESPAWN_ATTEMPTS = 3
+        private const val TICKS_PER_SECOND = 20L
+    }
+
     private data class EliminatedPlayerSession(
         val instance: GameInstance,
         var respawnLocation: Location,
-        var keepAsSpectator: Boolean
+        var keepAsSpectator: Boolean = true,
+        var respawnAttempts: Int = 0
     )
 
     private val gameTimers = mutableMapOf<UUID, BukkitRunnable>()
     var spectateListener: SpectateListener? = null
+    private val playerManager = PlayerManager(plugin)
 
     private val instanceItemDistribution = mutableMapOf<UUID, MutableSet<UUID>>()
     private val achievementListener get() = plugin.achievementListener
@@ -466,8 +473,7 @@ class GameplayManager(
         instance.spectators.add(player.uniqueId)
         eliminatedPlayerSessions[player.uniqueId] = EliminatedPlayerSession(
             instance = instance,
-            respawnLocation = gameLobbySpawn.clone(),
-            keepAsSpectator = true
+            respawnLocation = gameLobbySpawn.clone()
         )
         instance.players.mapNotNull { Bukkit.getPlayer(it) }.forEach { alivePlayer ->
             alivePlayer.hidePlayer(plugin, player)
@@ -640,11 +646,17 @@ class GameplayManager(
         val lobbyRespawn = plugin.configManager.getLobbySpawnLocation() ?: plugin.server.worlds.first().spawnLocation
         val spectatorSnapshot = instance.spectators.toList()
         spectatorSnapshot.forEach { spectatorId ->
-            eliminatedPlayerSessions[spectatorId] = EliminatedPlayerSession(
-                instance = instance,
-                respawnLocation = lobbyRespawn.clone(),
-                keepAsSpectator = false
-            )
+            val existing = eliminatedPlayerSessions[spectatorId]
+            if (existing != null) {
+                existing.keepAsSpectator = false
+                existing.respawnLocation = lobbyRespawn.clone()
+            } else {
+                eliminatedPlayerSessions[spectatorId] = EliminatedPlayerSession(
+                    instance = instance,
+                    respawnLocation = lobbyRespawn.clone(),
+                    keepAsSpectator = false
+                )
+            }
         }
         spectatorSnapshot.forEach { spectatorId ->
             val spectator = Bukkit.getPlayer(spectatorId)
@@ -698,14 +710,25 @@ class GameplayManager(
 
     // =================== UTILITY METHODS ===================
 
-    private fun scheduleForcedRespawn(playerId: UUID) {
+    private fun scheduleForcedRespawn(playerId: UUID, delayTicks: Long = 1L) {
         object : BukkitRunnable() {
             override fun run() {
+                val session = eliminatedPlayerSessions[playerId] ?: return
                 val player = Bukkit.getPlayer(playerId) ?: return
                 if (!player.isOnline) return
-                SpectatorUtils.ensurePlayerAlive(player, plugin, "GameplayManager")
+                val recovered = SpectatorUtils.ensurePlayerAlive(player, plugin, "GameplayManager")
+                if (!recovered) {
+                    session.respawnAttempts += 1
+                    if (session.respawnAttempts < MAX_RESPAWN_ATTEMPTS) {
+                        val nextDelay = TICKS_PER_SECOND * (session.respawnAttempts + 1)
+                        scheduleForcedRespawn(playerId, nextDelay)
+                    } else {
+                        plugin.logger.warning("[GameplayManager] Player ${player.name} could not be force-respawned after elimination; clearing eliminated state")
+                        clearEliminatedState(playerId)
+                    }
+                }
             }
-        }.runTaskLater(plugin, 1L)
+        }.runTaskLater(plugin, delayTicks)
     }
 
     fun getEliminatedRespawnLocation(uuid: UUID): Location? {
@@ -718,17 +741,18 @@ class GameplayManager(
     }
 
     fun handleEliminatedPlayerRespawn(player: Player): Boolean {
+        if (!player.isOnline) return false
         val session = eliminatedPlayerSessions[player.uniqueId] ?: return false
         val instance = session.instance
 
-        if (session.keepAsSpectator && instance.state == GameState.ACTIVE && instance.spectators.contains(player.uniqueId)) {
+        if (shouldMaintainAsInGameSpectator(session)) {
+            playerManager.restorePlayerState(player)
             SpectatorUtils.setPlayerAsSpectator(player, plugin)
             enforceInGameSpectatorVisibility(instance, player)
             plugin.spectateListener?.refreshPlayer(player)
             return true
         }
 
-        val playerManager = PlayerManager(plugin)
         playerManager.restorePlayerState(player)
         SpectatorUtils.removeSpectatorStatus(player, plugin)
         SpectatorUtils.clearCache(player)
@@ -741,6 +765,12 @@ class GameplayManager(
         eliminatedPlayerSessions.remove(player.uniqueId)
         plugin.spectateListener?.refreshPlayer(player)
         return true
+    }
+
+    private fun shouldMaintainAsInGameSpectator(session: EliminatedPlayerSession): Boolean {
+        val instance = session.instance
+        return session.keepAsSpectator &&
+                instance.state == GameState.ACTIVE
     }
 
     fun enforceInGameSpectatorVisibility(instance: GameInstance, spectator: Player) {

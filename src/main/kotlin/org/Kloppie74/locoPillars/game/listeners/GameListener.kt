@@ -39,6 +39,9 @@ import java.util.concurrent.ConcurrentHashMap
  * @since 2.0-SNAPSHOT
  */
 class GameListener(private val plugin: LocoPillars) : Listener {
+    companion object {
+        private const val POST_RESPAWN_DELAY_TICKS = 1L
+    }
 
     private val playerPlacedBlocks = ConcurrentHashMap<UUID, MutableSet<Location>>()
     private val cageProtectedPlayers = ConcurrentHashMap<UUID, Boolean>()
@@ -97,7 +100,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
                 if (!player.isOnline) return
                 plugin.gameManager.handleEliminatedPlayerRespawn(player)
             }
-        }.runTaskLater(plugin, 1L)
+        }.runTaskLater(plugin, POST_RESPAWN_DELAY_TICKS)
     }
 
     // =================== DAMAGE HANDLING ===================
