@@ -11,7 +11,8 @@ class GameInstance(
     val id: UUID,
     val arenaInstance: ArenaInstance,
     var state: GameState = GameState.WAITING,
-    var players: MutableList<UUID> = mutableListOf()
+    var players: MutableList<UUID> = mutableListOf(),
+    val spectators: MutableList<UUID> = mutableListOf()
 ) {
 
     // Enhanced team tracking system
@@ -121,6 +122,7 @@ class GameInstance(
     fun reset() {
         state = GameState.RESETTING
         players.clear()
+        spectators.clear()
 
         // Clear team tracking data
         originalTeamAssignments.clear()

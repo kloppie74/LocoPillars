@@ -1,5 +1,6 @@
 package org.Kloppie74.locoPillars.game.manager
 
+import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Material
 import org.bukkit.entity.Player
@@ -35,6 +36,13 @@ class PlayerManager(private val plugin: LocoPillars) {
         // Clear potion effects
         player.activePotionEffects.forEach { effect ->
             player.removePotionEffect(effect.type)
+        }
+
+        // Un-hide this player for all online players (and show all players to them).
+        // Undoes any hidePlayer calls from a previous game where this player died as a spectator.
+        Bukkit.getOnlinePlayers().forEach { onlinePlayer ->
+            onlinePlayer.showPlayer(plugin, player)
+            player.showPlayer(plugin, onlinePlayer)
         }
 
         debugLog("Player ${player.name} prepared successfully")

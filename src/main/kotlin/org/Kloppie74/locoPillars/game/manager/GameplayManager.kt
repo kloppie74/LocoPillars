@@ -25,7 +25,9 @@ import org.Kloppie74.locoPillars.database.dao.ArenaStatsDAO
 import org.Kloppie74.locoPillars.game.rewards.RewardProcessor
 import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
+import org.bukkit.Location
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.HashMap
 
 /**
@@ -45,6 +47,9 @@ class GameplayManager(
     private val instanceItemDistribution = mutableMapOf<UUID, MutableSet<UUID>>()
     private val achievementListener get() = plugin.achievementListener
     private val gameStartTimes = HashMap<UUID, Long>()
+
+    // Respawn locations for players who died in a game — consumed by PlayerRespawnEvent
+    private val deadPlayerRespawnLocations = ConcurrentHashMap<UUID, Location>()
 
     private fun debugLog(message: String) {
         if (configManager.debugMode) plugin.logger.info("[GameplayManager] $message")
@@ -440,6 +445,9 @@ class GameplayManager(
             SchematicCageHelper.clearCageInfoForPlayer(plugin, configManager, player.uniqueId)
         }
 
+        // Capture lobby spawn BEFORE removing from playerToInstance (needs the instance reference)
+        val gameLobbySpawn = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
+
         instance.players.remove(player.uniqueId)
         playerToInstance.remove(player.uniqueId)
 
@@ -452,8 +460,20 @@ class GameplayManager(
         // THEN apply spectator mode so the dead player can watch the rest of the game.
         playerManager.restorePlayerState(player)
         SpectatorUtils.setPlayerAsSpectator(player, plugin)
-        val gameLobbySpawn = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
-        player.teleport(gameLobbySpawn)
+
+        // Track as dead spectator so endGame() can clean them up
+        instance.spectators.add(player.uniqueId)
+
+        // Store respawn location for PlayerRespawnEvent — teleporting a dead player directly doesn't work
+        deadPlayerRespawnLocations[player.uniqueId] = gameLobbySpawn
+
+        // Immediately hide dead player from alive game players using direct API calls.
+        // The async GlobalVisibilityTicker will reinforce this, but direct calls ensure it happens right away.
+        val aliveGamePlayers = instance.players.mapNotNull { Bukkit.getPlayer(it) }
+        aliveGamePlayers.forEach { alivePlayer ->
+            alivePlayer.hidePlayer(plugin, player)   // alive cannot see dead spectator
+            player.showPlayer(plugin, alivePlayer)   // dead spectator can watch alive players
+        }
 
         val spectateListener = plugin.spectateListener
         instance.players.forEach { uuid ->
@@ -615,6 +635,34 @@ class GameplayManager(
         }
         instance.players.clear()
 
+        // Clean up dead spectators who were watching the game.
+        // They were removed from playerToInstance at death time but never processed by endGame().
+        val lobbySpawn = plugin.configManager.getLobbySpawnLocation()
+        instance.spectators.mapNotNull { Bukkit.getPlayer(it) }.filter { it.isOnline }.forEach { spectator ->
+            val spectatorPlayerManager = PlayerManager(plugin)
+            spectatorPlayerManager.restorePlayerState(spectator)
+            SpectatorUtils.clearCache(spectator)  // Remove from SPECTATOR_MAP so they are no longer spectating
+            // Make spectator visible to everyone and show all players to them
+            Bukkit.getOnlinePlayers().forEach { online ->
+                online.showPlayer(plugin, spectator)
+                spectator.showPlayer(plugin, online)
+            }
+            // Update their respawn location to the main lobby in case they haven't clicked Respawn yet
+            if (lobbySpawn != null) {
+                deadPlayerRespawnLocations[spectator.uniqueId] = lobbySpawn
+                spectator.teleport(lobbySpawn)
+            } else {
+                deadPlayerRespawnLocations.remove(spectator.uniqueId)
+            }
+            plugin.teamsListener.onPlayerLeaveGame(spectator)
+            plugin.spectateListener.onPlayerGameStatusChange(spectator)
+        }
+        // Clear respawn entries for offline spectators (stale entries)
+        instance.spectators.forEach { uuid ->
+            if (Bukkit.getPlayer(uuid)?.isOnline != true) deadPlayerRespawnLocations.remove(uuid)
+        }
+        instance.spectators.clear()
+
         object : BukkitRunnable() {
             override fun run() { resetInstance(instance) }
         }.runTaskLater(plugin, 100L)
@@ -694,10 +742,15 @@ class GameplayManager(
         }
     }
 
+    fun getAndClearDeadRespawnLocation(uuid: UUID): Location? {
+        return deadPlayerRespawnLocations.remove(uuid)
+    }
+
     fun cleanup() {
         gameTimers.values.forEach { it.cancel() }
         gameTimers.clear()
         instanceItemDistribution.clear()
+        deadPlayerRespawnLocations.clear()
         SchematicCageHelper.cleanupAllCageSessions(plugin, configManager)
         gameStartTimes.clear()
     }

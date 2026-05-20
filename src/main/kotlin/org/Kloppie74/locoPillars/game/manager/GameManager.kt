@@ -69,6 +69,10 @@ class GameManager(private val plugin: LocoPillars) {
         return result
     }
 
+    fun getAndClearDeadRespawnLocation(uuid: java.util.UUID): org.bukkit.Location? {
+        return gameplayManager.getAndClearDeadRespawnLocation(uuid)
+    }
+
     fun endGameByTimer(instance: GameInstance) {
         gameplayManager.endGameByTimer(instance, playerToInstance, playerManager)
     }

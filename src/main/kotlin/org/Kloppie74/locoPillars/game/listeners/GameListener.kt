@@ -15,6 +15,7 @@ import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
@@ -76,6 +77,16 @@ class GameListener(private val plugin: LocoPillars) : Listener {
 
             // Reset killstreak
             playerKillStreaks[player.uniqueId] = 0
+        }
+    }
+
+    // =================== RESPAWN HANDLING ===================
+
+    @EventHandler(priority = EventPriority.HIGH)
+    fun onPlayerRespawn(event: PlayerRespawnEvent) {
+        val respawnLoc = plugin.gameManager.getAndClearDeadRespawnLocation(event.player.uniqueId)
+        if (respawnLoc != null) {
+            event.respawnLocation = respawnLoc
         }
     }
 
