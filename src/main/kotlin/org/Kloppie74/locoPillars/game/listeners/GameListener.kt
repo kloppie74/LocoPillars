@@ -17,6 +17,7 @@ import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerTeleportEvent
+import org.bukkit.scheduler.BukkitRunnable
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.data.GameState
@@ -89,26 +90,29 @@ class GameListener(private val plugin: LocoPillars) : Listener {
         if (respawnLoc != null) {
             event.respawnLocation = respawnLoc
         }
+        if (!SpectatorUtils.isSpectator(player, plugin)) return
 
         val activeSpectatorInstance = plugin.gameManager.getAllInstances().firstOrNull { instance ->
             instance.state == GameState.ACTIVE && instance.spectators.contains(player.uniqueId)
         } ?: return
 
         // Re-apply spectator state and visibility after respawn to prevent floating/visible dead players.
-        plugin.server.scheduler.runTaskLater(plugin, Runnable {
-            if (!player.isOnline) return@Runnable
-            if (plugin.gameManager.getPlayerInstance(player) != null) return@Runnable
-            if (!activeSpectatorInstance.spectators.contains(player.uniqueId)) return@Runnable
-            if (activeSpectatorInstance.state != GameState.ACTIVE) return@Runnable
-            SpectatorUtils.setPlayerAsSpectator(player, plugin)
-            activeSpectatorInstance.players
-                .mapNotNull { plugin.server.getPlayer(it) }
-                .forEach { alivePlayer ->
-                    alivePlayer.hidePlayer(plugin, player)
-                    player.showPlayer(plugin, alivePlayer)
+        object : BukkitRunnable() {
+            override fun run() {
+                if (shouldRestoreSpectatorState(player, activeSpectatorInstance)) {
+                    SpectatorUtils.setPlayerAsSpectator(player, plugin)
+                    gameplayManager.enforceInGameSpectatorVisibility(activeSpectatorInstance, player)
+                    plugin.spectateListener?.refreshPlayer(player)
                 }
-            plugin.spectateListener?.refreshPlayer(player)
-        }, 1L)
+            }
+        }.runTaskLater(plugin, 1L)
+    }
+
+    private fun shouldRestoreSpectatorState(player: Player, instance: GameInstance): Boolean {
+        return player.isOnline &&
+                plugin.gameManager.getPlayerInstance(player) == null &&
+                instance.spectators.contains(player.uniqueId) &&
+                instance.state == GameState.ACTIVE
     }
 
     // =================== DAMAGE HANDLING ===================

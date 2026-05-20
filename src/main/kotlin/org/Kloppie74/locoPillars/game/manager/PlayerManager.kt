@@ -79,12 +79,9 @@ class PlayerManager(private val plugin: LocoPillars) {
     }
 
     private fun forceRespawnIfDead(player: Player) {
-        if (!player.isDead) return
-        try {
-            player.spigot().respawn()
+        val wasDead = player.isDead
+        if (SpectatorUtils.ensurePlayerAlive(player, plugin, "PlayerManager") && wasDead) {
             debugLog("Forced respawn for ${player.name}")
-        } catch (ex: Exception) {
-            plugin.logger.warning("[PlayerManager] Failed to force respawn ${player.name}: ${ex.message}")
         }
     }
 

@@ -55,16 +55,6 @@ class GameplayManager(
         if (configManager.debugMode) plugin.logger.info("[GameplayManager] $message")
     }
 
-    private fun forceRespawnIfDead(player: Player) {
-        if (!player.isDead) return
-        try {
-            player.spigot().respawn()
-            debugLog("Forced respawn for ${player.name}")
-        } catch (ex: Exception) {
-            plugin.logger.warning("[GameplayManager] Failed to force respawn ${player.name}: ${ex.message}")
-        }
-    }
-
     // =================== ACHIEVEMENT & STATS WRAPPERS ===================
 
     fun onGameWon(player: Player, gameTime: Long? = null) {
@@ -484,7 +474,7 @@ class GameplayManager(
             override fun run() {
                 val refreshed = Bukkit.getPlayer(player.uniqueId) ?: return
                 if (!refreshed.isOnline) return
-                forceRespawnIfDead(refreshed)
+                SpectatorUtils.ensurePlayerAlive(refreshed, plugin, "GameplayManager")
                 enforceInGameSpectatorVisibility(instance, refreshed)
             }
         }.runTaskLater(plugin, 1L)
@@ -653,7 +643,7 @@ class GameplayManager(
         // They were removed from playerToInstance at death time but never processed by endGame().
         val lobbySpawn = plugin.configManager.getLobbySpawnLocation()
         instance.spectators.mapNotNull { Bukkit.getPlayer(it) }.filter { it.isOnline }.forEach { spectator ->
-            forceRespawnIfDead(spectator)
+            SpectatorUtils.ensurePlayerAlive(spectator, plugin, "GameplayManager")
             val spectatorPlayerManager = PlayerManager(plugin)
             spectatorPlayerManager.restorePlayerState(spectator)
             SpectatorUtils.clearCache(spectator)  // Remove from SPECTATOR_MAP so they are no longer spectating
@@ -718,7 +708,7 @@ class GameplayManager(
 
     // =================== UTILITY METHODS ===================
 
-    private fun enforceInGameSpectatorVisibility(instance: GameInstance, spectator: Player) {
+    fun enforceInGameSpectatorVisibility(instance: GameInstance, spectator: Player) {
         val aliveGamePlayers = instance.players.mapNotNull { Bukkit.getPlayer(it) }
         aliveGamePlayers.forEach { alivePlayer ->
             alivePlayer.hidePlayer(plugin, spectator)
