@@ -17,18 +17,19 @@ import org.Kloppie74.locoPillars.utils.MSG
  *
  * Covers every setting present in a full game YML:
  *
- * Row 0 (slots 0–8)   — Schematic / Save region
+ * Row 0 (slots 0–8)   — Schematic / Save region (SaveRadius XZ, SaveHeight Y)
  * Row 1 (slots 9–17)  — Border settings
  * Row 2 (slots 18–26) — Gameplay: build/death bounds + break blocks
  * Row 3 (slots 27–35) — Timers
  * Row 4 (slots 36–44) — Player/Team counts + spawn holograms
- * Row 5 (slots 45–53) — World settings + misc + close button
+ * Row 5 (slots 45–53) — World settings + misc + blacklist + close button
  *
  * All values persist to settings.yml via EditorSession.
  */
 class EditorSettingsGui(
     private val plugin: LocoPillars,
-    private val editorSessionManager: EditorSessionManager
+    private val editorSessionManager: EditorSessionManager,
+    private val blacklistedItemsGui: BlacklistedItemsGui
 ) : Listener {
 
     private val title = MSG.chatColors("&0&l⚙ &bMap Settings &0&l⚙")
@@ -48,16 +49,21 @@ class EditorSettingsGui(
 
         // ── Row 0: Schematic ─────────────────────────────────────────────────
         inv.setItem(0, section("&6&lSCHEMATIC"))
-        inv.setItem(1, btn(Material.PAPER, "&eSave Radius", session.getSaveRadius().toString(), "blocks",
+        inv.setItem(1, btn(Material.PAPER, "&eSave Radius (X/Z)", session.getSaveRadius().toString(), "blocks",
             "&7L-click &a+5  &7| R-click &c-5",
-            "&7Shift+click &a+25 &7| &c-25"))
+            "&7Shift+click &a+25 &7| &c-25",
+            "&8Only affects horizontal (X/Z) save area"))
         inv.setItem(2, btn(Material.GOLDEN_PICKAXE, "&eWorlds Amount", session.getWorldsAmount().toString(), "instances",
             "&7L-click &a+1  &7| R-click &c-1",
             "&7Shift+click &a+5  &7| &c-5",
             "&7How many parallel instances to preload"))
         inv.setItem(3, toggle(Material.CHEST_MINECART, "&eLoad Map on Start", session.isLoadMap()))
-        // Row 0 filler
-        for (slot in 4..8) inv.setItem(slot, filler())
+        inv.setItem(4, btn(Material.SPYGLASS, "&eSave Height (Y)", session.getSaveHeight().toString(), "blocks above center",
+            "&7L-click &a+10 &7| R-click &c-10",
+            "&7Shift+click &a+50 &7| &c-50",
+            "&8Saves from world floor up to center+height",
+            "&8Default: 200  |  Capped at world max height"))
+        for (slot in 5..8) inv.setItem(slot, filler())
 
         // ── Row 1: Border ────────────────────────────────────────────────────
         inv.setItem(9, section("&a&lBORDER"))
@@ -82,7 +88,16 @@ class EditorSettingsGui(
             "&7Player dies below this Y",
             "&7L-click &a+5  &7| R-click &c-5"))
         inv.setItem(22, toggle(Material.IRON_PICKAXE, "&cCan Break Map Blocks", session.canBreakMapBlocks()))
-        for (slot in 23..26) inv.setItem(slot, filler())
+        inv.setItem(23, toggle(Material.OAK_DOOR, "&cLobby Enabled", session.isLobbyEnabled()).also { item ->
+            val meta = item.itemMeta!!
+            val extra = if (session.isLobbyEnabled())
+                listOf(MSG.chatColors("&8Players wait in a shared lobby before game starts"))
+            else
+                listOf(MSG.chatColors("&8Players spawn directly in their cage on join"))
+            meta.lore = (meta.lore ?: emptyList()) + extra
+            item.itemMeta = meta
+        })
+        for (slot in 24..26) inv.setItem(slot, filler())
 
         // ── Row 3: Timers ─────────────────────────────────────────────────────
         inv.setItem(27, section("&d&lTIMERS"))
@@ -120,7 +135,13 @@ class EditorSettingsGui(
             "&7L-click: cycle   &8(Blacklisted / Whitelisted / None)",
             "&7Controls which items are allowed in chests"))
         inv.setItem(48, toggle(Material.NETHER_STAR, "&eLucky Blocks", session.isLuckyBlocksEnabled()))
-        for (slot in 49..52) inv.setItem(slot, filler())
+        val blacklistCount = session.getBlacklistedItems().size
+        inv.setItem(49, makeButton(Material.RED_WOOL, "&cBlacklisted Items",
+            listOf(
+                MSG.chatColors("&7Currently: &f$blacklistCount &7item(s) blacklisted"),
+                MSG.chatColors("&7Click to manage the blacklist")
+            )))
+        for (slot in 50..52) inv.setItem(slot, filler())
         inv.setItem(53, makeButton(Material.BARRIER, "&cClose", listOf("&7Click to close the settings GUI.")))
 
         player.openInventory(inv)
@@ -150,6 +171,7 @@ class EditorSettingsGui(
             1  -> session.setSaveRadius(session.getSaveRadius()    + step(left, shift, 5, 25))
             2  -> session.setWorldsAmount(session.getWorldsAmount()+ step(left, shift, 1, 5))
             3  -> session.toggleLoadMap()
+            4  -> session.setSaveHeight(session.getSaveHeight()    + step(left, shift, 10, 50))
 
             // ── Row 1: Border ─────────────────────────────────────────────────
             10 -> session.toggleBorderEnabled()
@@ -162,6 +184,7 @@ class EditorSettingsGui(
             20 -> session.setBuildRange(session.getBuildRange()    + step(left, shift, 5, 5))
             21 -> session.setDeathHeight(session.getDeathHeight()  + step(left, shift, 5, 5))
             22 -> session.toggleBreakMapBlocks()
+            23 -> session.toggleLobbyEnabled()
 
             // ── Row 3: Timers ──────────────────────────────────────────────────
             28 -> session.setLobbyTimer(session.getLobbyTimer()    + step(left, shift, 5, 5))
@@ -182,6 +205,11 @@ class EditorSettingsGui(
             // ── Row 5: Misc ────────────────────────────────────────────────────
             47 -> session.cycleRandomItemsType()
             48 -> session.toggleLuckyBlocks()
+            49 -> {
+                player.closeInventory()
+                Bukkit.getScheduler().runTask(plugin, Runnable { blacklistedItemsGui.open(player) })
+                return
+            }
             53 -> { player.closeInventory(); return }
 
             else -> return

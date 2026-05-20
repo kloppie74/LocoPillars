@@ -68,11 +68,10 @@ class EditorSessionManager(
         val saveRadius  = mapRepository.getSaveRadius(mapName).toDouble()
 
         // Paste origin = the minimum corner of the save region, matching
-        // getSaveRegionBounds() loc1 exactly. This ensures the schematic lands
-        // at the same position it was saved from, regardless of how
-        // SchematicHelper handles the clipboard's internal origin offset.
+        // getSaveRegionBounds() loc1 exactly. Y always starts at world floor
+        // so all block Y-coordinates are preserved after a round-trip save/load.
         val pasteX      = centerX - saveRadius
-        val pasteY      = maxOf(world.minHeight.toDouble(), centerY - saveRadius)
+        val pasteY      = world.minHeight.toDouble()
         val pasteZ      = centerZ - saveRadius
         val centerLoc   = Location(world, pasteX, pasteY, pasteZ)
 
@@ -194,6 +193,27 @@ class EditorSessionManager(
         saveSchematicAsync(loc1, loc2, schemFile)
             .exceptionally { ex ->
                 plugin.logger.severe("[EditorSessionManager] Failed to save schematic to ${schemFile.name}: ${ex.message}")
+                false
+            }
+            .whenComplete { success, _ -> runOnMain { callback(success ?: false) } }
+    }
+
+    /**
+     * Load a schematic file and paste it into the player's active editor session world.
+     * Pastes at the session's minimum corner (world floor) so coordinates are preserved.
+     * Callback is invoked on the main thread with the success boolean.
+     */
+    fun loadSchematicIntoSession(player: Player, schemFile: java.io.File, callback: (Boolean) -> Unit) {
+        val session = getSession(player) ?: run { callback(false); return }
+        val pasteLocation = session.getSaveRegionBounds().first
+
+        loadSchematicAsync(schemFile)
+            .thenCompose { clipboard ->
+                if (clipboard == null) CompletableFuture.completedFuture(false)
+                else pasteClipboardAsync(clipboard, pasteLocation)
+            }
+            .exceptionally { ex ->
+                plugin.logger.severe("[EditorSessionManager] Failed to load schematic ${schemFile.name}: ${ex.message}")
                 false
             }
             .whenComplete { success, _ -> runOnMain { callback(success ?: false) } }

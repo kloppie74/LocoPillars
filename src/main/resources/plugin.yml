@@ -85,7 +85,7 @@ commands:
     usage: "/editor <toggle|map|info|doctor|hotbar|holograms|setup|create|edit|delete|list|save|cancel|resize|settings|validate|files|spawn|help> [args]"
     permission: locopillars.admin
     permission-message: "§cYou do not have permission to use the editor!"
-    aliases: [ edit, adminedit ]
+    aliases: [ adminedit, admineditor ]
 
 
 permissions:

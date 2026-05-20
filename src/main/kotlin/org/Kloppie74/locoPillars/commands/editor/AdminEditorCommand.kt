@@ -597,7 +597,7 @@ class AdminEditorCommand(
             val reports = fileValidator.validateAll()
             if (reports.isEmpty()) { player.sendMessage(MSG.lang("editor.validate.no_maps")); return }
             player.sendMessage(MSG.lang("editor.validate.header_all", "count" to reports.size.toString()))
-            reports.values.forEach { r -> player.sendMessage(MSG.chatColors(r.summary())) }
+            reports.values.forEach { r -> sendValidationReport(player, r) }
         }
     }
 
@@ -745,16 +745,19 @@ class AdminEditorCommand(
     // -------------------------------------------------------------------------
 
     private fun handleSchematic(player: Player, args: Array<out String>) {
-        val mapName = args.getOrNull(1) ?: adminEditorManager.getState(player)?.activeMapName ?: run {
-            player.sendMessage(MSG.lang("editor.schematic.usage"))
-            return
-        }
-        if (!mapRepository.mapExists(mapName)) {
-            player.sendMessage(MSG.lang("editor.map_not_found", "name" to mapName)); suggestMaps(player); return
-        }
-        val idArg = args.getOrNull(2)
-        if (idArg == null) {
-            // List existing schematics
+        val hasSession = editorSessionManager.hasSession(player)
+        val sessionMap = adminEditorManager.getState(player)?.activeMapName
+
+        val sub = args.getOrNull(1)?.lowercase()
+
+        // ── List: no sub or map name ─────────────────────────────────────────
+        if (sub == null || (sub != "save" && sub != "load")) {
+            val mapName = if (hasSession && sessionMap != null) sessionMap
+                          else sub ?: run { player.sendMessage(MSG.lang("editor.schematic.usage")); return }
+
+            if (!mapRepository.mapExists(mapName)) {
+                player.sendMessage(MSG.lang("editor.map_not_found", "name" to mapName)); suggestMaps(player); return
+            }
             val files = mapRepository.getMapSchematicFiles(mapName)
             if (files.isEmpty()) {
                 player.sendMessage(MSG.lang("editor.schematic.none", "name" to mapName))
@@ -762,34 +765,46 @@ class AdminEditorCommand(
                 player.sendMessage(MSG.lang("editor.schematic.list_header", "name" to mapName, "count" to files.size.toString()))
                 files.forEach { f -> player.sendMessage(MSG.lang("editor.schematic.list_entry", "file" to f.name)) }
             }
-            player.sendMessage(MSG.lang("editor.schematic.usage_save"))
+            player.sendMessage(MSG.lang("editor.schematic.usage_hint"))
             return
         }
-        val id = idArg.toIntOrNull()
+
+        // ── Save / Load: require active session ──────────────────────────────
+        if (!hasSession || sessionMap == null) {
+            player.sendMessage(MSG.lang("editor.schematic.no_session")); return
+        }
+        val mapName = sessionMap
+
+        val idArg = args.getOrNull(2)
+        val id = idArg?.toIntOrNull()
         if (id == null || id < 1) {
-            player.sendMessage(MSG.lang("editor.schematic.invalid_id"))
-            return
+            player.sendMessage(MSG.lang("editor.schematic.invalid_id")); return
         }
-        if (!editorSessionManager.hasSession(player)) {
-            player.sendMessage(MSG.lang("editor.schematic.no_session"))
-            return
-        }
-        val session = editorSessionManager.getSession(player) ?: return
-        val (loc1, loc2) = session.getSaveRegionBounds()
-        val schemsFolder = mapRepository.getMapSchematicsFolder(mapName)
-        schemsFolder.mkdirs()
+
+        mapRepository.getMapSchematicsFolder(mapName).mkdirs()
         val schemFile = mapRepository.getMapSchematicFile(mapName, id)
 
-        player.sendMessage(MSG.lang("editor.schematic.saving", "id" to id.toString(), "name" to mapName))
-        editorSessionManager.saveSchematicToFile(player, loc1, loc2, schemFile) { success ->
-            if (success) {
-                player.sendMessage(MSG.lang("editor.schematic.saved", "id" to id.toString(), "name" to mapName))
-                val result = gameFileService.runSetupForMap(mapName)
-                if (result.warnings.isNotEmpty()) {
+        if (sub == "save") {
+            val session = editorSessionManager.getSession(player) ?: return
+            val (loc1, loc2) = session.getSaveRegionBounds()
+            player.sendMessage(MSG.lang("editor.schematic.saving", "id" to id.toString(), "name" to mapName))
+            editorSessionManager.saveSchematicToFile(player, loc1, loc2, schemFile) { success ->
+                if (success) {
+                    player.sendMessage(MSG.lang("editor.schematic.saved", "id" to id.toString(), "name" to mapName))
+                    val result = gameFileService.runSetupForMap(mapName)
                     result.warnings.forEach { player.sendMessage(MSG.lang("editor.schematic.sync_warning", "msg" to it)) }
+                } else {
+                    player.sendMessage(MSG.lang("editor.schematic.save_failed", "id" to id.toString()))
                 }
-            } else {
-                player.sendMessage(MSG.lang("editor.schematic.save_failed", "id" to id.toString()))
+            }
+        } else { // load
+            if (!schemFile.exists()) {
+                player.sendMessage(MSG.lang("editor.schematic.not_found", "id" to id.toString(), "name" to mapName)); return
+            }
+            player.sendMessage(MSG.lang("editor.schematic.loading", "id" to id.toString(), "name" to mapName))
+            editorSessionManager.loadSchematicIntoSession(player, schemFile) { success ->
+                if (success) player.sendMessage(MSG.lang("editor.schematic.loaded", "id" to id.toString(), "name" to mapName))
+                else         player.sendMessage(MSG.lang("editor.schematic.load_failed", "id" to id.toString()))
             }
         }
     }
@@ -954,8 +969,14 @@ class AdminEditorCommand(
                     mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
                 "map" -> (mutableListOf("clear") + mapRepository.getAllMapNames())
                     .filter { it.startsWith(args[1], ignoreCase = true) }
-                "validate", "files", "setup", "enable", "disable", "schematic", "rewards" ->
+                "validate", "files", "setup", "enable", "disable", "rewards" ->
                     mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
+                "schematic" -> {
+                    val inSession = editorSessionManager.hasSession(sender) &&
+                            adminEditorManager.getState(sender)?.activeMapName != null
+                    if (inSession) listOf("save", "load").filter { it.startsWith(args[1], ignoreCase = true) }
+                    else mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
+                }
                 "hotbar"    -> listOf("on", "off", "toggle", "status").filter { it.startsWith(args[1], ignoreCase = true) }
                 "holograms" -> listOf("on", "off", "refresh", "status").filter { it.startsWith(args[1], ignoreCase = true) }
                 "resize"    -> listOf("25", "50", "75", "100", "150", "200").filter { it.startsWith(args[1]) }
@@ -976,7 +997,8 @@ class AdminEditorCommand(
                     listOf("clear").filter { it.startsWith(args[2], ignoreCase = true) }
                 args[0].equals("lobby", ignoreCase = true) && args[1].equals("area", ignoreCase = true) ->
                     listOf("set", "clear").filter { it.startsWith(args[2], ignoreCase = true) }
-                args[0].equals("schematic", ignoreCase = true) ->
+                args[0].equals("schematic", ignoreCase = true) &&
+                        (args[1].equals("save", ignoreCase = true) || args[1].equals("load", ignoreCase = true)) ->
                     listOf("1", "2", "3", "4", "5").filter { it.startsWith(args[2]) }
                 args[0].equals("rewards", ignoreCase = true) ->
                     listOf("list", "add-message", "add-command", "clear").filter { it.startsWith(args[2], ignoreCase = true) }
@@ -1005,14 +1027,18 @@ class AdminEditorCommand(
 
     private fun sendValidationReport(player: Player, report: EditorFileValidator.ValidationReport) {
         player.sendMessage(MSG.lang("editor.validate.header_single", "name" to report.mapName))
-        if (report.isValid) player.sendMessage(MSG.lang("editor.validate.valid"))
-        else {
-            player.sendMessage(MSG.lang("editor.validate.errors_header_short"))
+        if (report.errors.isEmpty()) {
+            player.sendMessage(MSG.lang("editor.validate.valid"))
+        } else {
+            player.sendMessage(MSG.lang("editor.validate.errors_header", "count" to report.errors.size.toString()))
             report.errors.forEach { player.sendMessage(MSG.lang("editor.validate.error_entry", "error" to it)) }
         }
         if (report.warnings.isNotEmpty()) {
-            player.sendMessage(MSG.lang("editor.validate.warnings_header_short"))
+            player.sendMessage(MSG.lang("editor.validate.warnings_header", "count" to report.warnings.size.toString()))
             report.warnings.forEach { player.sendMessage(MSG.lang("editor.validate.warning_entry", "warning" to it)) }
+        }
+        if (report.info.isNotEmpty()) {
+            report.info.forEach { player.sendMessage(MSG.chatColors("  &8ℹ $it")) }
         }
     }
 

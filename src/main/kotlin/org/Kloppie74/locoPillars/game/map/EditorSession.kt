@@ -30,6 +30,7 @@ class EditorSession(
 
     val sessionId: UUID = UUID.randomUUID()
     private var saveRadius: Int = mapRepository.getSaveRadius(mapName)
+    private var saveHeight: Int = mapRepository.getSaveHeight(mapName)
     private var borderSize: Double = mapRepository.getBorderSize(mapName)
     private var borderEnabled: Boolean = mapRepository.loadMapSettings(mapName)
         ?.getBoolean("Border.Enabled", true)
@@ -64,6 +65,9 @@ class EditorSession(
     private var canBreakMapBlocks: Boolean = mapRepository.loadMapSettings(mapName)
         ?.getBoolean("Settings.Can-Break-Map-Blocks", false)
         ?: false
+    private var lobbyEnabled: Boolean = mapRepository.loadMapSettings(mapName)
+        ?.getBoolean("Settings.LobbyEnabled", true)
+        ?: true
     private var hologramsEnabled: Boolean = mapRepository.loadMapSettings(mapName)
         ?.getBoolean("Editor.Holograms.Enabled", true)
         ?: true
@@ -85,6 +89,8 @@ class EditorSession(
     // RandomItems.Type: "Blacklisted" | "Whitelisted" | "None"
     private var randomItemsType: String = mapRepository.loadMapSettings(mapName)
         ?.getString("Settings.RandomItems.Type", "Blacklisted") ?: "Blacklisted"
+    private var blacklistedItems: MutableList<String> = mapRepository.loadMapSettings(mapName)
+        ?.getStringList("Settings.RandomItems.BlacklistedItems")?.toMutableList() ?: mutableListOf()
     private var luckyBlocksEnabled: Boolean = mapRepository.loadMapSettings(mapName)
         ?.let { cfg -> cfg.getList("Settings.Luckyblocks")?.isNotEmpty() == true } ?: false
 
@@ -136,16 +142,15 @@ class EditorSession(
      * Display RED particles outlining the save region
      */
     private fun displaySaveRegionParticles() {
-        val world = tempWorld
-        val radius = saveRadius.toDouble()
+        val world    = tempWorld
+        val xzRadius = saveRadius.toDouble()
 
-        // Calculate bounds
-        val minX = centerX - radius
-        val maxX = centerX + radius
-        val minY = Math.max(world.minHeight.toDouble(), centerY - radius)
-        val maxY = Math.min(world.maxHeight.toDouble(), centerY + radius)
-        val minZ = centerZ - radius
-        val maxZ = centerZ + radius
+        val minX = centerX - xzRadius
+        val maxX = centerX + xzRadius
+        val minY = world.minHeight.toDouble()
+        val maxY = minOf(world.maxHeight.toDouble(), centerY + saveHeight.toDouble())
+        val minZ = centerZ - xzRadius
+        val maxZ = centerZ + xzRadius
 
         // Draw cuboid outline with particles
         drawParticleLine(world, minX, minY, minZ, maxX, minY, minZ, Color.RED) // Bottom edge 1
@@ -296,29 +301,43 @@ class EditorSession(
     fun getGameTimer(): Int = gameTimer
     fun getItemTimer(): Int = itemTimer
     fun canBreakMapBlocks(): Boolean = canBreakMapBlocks
+    fun isLobbyEnabled(): Boolean = lobbyEnabled
     fun isHologramsEnabled(): Boolean = hologramsEnabled
 
     /**
      * Update the schematic radius and refresh particle display
      */
     fun setSaveRadius(radius: Int) {
-        if (radius < 10) {
-            player.sendMessage(MSG.chatColors("&cSave radius must be at least 10!"))
-            return
-        }
+        val clamped = radius.coerceIn(10, 500)
+        saveRadius = clamped
+        mapRepository.updateSaveRadius(mapName, clamped)
+        player.sendActionBar(MSG.chatColors("&aSave XZ-radius: &f$clamped blocks"))
+        debugLog("Updated save radius to $clamped for map $mapName")
+    }
 
-        if (radius > 500) {
-            player.sendMessage(MSG.chatColors("&cSave radius cannot exceed 500!"))
-            return
-        }
+    fun getSaveHeight(): Int = saveHeight
 
-        saveRadius = radius
-        mapRepository.updateSaveRadius(mapName, radius)
+    fun setSaveHeight(height: Int) {
+        val clamped = height.coerceIn(20, 500)
+        saveHeight = clamped
+        mapRepository.updateSaveHeight(mapName, clamped)
+        player.sendActionBar(MSG.chatColors("&aSave height: &f+$clamped blocks above center"))
+        debugLog("Updated save height to $clamped for map $mapName")
+    }
 
-        player.sendMessage(MSG.chatColors("&aSave radius updated to: &f$radius"))
-        player.sendMessage(MSG.chatColors("&7The RED particle boundary has been updated"))
+    fun getBlacklistedItems(): List<String> = blacklistedItems.toList()
 
-        debugLog("Updated save radius to $radius for map $mapName")
+    fun addBlacklistedItem(material: String): Boolean {
+        if (blacklistedItems.contains(material)) return false
+        blacklistedItems.add(material)
+        persist("Settings.RandomItems.BlacklistedItems", blacklistedItems)
+        return true
+    }
+
+    fun removeBlacklistedItem(material: String): Boolean {
+        if (!blacklistedItems.remove(material)) return false
+        persist("Settings.RandomItems.BlacklistedItems", blacklistedItems)
+        return true
     }
 
     fun setBorderSize(size: Double) {
@@ -393,7 +412,13 @@ class EditorSession(
     fun toggleBreakMapBlocks() {
         canBreakMapBlocks = !canBreakMapBlocks
         persist("Settings.Can-Break-Map-Blocks", canBreakMapBlocks)
-        player.sendMessage(MSG.chatColors("&aCan-Break-Map-Blocks: &f${if (canBreakMapBlocks) "enabled" else "disabled"}"))
+        player.sendActionBar(MSG.chatColors("&aCan-Break-Map-Blocks: &f${if (canBreakMapBlocks) "enabled" else "disabled"}"))
+    }
+
+    fun toggleLobbyEnabled() {
+        lobbyEnabled = !lobbyEnabled
+        persist("Settings.LobbyEnabled", lobbyEnabled)
+        player.sendActionBar(MSG.chatColors("&aLobby: &f${if (lobbyEnabled) "enabled" else "disabled"}"))
     }
 
     fun setHologramsEnabled(enabled: Boolean) {
@@ -429,21 +454,11 @@ class EditorSession(
      * Get the save region bounds as a pair of locations
      */
     fun getSaveRegionBounds(): Pair<Location, Location> {
-        val radius = saveRadius.toDouble()
+        val xzRadius = saveRadius.toDouble()
+        val yTop     = minOf(tempWorld.maxHeight.toDouble(), centerY + saveHeight.toDouble())
 
-        val loc1 = Location(
-            tempWorld,
-            centerX - radius,
-            Math.max(tempWorld.minHeight.toDouble(), centerY - radius),
-            centerZ - radius
-        )
-
-        val loc2 = Location(
-            tempWorld,
-            centerX + radius,
-            Math.min(tempWorld.maxHeight.toDouble(), centerY + radius),
-            centerZ + radius
-        )
+        val loc1 = Location(tempWorld, centerX - xzRadius, tempWorld.minHeight.toDouble(), centerZ - xzRadius)
+        val loc2 = Location(tempWorld, centerX + xzRadius, yTop, centerZ + xzRadius)
 
         return Pair(loc1, loc2)
     }
@@ -496,14 +511,15 @@ class EditorSession(
         player.sendMessage(MSG.chatColors("&6=== Editor Session Info ==="))
         player.sendMessage(MSG.chatColors("&eMap: &f$mapName"))
         player.sendMessage(MSG.chatColors("&eWorld: &f${tempWorld.name}"))
-        player.sendMessage(MSG.chatColors("&eSave Radius: &f$saveRadius"))
+        player.sendMessage(MSG.chatColors("&eSave Radius (X/Z): &f$saveRadius blocks"))
+        player.sendMessage(MSG.chatColors("&eSave Height (Y):   &f+$saveHeight blocks above center  &8(floor: world min)"))
         player.sendMessage(MSG.chatColors("&eBorder Size: &f${borderSize.toInt()}"))
         player.sendMessage(MSG.chatColors("&eBorder Enabled: &f${if (borderEnabled) "yes" else "no"}"))
         player.sendMessage(MSG.chatColors("&eHolograms: &f${if (hologramsEnabled) "enabled" else "disabled"}"))
         player.sendMessage(MSG.chatColors("&eCenter: &f${centerX.toInt()}, ${centerY.toInt()}, ${centerZ.toInt()}"))
         player.sendMessage(MSG.chatColors("&7The RED particles show the save region"))
         player.sendMessage(MSG.chatColors("&7The GREEN particles show the play border"))
-        player.sendMessage(MSG.chatColors("&7Use &e/editor resize <radius> &7to adjust"))
+        player.sendMessage(MSG.chatColors("&7Use &e/editor resize <radius> &7to adjust XZ radius"))
         player.sendMessage(MSG.chatColors("&7Use &e/editor save &7to save your changes"))
     }
 

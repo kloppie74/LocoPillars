@@ -207,19 +207,16 @@ class GameJoinManager(
             return false
         }
 
-        val origin = instance.arenaInstance.origin
+        val origin     = instance.arenaInstance.origin
         val buildRange = instance.arenaInstance.config.getBuildRange()
-        val buildHeight = instance.arenaInstance.config.getBuildHeight()
 
         val withinXRange = spawnArea.x >= origin.x - buildRange && spawnArea.x <= origin.x + buildRange
         val withinZRange = spawnArea.z >= origin.z - buildRange && spawnArea.z <= origin.z + buildRange
-        val withinYRange = spawnArea.y >= origin.y && spawnArea.y <= origin.y + buildHeight
 
-        if (!withinXRange || !withinZRange || !withinYRange) {
-            plugin.logger.severe("[GameJoinManager] ✗ ERROR: SpawnArea outside game boundaries!")
-            plugin.logger.severe("[GameJoinManager]   Spawn: x=${spawnArea.x}, y=${spawnArea.y}, z=${spawnArea.z}")
-            plugin.logger.severe("[GameJoinManager]   Origin: x=${origin.x}, y=${origin.y}, z=${origin.z}")
-            plugin.logger.severe("[GameJoinManager]   BuildRange: $buildRange, BuildHeight: $buildHeight")
+        if (!withinXRange || !withinZRange) {
+            plugin.logger.severe("[GameJoinManager] ✗ ERROR: SpawnArea outside game XZ boundaries!")
+            plugin.logger.severe("[GameJoinManager]   Spawn: x=${spawnArea.x}, z=${spawnArea.z}")
+            plugin.logger.severe("[GameJoinManager]   Origin: x=${origin.x}, z=${origin.z}, BuildRange: $buildRange")
             player.sendMessage(MSG.lang("game.join.error_spawn_boundary"))
             return false
         }

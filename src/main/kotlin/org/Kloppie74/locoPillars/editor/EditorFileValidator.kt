@@ -129,6 +129,12 @@ class EditorFileValidator(
         val config = tryLoadYaml(settingsFile, errors) ?: return
 
         // SpawnLocations
+        val centerX = config.getDouble("Settings.SpawnPoint.X", 0.0)
+        val centerZ = config.getDouble("Settings.SpawnPoint.Z", 0.0)
+        val buildRange = config.getInt("Settings.BuildRange", 50)
+        val buildHeight = config.getInt("Settings.BuildHeight", 80)
+        val saveRadius = config.getInt("SaveRadius", config.getInt("SchematicRadius", 50))
+
         if (!config.contains("SpawnLocations")) {
             errors += "settings.yml: missing 'SpawnLocations' section"
         } else {
@@ -142,10 +148,22 @@ class EditorFileValidator(
                 var totalSpawns = 0
                 teamKeys.forEach { teamKey ->
                     val teamSection = sl?.getConfigurationSection(teamKey)
-                    val spawns = teamSection?.getKeys(false)?.count { it.startsWith("Player") } ?: 0
-                    totalSpawns += spawns
-                    if (spawns == 0) {
+                    val playerKeys = teamSection?.getKeys(false)?.filter { it.startsWith("Player") } ?: emptySet()
+                    totalSpawns += playerKeys.size
+                    if (playerKeys.isEmpty()) {
                         warnings += "Team '$teamKey' has no Player spawn slots"
+                    }
+                    playerKeys.forEach { playerKey ->
+                        val ps = teamSection?.getConfigurationSection(playerKey) ?: return@forEach
+                        val sx = ps.getDouble("X")
+                        val sz = ps.getDouble("Z")
+                        val dxz = Math.max(Math.abs(sx - centerX), Math.abs(sz - centerZ))
+                        if (dxz > buildRange) {
+                            warnings += "Spawn $teamKey/$playerKey is ${dxz.toInt()} blocks from center — exceeds BuildRange ($buildRange)"
+                        }
+                        if (dxz > saveRadius) {
+                            errors += "Spawn $teamKey/$playerKey is ${dxz.toInt()} blocks from center — exceeds SaveRadius ($saveRadius), may be outside saved schematic!"
+                        }
                     }
                 }
                 info += "Total spawn slots: $totalSpawns across ${teamKeys.size} team(s)"
@@ -160,6 +178,36 @@ class EditorFileValidator(
         // SpawnPoint
         if (!config.contains("Settings.SpawnPoint")) {
             warnings += "settings.yml: Settings.SpawnPoint not defined"
+        }
+
+        // BuildRange vs SaveRadius
+        if (buildRange > saveRadius) {
+            warnings += "BuildRange ($buildRange) > SaveRadius ($saveRadius) — players can build outside the saved schematic area"
+        }
+
+        // BuildHeight sanity
+        if (buildHeight < 10) {
+            warnings += "BuildHeight ($buildHeight) is very low — players may not be able to build at all"
+        }
+
+        // Lobby settings
+        val lobbyEnabled = config.getBoolean("Settings.LobbyEnabled", true)
+        if (lobbyEnabled) {
+            val hasSpawn = config.contains("Settings.SpawnPoint.X")
+            val hasArea  = config.contains("Settings.Spawn-Area.Loc1") && config.contains("Settings.Spawn-Area.Loc2")
+            if (!hasSpawn) errors += "LobbyEnabled=true but Settings.SpawnPoint is missing — players have no lobby spawn!"
+            if (!hasArea)  warnings += "LobbyEnabled=true but Settings.Spawn-Area is not defined — no spawn-area restriction"
+            if (hasArea) {
+                val lx1 = config.getDouble("Settings.Spawn-Area.Loc1.X")
+                val lz1 = config.getDouble("Settings.Spawn-Area.Loc1.Z")
+                val lx2 = config.getDouble("Settings.Spawn-Area.Loc2.X")
+                val lz2 = config.getDouble("Settings.Spawn-Area.Loc2.Z")
+                val areaMaxXZ = maxOf(Math.abs(lx1 - centerX), Math.abs(lz1 - centerZ),
+                                      Math.abs(lx2 - centerX), Math.abs(lz2 - centerZ))
+                if (areaMaxXZ > buildRange) {
+                    warnings += "Spawn-Area corner is ${areaMaxXZ.toInt()} blocks from center — outside BuildRange ($buildRange)"
+                }
+            }
         }
 
         // Border

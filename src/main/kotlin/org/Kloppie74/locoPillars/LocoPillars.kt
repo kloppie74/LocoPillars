@@ -5,6 +5,7 @@ import com.comphenix.protocol.ProtocolManager
 import org.Kloppie74.locoPillars.commands.MemoryCommand
 import org.Kloppie74.locoPillars.commands.editor.AdminEditorCommand
 import org.Kloppie74.locoPillars.editor.AdminEditorManager
+import org.Kloppie74.locoPillars.editor.BlacklistedItemsGui
 import org.Kloppie74.locoPillars.editor.EditorFileValidator
 import org.Kloppie74.locoPillars.editor.EditorHotbarManager
 import org.Kloppie74.locoPillars.editor.EditorSettingsGui
@@ -18,7 +19,6 @@ import org.Kloppie74.locoPillars.game.config.GameConfig
 import org.Kloppie74.locoPillars.game.manager.GameManager
 import org.Kloppie74.locoPillars.game.arena.ArenaManager
 import org.Kloppie74.locoPillars.game.arena.ArenaWorldManager
-import org.Kloppie74.locoPillars.game.template.TemplateManager
 import org.Kloppie74.locoPillars.game.map.MapRepository
 import org.Kloppie74.locoPillars.game.map.EditorSessionManager
 import org.Kloppie74.locoPillars.commands.PillarsCommand
@@ -81,8 +81,6 @@ class LocoPillars : JavaPlugin() {
         private set
     lateinit var worldManager: ArenaWorldManager
         private set
-    lateinit var templateManager: TemplateManager
-        private set
     lateinit var spawnAreaManager: SpawnAreaManager
         private set
     lateinit var configs: List<GameConfig>
@@ -99,6 +97,8 @@ class LocoPillars : JavaPlugin() {
     lateinit var editorHotbarManager: EditorHotbarManager
         private set
     lateinit var adminEditorManager: AdminEditorManager
+        private set
+    lateinit var blacklistedItemsGui: BlacklistedItemsGui
         private set
     lateinit var editorSettingsGui: EditorSettingsGui
         private set
@@ -171,20 +171,15 @@ class LocoPillars : JavaPlugin() {
             // 2. FOLDER STRUCTURE
             createFolderStructure()
 
-            // 3. TEMPLATE & ARENA SYSTEM
-            templateManager = TemplateManager(this, configManager)
-            if (templateManager.listAvailableTemplates().isEmpty()) {
-                logger.info("[LocoPillars] No templates found, creating default templates...")
-                templateManager.createDefaultTemplates()
-            }
-
-            // 3.5 MAP EDITOR & ADMIN EDITOR SYSTEM
+            // 3. MAP EDITOR & ADMIN EDITOR SYSTEM
             logger.info("[LocoPillars] Initializing Map Editor & Admin Editor System...")
             mapRepository       = MapRepository(this, configManager)
             editorSessionManager = EditorSessionManager(this, mapRepository)
 
             editorHotbarManager  = EditorHotbarManager()
-            editorSettingsGui    = EditorSettingsGui(this, editorSessionManager)
+            blacklistedItemsGui  = BlacklistedItemsGui(this, editorSessionManager)
+            editorSettingsGui    = EditorSettingsGui(this, editorSessionManager, blacklistedItemsGui)
+            blacklistedItemsGui.editorSettingsGui = editorSettingsGui
             adminEditorManager   = AdminEditorManager(this, editorHotbarManager)
             adminEditorManager.startCreativeModeEnforcer()
             spawnPointEditor     = SpawnPointEditor(this, mapRepository)
@@ -198,6 +193,7 @@ class LocoPillars : JavaPlugin() {
             }
 
             server.pluginManager.registerEvents(editorSettingsGui, this)
+            server.pluginManager.registerEvents(blacklistedItemsGui, this)
             server.pluginManager.registerEvents(
                 EditorModeListener(adminEditorManager, editorSessionManager), this)
             server.pluginManager.registerEvents(
@@ -622,28 +618,9 @@ class LocoPillars : JavaPlugin() {
         logger.warning("[LocoPillars] 3. File names match (without extensions)")
         logger.warning("[LocoPillars] 4. Both files exist for each game type")
         logger.warning("[LocoPillars]")
-        logger.warning("[LocoPillars] The plugin will continue running but no games will be available")
-        logger.warning("[LocoPillars] Default template examples have been created in the Data/Games folder")
+        logger.warning("[LocoPillars] Use /editor create <name> to create a new map.")
+        logger.warning("[LocoPillars] The plugin will continue running but no games will be available.")
         logger.warning("[LocoPillars] ==========================================")
-
-        if (configManager.debugMode) {
-            val availableTemplates = templateManager.listAvailableTemplates()
-            logger.info("[LocoPillars] Available templates: ${availableTemplates.size}")
-            availableTemplates.forEach { templateName ->
-                val info = templateManager.getTemplateInfo(templateName)
-                logger.info("[LocoPillars] Template: $templateName")
-                logger.info("[LocoPillars]   Display Name: ${info?.displayName ?: "N/A"}")
-                logger.info("[LocoPillars]   Has Schematic: ${info?.hasSchematic ?: false}")
-
-                val validation = templateManager.validateTemplate(templateName)
-                logger.info("[LocoPillars]   Valid: ${validation.isValid}")
-                if (!validation.isValid) {
-                    validation.errors.forEach { error ->
-                        logger.warning("[LocoPillars]     Error: $error")
-                    }
-                }
-            }
-        }
     }
 
     private fun showStartupSummary() {

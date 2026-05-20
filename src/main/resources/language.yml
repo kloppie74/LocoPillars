@@ -533,6 +533,25 @@ editor:
     already_disabled: "&7{name} was already disabled (nothing found in Data/)."
     reenable_hint: "&8Re-enable anytime with &e/editor enable {name}&8."
 
+  # /editor schematic
+  schematic:
+    usage: "&cUsage: &e/editor schematic save <id>  &7or  &e/editor schematic load <id>"
+    usage_hint: "&7Save: &e/editor schematic save <id>  &7| Load: &e/editor schematic load <id>"
+    usage_save: "&7Save schematic: &e/editor schematic save <id>"
+    none: "&7No schematics found for &e{name}&7."
+    list_header: "&6=== Schematics: {name} &7({count}) ==="
+    list_entry: "  &7- &e{file}"
+    invalid_id: "&cInvalid schematic ID — must be a positive integer (1, 2, 3, …)"
+    no_session: "&cYou must be in an active editor session to save a schematic.\n&7Use &e/editor edit <map> &7to start one."
+    saving: "&eSaving schematic &f#{id} &efor &f{name}&e…"
+    saved: "&a✓ Schematic &f#{id} &asaved for &f{name}&a! Files synced to Data/."
+    save_failed: "&c✗ Failed to save schematic &f#{id}&c. Check console for details."
+    sync_warning: "&e⚠ Sync warning: {msg}"
+    not_found: "&cSchematic &f#{id} &cdoes not exist for &f{name}&c. Save it first with &e/editor schematic save {id}"
+    loading: "&eLoading schematic &f#{id} &efor &f{name}&e into editor world…"
+    loaded: "&a✓ Schematic &f#{id} &afor &f{name} &aloaded successfully!"
+    load_failed: "&c✗ Failed to load schematic &f#{id}&c. Check console for details."
+
   # /editor help
   help:
     header: "&6=== Admin Editor — /editor ==="

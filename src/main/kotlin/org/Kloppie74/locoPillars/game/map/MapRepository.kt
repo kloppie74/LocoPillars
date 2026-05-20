@@ -22,62 +22,38 @@ class MapRepository(
 ) {
     
     private val mapsFolder: File get() = File(plugin.dataFolder, "maps")
-    private val templatesFolder: File get() = File(plugin.dataFolder, "templates")
-    
+
     init {
         ensureFoldersExist()
-        createDefaultTemplates()
     }
-    
+
     private fun ensureFoldersExist() {
         if (!mapsFolder.exists()) {
             mapsFolder.mkdirs()
             debugLog("Created maps folder: ${mapsFolder.absolutePath}")
         }
-        if (!templatesFolder.exists()) {
-            templatesFolder.mkdirs()
-            debugLog("Created templates folder: ${templatesFolder.absolutePath}")
-        }
     }
-    
-    private fun createDefaultTemplates() {
-        val defaultSettingsFile = File(templatesFolder, "default_settings.yml")
-        val defaultSchemReadme = File(templatesFolder, "default_map.schem.readme")
-        
-        if (!defaultSettingsFile.exists()) {
-            createDefaultSettingsTemplate(defaultSettingsFile)
-            debugLog("Created default_settings.yml template")
+
+    /**
+     * Create a new map with a minimal settings.yml.
+     */
+    fun createMap(mapName: String): Boolean {
+        val mapFolder = File(mapsFolder, mapName)
+
+        if (mapFolder.exists()) {
+            plugin.logger.warning("Map folder already exists: $mapName")
+            return false
         }
-        
-        if (!defaultSchemReadme.exists()) {
-            defaultSchemReadme.writeText("""
-                # Default Map Schematic
-                
-                This is a placeholder for the default_map.schem file.
-                
-                To create a default template schematic:
-                1. Build a basic arena in a test world
-                2. Use WorldEdit: //copy
-                3. Save: //schem save default_map
-                4. Place the default_map.schem file in this templates folder
-                
-                When creating new maps, this schematic will be copied automatically.
-                If this file doesn't exist, maps will start as empty void worlds.
-            """.trimIndent())
-            debugLog("Created default schematic readme")
-        }
-    }
-    
-    private fun createDefaultSettingsTemplate(file: File) {
+
+        mapFolder.mkdirs()
+        debugLog("Created map folder: ${mapFolder.absolutePath}")
+
+        val mapSettings = File(mapFolder, "settings.yml")
         val config = YamlConfiguration()
-        
-        // Map Metadata
-        config.set("MapName", "NewMap")
-        config.set("DisplayName", "New Map")
+        config.set("MapName", mapName)
+        config.set("DisplayName", mapName)
         config.set("SaveRadius", 50)
         config.set("SchematicRadius", 50)
-        
-        // Game Settings
         config.set("Settings.BuildHeight", 80)
         config.set("Settings.BuildRange", 50)
         config.set("Settings.DeathHeight", -10)
@@ -86,115 +62,21 @@ class MapRepository(
         config.set("Settings.GameTimer", 600)
         config.set("Settings.ItemTimer", 10)
         config.set("Settings.Can-Break-Map-Blocks", false)
-        
-        // Spawn Point
-        config.set("Settings.SpawnPoint.X", 0.5)
-        config.set("Settings.SpawnPoint.Y", 65.0)
-        config.set("Settings.SpawnPoint.Z", 0.5)
-        
-        // Player Configuration
-        config.set("SpawnLocations.MinimumPlayers", 4)
+        config.set("Settings.SpawnPoint.X", 0.0)
+        config.set("Settings.SpawnPoint.Y", 1.0)
+        config.set("Settings.SpawnPoint.Z", 0.0)
+        config.set("SpawnLocations.MinimumPlayers", 2)
         config.set("SpawnLocations.MaximumPlayers", 8)
         config.set("SpawnLocations.MaxTeams", 8)
         config.set("SpawnLocations.PlayersPerTeam", 1)
-        
-        // Default Teams (4 basic teams)
-        createDefaultTeam(config, "Team1", "&c[Red]", "RED", -10.5, 65.0, -10.5, 45.0f)
-        createDefaultTeam(config, "Team2", "&9[Blue]", "BLUE", 10.5, 65.0, -10.5, 135.0f)
-        createDefaultTeam(config, "Team3", "&a[Green]", "GREEN", 10.5, 65.0, 10.5, -135.0f)
-        createDefaultTeam(config, "Team4", "&e[Yellow]", "YELLOW", -10.5, 65.0, 10.5, -45.0f)
-        
-        // Border Configuration
-        config.set("Border.Enabled", true)
-        config.set("Border.Size", 100.0)
-        config.set("Border.DamageAmount", 1.0)
-        config.set("Border.DamageBuffer", 5.0)
-        
         try {
-            config.save(file)
+            config.save(mapSettings)
+            debugLog("Created settings.yml for $mapName")
         } catch (e: Exception) {
-            plugin.logger.severe("Failed to create default settings template: ${e.message}")
-        }
-    }
-    
-    private fun createDefaultTeam(
-        config: YamlConfiguration,
-        teamKey: String,
-        teamName: String,
-        color: String,
-        x: Double,
-        y: Double,
-        z: Double,
-        yaw: Float
-    ) {
-        config.set("SpawnLocations.$teamKey.Name", teamName)
-        config.set("SpawnLocations.$teamKey.Color", color)
-        config.set("SpawnLocations.$teamKey.Player1.X", x)
-        config.set("SpawnLocations.$teamKey.Player1.Y", y)
-        config.set("SpawnLocations.$teamKey.Player1.Z", z)
-        config.set("SpawnLocations.$teamKey.Player1.Yaw", yaw)
-        config.set("SpawnLocations.$teamKey.Player1.Pitch", 0.0f)
-        config.set("SpawnLocations.$teamKey.Player1.Cage-Rotation", 0)
-    }
-    
-    /**
-     * Create a new map by copying templates
-     */
-    fun createMap(mapName: String): Boolean {
-        val mapFolder = File(mapsFolder, mapName)
-        
-        if (mapFolder.exists()) {
-            plugin.logger.warning("Map folder already exists: $mapName")
+            plugin.logger.severe("Failed to create settings.yml for $mapName: ${e.message}")
             return false
         }
-        
-        mapFolder.mkdirs()
-        debugLog("Created map folder: ${mapFolder.absolutePath}")
-        
-        // Copy default settings
-        val templateSettings = File(templatesFolder, "default_settings.yml")
-        val mapSettings = File(mapFolder, "settings.yml")
-        
-        if (templateSettings.exists()) {
-            templateSettings.copyTo(mapSettings, overwrite = true)
-            
-            // Update map name in settings
-            val config = YamlConfiguration.loadConfiguration(mapSettings)
-            config.set("MapName", mapName)
-            config.set("DisplayName", mapName)
-            config.save(mapSettings)
-            
-            debugLog("Copied and updated settings.yml for $mapName")
-        } else {
-            // Create basic settings if template doesn't exist
-            createDefaultSettingsTemplate(mapSettings)
-            val config = YamlConfiguration.loadConfiguration(mapSettings)
-            config.set("MapName", mapName)
-            config.set("DisplayName", mapName)
-            config.save(mapSettings)
-            debugLog("Created new settings.yml for $mapName")
-        }
-        
-        // Copy default schematic if it exists
-        // Prefer explicit _template.schem overrides for admin templates before falling back to default_map.schem.
-        val templateSchem = listOf(
-            File(templatesFolder, "_template.schem"),
-            File(templatesFolder, "default_map.schem")
-        ).firstOrNull { it.exists() }
-        val mapSchem = File(mapFolder, "region.schem")
 
-        if (templateSchem != null) {
-            templateSchem.copyTo(mapSchem, overwrite = true)
-            debugLog("Copied ${templateSchem.name} to $mapName")
-        } else {
-            val config = YamlConfiguration.loadConfiguration(mapSettings)
-            config.set("Settings.SpawnPoint.X", 0.0)
-            config.set("Settings.SpawnPoint.Y", 1.0)
-            config.set("Settings.SpawnPoint.Z", 0.0)
-            config.save(mapSettings)
-            debugLog("No default schematic found - map will start with bedrock anchor")
-        }
-        
         plugin.logger.info("Successfully created map: $mapName")
         return true
     }
@@ -332,6 +214,17 @@ class MapRepository(
         val config = loadMapSettings(mapName) ?: return false
         config.set("SaveRadius", radius)
         config.set("SchematicRadius", radius)
+        return saveMapSettings(mapName, config)
+    }
+
+    fun getSaveHeight(mapName: String): Int {
+        val config = loadMapSettings(mapName)
+        return config?.getInt("SaveHeight", 200) ?: 200
+    }
+
+    fun updateSaveHeight(mapName: String, height: Int): Boolean {
+        val config = loadMapSettings(mapName) ?: return false
+        config.set("SaveHeight", height)
         return saveMapSettings(mapName, config)
     }
 

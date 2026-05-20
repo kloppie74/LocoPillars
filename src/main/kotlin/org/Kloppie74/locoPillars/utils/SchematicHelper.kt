@@ -99,10 +99,13 @@ object SchematicHelper {
                 Operations.complete(copyOperation)
             }
 
-            val format = ClipboardFormats.findByAlias("sponge") ?: run {
-                plugin.logger.severe("[SchematicHelper] Sponge format not found!")
-                return false
-            }
+            val format = ClipboardFormats.findByAlias("fast")
+                ?: ClipboardFormats.findByAlias("sponge")
+                ?: ClipboardFormats.findByAlias("schem")
+                ?: run {
+                    plugin.logger.severe("[SchematicHelper] No supported clipboard format found (tried: fast, sponge, schem)!")
+                    return false
+                }
 
             FileOutputStream(schemFile).use { outputStream ->
                 format.getWriter(outputStream).use { writer ->

@@ -210,7 +210,6 @@ class GameFileService(
         if (!dataFolder.exists()) { dataFolder.mkdirs(); foldersCreated++ }
         if (!gamesFolder.exists()) { gamesFolder.mkdirs(); foldersCreated++ }
         if (!schemsFolder.exists()) { schemsFolder.mkdirs(); foldersCreated++ }
-        ensureSetupGuideFiles()
 
         //bundledConfigsCopied += copyBundledGameConfigs(warnings)
 

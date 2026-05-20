@@ -224,7 +224,7 @@ class ArenaManager(
 
                 val x = gridX * instanceDistance
                 val z = gridZ * instanceDistance
-                val origin = Location(world, x.toDouble(), 40.0, z.toDouble())
+                val origin = Location(world, x.toDouble(), 0.0, z.toDouble())
 
                 val regionId = "pillars_${config.name}_${instanceIndex}"
 
@@ -425,33 +425,38 @@ class ArenaManager(
         instance.currentSchematicFile = selectedSchematic
 
         debugLog("Using schematic: ${selectedSchematic.name}")
-        debugLog("Schematic file: ${selectedSchematic.absolutePath}")
-        debugLog("Origin location: ${instance.origin}")
 
-        val success = org.Kloppie74.locoPillars.utils.SchematicHelper.pasteSchematic(
-            plugin,
-            configManager,
-            selectedSchematic,
-            instance.origin
+        // Load clipboard to read its saved origin (= minimum corner of the editor save region).
+        // Paste such that clipboard.origin aligns with (instance.origin.x + clip.x, clip.y, instance.origin.z + clip.z).
+        // This ensures block X/Z coordinates in the game world match their absolute editor coordinates
+        // (+ each instance's grid offset), and block Y is fully preserved.
+        val clipboard = org.Kloppie74.locoPillars.utils.SchematicHelper.loadSchematic(plugin, configManager, selectedSchematic)
+        if (clipboard == null) {
+            plugin.logger.severe("[ArenaManager] ✗ Failed to load schematic for ${instance.template.name} (${instance.id})")
+            return
+        }
+
+        val clipOrigin = clipboard.origin
+        val pasteLocation = Location(
+            instance.world,
+            instance.origin.x + clipOrigin.x,
+            clipOrigin.y.toDouble(),
+            instance.origin.z + clipOrigin.z
+        )
+
+        debugLog("Clipboard origin: (${clipOrigin.x}, ${clipOrigin.y}, ${clipOrigin.z})")
+        debugLog("Paste location:   (${pasteLocation.x}, ${pasteLocation.y}, ${pasteLocation.z})")
+
+        val success = org.Kloppie74.locoPillars.utils.SchematicHelper.pasteClipboard(
+            plugin, configManager, clipboard, pasteLocation
         )
 
         if (success) {
             debugLog("✓ Arena ${instance.template.name} (instance ${instance.id}) successfully reset")
-            debugLog("  Used schematic: ${selectedSchematic.name}")
-            debugLog("  Location: ${instance.origin}")
-            debugLog("  World: ${instance.world.name}")
         } else {
             plugin.logger.severe("[ArenaManager] ✗ Failed to reset arena ${instance.template.name} (instance ${instance.id})")
-            plugin.logger.severe("[ArenaManager] Debug information:")
-            plugin.logger.severe("[ArenaManager]   Template name: ${instance.template.name}")
-            plugin.logger.severe("[ArenaManager]   Selected schematic: ${selectedSchematic.name}")
-            plugin.logger.severe("[ArenaManager]   Schematic path: ${selectedSchematic.absolutePath}")
-            plugin.logger.severe("[ArenaManager]   World: ${instance.world.name}")
-            plugin.logger.severe("[ArenaManager]   Origin: ${instance.origin}")
-            plugin.logger.severe("[ArenaManager]   Instance ID: ${instance.id}")
-
-            plugin.logger.severe("[ArenaManager] Running additional validation...")
-            org.Kloppie74.locoPillars.utils.SchematicHelper.validateSchematicFile(plugin, configManager, selectedSchematic)
+            plugin.logger.severe("[ArenaManager]   Schematic: ${selectedSchematic.absolutePath}")
+            plugin.logger.severe("[ArenaManager]   Paste location: $pasteLocation")
         }
     }
 
