@@ -86,33 +86,18 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerRespawn(event: PlayerRespawnEvent) {
         val player = event.player
-        val respawnLoc = plugin.gameManager.getAndClearDeadRespawnLocation(player.uniqueId)
+        val respawnLoc = plugin.gameManager.getEliminatedRespawnLocation(player.uniqueId)
         if (respawnLoc != null) {
             event.respawnLocation = respawnLoc
         }
-        if (!SpectatorUtils.isSpectator(player, plugin)) return
 
-        val activeSpectatorInstance = plugin.gameManager.getAllInstances().firstOrNull { instance ->
-            instance.state == GameState.ACTIVE && instance.spectators.contains(player.uniqueId)
-        } ?: return
-
-        // Re-apply spectator state and visibility after respawn to prevent floating/visible dead players.
+        // Re-apply eliminated/spectator transition state atomically after respawn.
         object : BukkitRunnable() {
             override fun run() {
-                if (shouldRestoreSpectatorState(player, activeSpectatorInstance)) {
-                    SpectatorUtils.setPlayerAsSpectator(player, plugin)
-                    gameplayManager.enforceInGameSpectatorVisibility(activeSpectatorInstance, player)
-                    plugin.spectateListener?.refreshPlayer(player)
-                }
+                if (!player.isOnline) return
+                plugin.gameManager.handleEliminatedPlayerRespawn(player)
             }
         }.runTaskLater(plugin, 1L)
-    }
-
-    private fun shouldRestoreSpectatorState(player: Player, instance: GameInstance): Boolean {
-        return player.isOnline &&
-                plugin.gameManager.getPlayerInstance(player) == null &&
-                instance.spectators.contains(player.uniqueId) &&
-                instance.state == GameState.ACTIVE
     }
 
     // =================== DAMAGE HANDLING ===================
@@ -239,6 +224,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerQuit(event: PlayerQuitEvent) {
         val player = event.player
+        plugin.gameManager.clearEliminatedState(player.uniqueId)
 
         // Clear cage protection
         cageProtectedPlayers.remove(player.uniqueId)
@@ -264,6 +250,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.LOW)
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.player
+        plugin.gameManager.clearEliminatedState(player.uniqueId)
 
         // Teleport to lobby spawn
         val lobbySpawn = plugin.configManager.getLobbySpawnLocation()
