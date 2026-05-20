@@ -66,40 +66,73 @@ class GameJoinManager(
         playerManager.preparePlayerForGame(player)
         debugLog("Player ${player.name} prepared for game")
 
-        val spawnArea = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
-        if (!validateSpawnArea(player, instance, spawnArea)) {
-            instance.players.remove(player.uniqueId)
-            playerToInstance.remove(player.uniqueId)
-            return null
-        }
+        val lobbyEnabled = instance.arenaInstance.config.isLobbyEnabled()
 
-        if (plugin.configManager.debugMode) logTeleportDebug(player, instance, spawnArea)
+        if (lobbyEnabled) {
+            // ── Lobby-enabled path: send player to shared waiting area ─────────
+            val spawnArea = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
+            if (!validateSpawnArea(player, instance, spawnArea)) {
+                instance.players.remove(player.uniqueId)
+                playerToInstance.remove(player.uniqueId)
+                return null
+            }
 
-        val teleportSuccess = player.teleport(spawnArea)
-        if (!teleportSuccess) {
-            plugin.logger.severe("[GameJoinManager] ✗ Teleport FAILED for ${player.name}!")
-            player.sendMessage(MSG.lang("game.join.error_teleport"))
-            instance.players.remove(player.uniqueId)
-            playerToInstance.remove(player.uniqueId)
-            return null
-        }
+            if (plugin.configManager.debugMode) logTeleportDebug(player, instance, spawnArea)
 
-        debugLog("✓ Teleport SUCCESS for ${player.name}")
-        if (plugin.configManager.debugMode) scheduleLocationDebugLog(player)
+            val teleportSuccess = player.teleport(spawnArea)
+            if (!teleportSuccess) {
+                plugin.logger.severe("[GameJoinManager] ✗ Teleport FAILED for ${player.name}!")
+                player.sendMessage(MSG.lang("game.join.error_teleport"))
+                instance.players.remove(player.uniqueId)
+                playerToInstance.remove(player.uniqueId)
+                return null
+            }
 
-        updateDatabaseOnJoin(player, playerId, instance)
+            debugLog("✓ Teleport SUCCESS for ${player.name}")
+            if (plugin.configManager.debugMode) scheduleLocationDebugLog(player)
 
-        broadcastToGame(instance, MSG.lang("game.join.broadcast",
-            "player" to player.name,
-            "current" to playersAfterJoin.toString(),
-            "max" to instance.getMaxPlayers().toString()))
-        player.sendMessage(MSG.lang("game.join.welcome", "game" to instance.getDisplayName()))
+            updateDatabaseOnJoin(player, playerId, instance)
 
-        if (playersAfterJoin >= instance.getMinPlayers() && instance.state == GameState.WAITING) {
-            debugLog("Minimum players reached ($playersAfterJoin/${instance.getMinPlayers()}), starting lobby countdown")
-            gameplayManager.startLobbyCountdown(instance)
+            broadcastToGame(instance, MSG.lang("game.join.broadcast",
+                "player" to player.name,
+                "current" to playersAfterJoin.toString(),
+                "max" to instance.getMaxPlayers().toString()))
+            player.sendMessage(MSG.lang("game.join.welcome", "game" to instance.getDisplayName()))
+
+            if (playersAfterJoin >= instance.getMinPlayers() && instance.state == GameState.WAITING) {
+                debugLog("Minimum players reached ($playersAfterJoin/${instance.getMinPlayers()}), starting lobby countdown")
+                gameplayManager.startLobbyCountdown(instance)
+            } else {
+                val needed = instance.getMinPlayers() - playersAfterJoin
+                player.sendMessage(MSG.lang("pillars.join.waiting_for_players", "needed" to needed.toString()))
+                debugLog("Waiting for more players: $playersAfterJoin/${instance.getMinPlayers()} minimum")
+            }
         } else {
-            debugLog("Waiting for more players: $playersAfterJoin/${instance.getMinPlayers()} minimum")
+            // ── Lobby-disabled path: assign directly to team cage ─────────────
+            val assigned = gameplayManager.assignPlayerDirectlyToCage(player, instance)
+            if (!assigned) {
+                player.sendMessage(MSG.lang("game.join.error_no_team_slots"))
+                instance.players.remove(player.uniqueId)
+                playerToInstance.remove(player.uniqueId)
+                return null
+            }
+
+            updateDatabaseOnJoin(player, playerId, instance)
+
+            broadcastToGame(instance, MSG.lang("game.join.broadcast",
+                "player" to player.name,
+                "current" to playersAfterJoin.toString(),
+                "max" to instance.getMaxPlayers().toString()))
+            player.sendMessage(MSG.lang("game.join.welcome", "game" to instance.getDisplayName()))
+
+            if (playersAfterJoin >= instance.getMinPlayers() && instance.state == GameState.WAITING) {
+                debugLog("No-lobby: minimum players reached ($playersAfterJoin/${instance.getMinPlayers()}), starting game")
+                gameplayManager.startGame(instance)
+            } else {
+                val needed = instance.getMinPlayers() - playersAfterJoin
+                player.sendMessage(MSG.lang("pillars.join.waiting_for_players", "needed" to needed.toString()))
+                debugLog("No-lobby: waiting for more players: $playersAfterJoin/${instance.getMinPlayers()} minimum")
+            }
         }
 
         SpectatorUtils.removeSpectatorStatus(player, plugin)

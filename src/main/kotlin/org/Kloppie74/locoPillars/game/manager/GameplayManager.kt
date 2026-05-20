@@ -185,12 +185,14 @@ class GameplayManager(
         broadcastToGame(instance, MSG.lang("game.start.started"))
 
         plugin.spectatorInventoryManager.updateVisibilityForGameInstance(instance)
-        clearSpawnAreasForGame(instance)
 
         val gameListener = plugin.gameListener
         gameListener.clearAllPlayerPlacedBlocks(instance.id)
 
-        assignPlayersToTeams(instance)
+        if (instance.arenaInstance.config.isLobbyEnabled()) {
+            clearSpawnAreasForGame(instance)
+            assignPlayersToTeams(instance)
+        }
         startCageTimer(instance)
 
         val gameTimer = instance.arenaInstance.config.getGameTimer()
@@ -308,6 +310,29 @@ class GameplayManager(
             val teamPlayers = instance.getPlayersInTeam(team)
             debugLog("  ${team.name}: ${teamPlayers.size} players")
         }
+    }
+
+    fun assignPlayerDirectlyToCage(player: Player, instance: GameInstance): Boolean {
+        val teams = instance.arenaInstance.config.teams
+        val playersPerTeam = instance.arenaInstance.config.getPlayersPerTeam()
+
+        for (team in teams) {
+            val assignedCount = instance.getPlayersInTeam(team).size
+            if (assignedCount < playersPerTeam && assignedCount < team.spawns.size) {
+                val spawnLocation = team.spawns[assignedCount].toAbsolute(instance.arenaInstance.origin)
+                player.teleport(spawnLocation)
+                instance.trackTeamAssignment(player.uniqueId, team)
+                placeCageAtSpawnLocation(player.uniqueId, spawnLocation)
+                setupPlayerForTeam(player, team)
+                applyCageEffects(player)
+                plugin.gameListener.setCageProtection(player.uniqueId, true)
+                player.sendMessage(MSG.lang("game.team.assigned", "team" to team.name))
+                debugLog("Player ${player.name} directly assigned to team ${team.name} (no-lobby mode)")
+                return true
+            }
+        }
+        debugLog("No team slots available for ${player.name} in instance ${instance.id}")
+        return false
     }
 
     private fun placeCageAtSpawnLocation(playerUUID: UUID, spawnLocation: org.bukkit.Location) {

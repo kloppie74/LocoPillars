@@ -136,6 +136,7 @@ Settings:
   GameTimer: 900
   ItemTimer: 5
   Can-Break-Map-Blocks: false
+  LobbyEnabled: true
   SpawnPoint:
     X: 0
     Y: 60

@@ -116,6 +116,7 @@ game:
     error_spawn_null: "&cError: Invalid spawn location (world is null)"
     error_spawn_mismatch: "&cError: Spawn location world mismatch"
     error_spawn_boundary: "&cError: Spawn area outside game boundaries!"
+    error_no_team_slots: "&cNo team slots available in this game right now!"
 
   leave:
     broadcast: "&e{player} left the game! ({current}/{max})"

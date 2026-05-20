@@ -77,6 +77,11 @@ class GameConfig(
         return (settings["Can-Break-Map-Blocks"] as? Boolean) ?: false
     }
 
+    fun isLobbyEnabled(): Boolean {
+        val settings = configMap["Settings"] as? Map<String, Any> ?: return true
+        return (settings["LobbyEnabled"] as? Boolean) ?: true
+    }
+
     fun getSpawnTeleportLocation(origin: Location): Location {
         val settings = configMap["Settings"] as? Map<String, Any> ?: return origin
         val spawnPoint = settings["SpawnPoint"] as? Map<String, Any> ?: return origin

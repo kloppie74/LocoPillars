@@ -20,6 +20,7 @@ Settings:
   BuildRange: 40
   DeathHeight: -5
   Can-Break-Map-Blocks: false
+  LobbyEnabled: true
   RandomItems:
     Type: Blacklisted
   DisplayName: Garden-8p

@@ -42,12 +42,10 @@ dependencies {
         exclude(group = "org.apache.logging.log4j")
     }
     // FastAsyncWorldEdit — compileOnly so SchematicHelper can detect FAWE at runtime
-    compileOnly("com.intellectualsites.fastasyncworldedit:fastasyncworldedit-core:2.12.4") {
-        exclude(group = "org.apache.logging.log4j")
-    }
-    compileOnly("com.intellectualsites.fastasyncworldedit:fastasyncworldedit-bukkit:2.12.4") {
-        exclude(group = "org.apache.logging.log4j")
-    }
+    implementation(platform("com.intellectualsites.bom:bom-newest:1.56")) // Ref: https://github.com/IntellectualSites/bom
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.12.2")
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit:2.12.2") { isTransitive = false } // <-- ADDED VERSION
+
     compileOnly("com.sk89q.worldguard:worldguard-core:7.0.12") {
         exclude(group = "org.apache.logging.log4j")
     }
