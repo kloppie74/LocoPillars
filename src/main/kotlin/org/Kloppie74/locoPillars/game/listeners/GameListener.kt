@@ -17,6 +17,7 @@ import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerTeleportEvent
+import org.bukkit.scheduler.BukkitRunnable
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.data.GameState
@@ -38,6 +39,9 @@ import java.util.concurrent.ConcurrentHashMap
  * @since 2.0-SNAPSHOT
  */
 class GameListener(private val plugin: LocoPillars) : Listener {
+    companion object {
+        private const val POST_RESPAWN_DELAY_TICKS = 1L
+    }
 
     private val playerPlacedBlocks = ConcurrentHashMap<UUID, MutableSet<Location>>()
     private val cageProtectedPlayers = ConcurrentHashMap<UUID, Boolean>()
@@ -84,10 +88,19 @@ class GameListener(private val plugin: LocoPillars) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerRespawn(event: PlayerRespawnEvent) {
-        val respawnLoc = plugin.gameManager.getAndClearDeadRespawnLocation(event.player.uniqueId)
+        val player = event.player
+        val respawnLoc = plugin.gameManager.getEliminatedRespawnLocation(player.uniqueId)
         if (respawnLoc != null) {
             event.respawnLocation = respawnLoc
         }
+
+        // Re-apply eliminated/spectator transition state atomically after respawn.
+        object : BukkitRunnable() {
+            override fun run() {
+                if (!player.isOnline) return
+                plugin.gameManager.handleEliminatedPlayerRespawn(player)
+            }
+        }.runTaskLater(plugin, POST_RESPAWN_DELAY_TICKS)
     }
 
     // =================== DAMAGE HANDLING ===================
@@ -214,6 +227,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerQuit(event: PlayerQuitEvent) {
         val player = event.player
+        plugin.gameManager.clearEliminatedState(player.uniqueId)
 
         // Clear cage protection
         cageProtectedPlayers.remove(player.uniqueId)
@@ -239,6 +253,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.LOW)
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.player
+        plugin.gameManager.clearEliminatedState(player.uniqueId)
 
         // Teleport to lobby spawn
         val lobbySpawn = plugin.configManager.getLobbySpawnLocation()

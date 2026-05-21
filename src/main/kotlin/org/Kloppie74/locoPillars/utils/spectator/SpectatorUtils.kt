@@ -97,4 +97,21 @@ object SpectatorUtils {
     fun clearCache(player: Player) {
         SPECTATOR_MAP.remove(player.uniqueId)
     }
+
+    @JvmStatic
+    fun ensurePlayerAlive(player: Player, plugin: LocoPillars, context: String): Boolean {
+        if (!player.isDead) return true
+        return try {
+            player.spigot().respawn()
+            if (player.isDead) {
+                plugin.logger.warning("[$context] Failed to force respawn ${player.name}: player still dead")
+                false
+            } else {
+                true
+            }
+        } catch (ex: Exception) {
+            plugin.logger.warning("[$context] Failed to force respawn ${player.name}: ${ex.message}")
+            false
+        }
+    }
 }

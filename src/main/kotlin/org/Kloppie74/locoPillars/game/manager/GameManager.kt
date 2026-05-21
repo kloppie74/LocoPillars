@@ -6,6 +6,7 @@ import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.arena.ArenaManager
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.events.TimerEvent
+import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import java.util.*
 
@@ -42,6 +43,12 @@ class GameManager(private val plugin: LocoPillars) {
     }
 
     fun joinGame(player: Player, gameTypeName: String): GameInstance? {
+        clearEliminatedState(player.uniqueId)
+        if (!SpectatorUtils.ensurePlayerAlive(player, plugin, "GameManager")) {
+            player.sendMessage(MSG.chatColors("&cPlease respawn first and try joining again."))
+            return null
+        }
+
         val instance = joinManager.joinGame(player, gameTypeName, gameplayManager)
         if (instance != null) {
             SpectatorUtils.removeSpectatorStatus(player, plugin)
@@ -54,6 +61,7 @@ class GameManager(private val plugin: LocoPillars) {
 
     fun leaveGame(player: Player): Boolean {
         val success = leaveManager.leaveGame(player, gameplayManager)
+        clearEliminatedState(player.uniqueId)
         // Notify tab/visibility systems that this player is now in lobby
         plugin.teamsListener.onPlayerLeaveGame(player)
         plugin.spectateListener.onPlayerGameStatusChange(player)
@@ -61,7 +69,7 @@ class GameManager(private val plugin: LocoPillars) {
     }
 
     fun handlePlayerDeath(player: Player): Boolean {
-        val result = gameplayManager.handlePlayerDeath(player, playerToInstance, playerManager)
+        val result = gameplayManager.handlePlayerDeath(player, playerToInstance)
         if (result) {
             // Player is now a spectator — update tab visibility so they're filtered correctly
             plugin.teamsListener.onPlayerLeaveGame(player)
@@ -69,12 +77,20 @@ class GameManager(private val plugin: LocoPillars) {
         return result
     }
 
-    fun getAndClearDeadRespawnLocation(uuid: java.util.UUID): org.bukkit.Location? {
-        return gameplayManager.getAndClearDeadRespawnLocation(uuid)
+    fun getEliminatedRespawnLocation(uuid: UUID): org.bukkit.Location? {
+        return gameplayManager.getEliminatedRespawnLocation(uuid)
+    }
+
+    fun handleEliminatedPlayerRespawn(player: Player): Boolean {
+        return gameplayManager.handleEliminatedPlayerRespawn(player)
+    }
+
+    fun clearEliminatedState(uuid: UUID) {
+        gameplayManager.clearEliminatedState(uuid)
     }
 
     fun endGameByTimer(instance: GameInstance) {
-        gameplayManager.endGameByTimer(instance, playerToInstance, playerManager)
+        gameplayManager.endGameByTimer(instance, playerToInstance)
     }
 
     fun giveItemsToPlayers(instance: GameInstance) {
