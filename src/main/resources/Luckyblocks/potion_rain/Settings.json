@@ -1,0 +1,11 @@
+{
+  "id": "potion_rain",
+  "display_name": "Potion Rain",
+  "description": "Blessed with regeneration, absorption and saturation!",
+  "icon": {
+    "material": "POTION",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "UNCOMMON"
+}

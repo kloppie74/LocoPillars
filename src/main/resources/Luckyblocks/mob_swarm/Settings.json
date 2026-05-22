@@ -1,0 +1,11 @@
+{
+  "id": "mob_swarm",
+  "display_name": "Mob Swarm",
+  "description": "A horde of monsters spawns and attacks!",
+  "icon": {
+    "material": "ROTTEN_FLESH",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "UNCOMMON"
+}

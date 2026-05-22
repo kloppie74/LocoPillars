@@ -1,0 +1,11 @@
+{
+  "id": "random_teleport",
+  "display_name": "Random Teleport",
+  "description": "Flung to a completely random location!",
+  "icon": {
+    "material": "ENDER_PEARL",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "COMMON"
+}

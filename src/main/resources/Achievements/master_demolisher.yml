@@ -1,0 +1,23 @@
+id: master_demolisher
+name: "Master Demolisher"
+display_name: "Master Demolisher"
+description: "Break %amount% blocks in total."
+category: "BUILDING"
+type: "PROGRESS"
+difficulty: "HARD"
+rarity: 8.0
+icon:
+  material: "NETHERITE_PICKAXE"
+  custom_model_data: 0
+display_order: 22
+hidden: false
+secret: false
+active: true
+unlock_message: "&4Nothing stands before the Master Demolisher!"
+requirements:
+  target:
+    id: "blocks_broken"
+    amount: 25000
+rewards:
+  experience: 500
+  coins: 130

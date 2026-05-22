@@ -1,0 +1,23 @@
+id: rising_star
+name: "Rising Star"
+display_name: "Rising Star"
+description: "Win %amount% games."
+category: "WINS"
+type: "PROGRESS"
+difficulty: "MEDIUM"
+rarity: 28.0
+icon:
+  material: "GOLD_NUGGET"
+  custom_model_data: 0
+display_order: 11
+hidden: false
+secret: false
+active: true
+unlock_message: "&eYou are a Rising Star!"
+requirements:
+  target:
+    id: "win_game"
+    amount: 10
+rewards:
+  experience: 200
+  coins: 50

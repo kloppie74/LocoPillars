@@ -29,10 +29,11 @@ import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.utils.LanguageManager
 import org.Kloppie74.locoPillars.database.DatabaseManager
 import org.Kloppie74.locoPillars.events.listeners.PlayerJoinListener
-import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlockEngineIntegration
+import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksCommand
 import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksListener
 import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksMenu
 import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksUtil
+import org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyblockLoader
 import org.Kloppie74.locoPillars.utils.Placeholders
 import org.Kloppie74.locoPillars.utils.achievements.AchievementListener
 import org.Kloppie74.locoPillars.utils.achievements.AchievementLoader
@@ -343,16 +344,18 @@ class LocoPillars : JavaPlugin() {
             debugLog("✓ Chat system initialized successfully")
 
             // 14. LUCKY BLOCKS SYSTEM
-            val luckyBlockEngine = LuckyBlockEngineIntegration.initializeEngine(this, configManager)
-            LuckyBlockEngineIntegration.registerEngineListeners(this, luckyBlockEngine)
-            LuckyBlocksUtil.setLuckyBlockEngine(luckyBlockEngine)
+            val luckyblockLoader = LuckyblockLoader(this)
+            luckyblockLoader.loadAll()
+            LuckyBlocksUtil.setLuckyblockLoader(luckyblockLoader)
+            LuckyBlocksUtil.setGameManager(gameManager)
+            LuckyBlocksMenu.loader = luckyblockLoader
 
             val luckyBlocksListener = LuckyBlocksListener(configManager)
             Bukkit.getPluginManager().registerEvents(luckyBlocksListener, this)
 
-            val engineCommand = LuckyBlockEngineIntegration.createEngineCommand(configManager, luckyBlockEngine)
-            getCommand("luckyblocks")?.setExecutor(engineCommand)
-            getCommand("luckyblocks")?.tabCompleter = engineCommand
+            val luckyBlocksCommand = LuckyBlocksCommand(configManager, luckyblockLoader)
+            getCommand("luckyblocks")?.setExecutor(luckyBlocksCommand)
+            getCommand("luckyblocks")?.tabCompleter = luckyBlocksCommand
 
             Bukkit.getPluginManager().registerEvents(LuckyBlocksMenu, this)
 

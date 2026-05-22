@@ -1,0 +1,23 @@
+id: apprentice_warrior
+name: "Apprentice Warrior"
+display_name: "Apprentice Warrior"
+description: "Kill %amount% players across all games."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "EASY"
+rarity: 55.0
+icon:
+  material: "STONE_SWORD"
+  custom_model_data: 0
+display_order: 2
+hidden: false
+secret: false
+active: true
+unlock_message: "&7You are becoming a warrior!"
+requirements:
+  target:
+    id: "kill_player"
+    amount: 10
+rewards:
+  experience: 100
+  coins: 25

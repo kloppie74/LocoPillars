@@ -1,0 +1,23 @@
+id: miner
+name: "Miner"
+display_name: "Miner"
+description: "Break %amount% blocks in total."
+category: "BUILDING"
+type: "PROGRESS"
+difficulty: "EASY"
+rarity: 60.0
+icon:
+  material: "IRON_PICKAXE"
+  custom_model_data: 0
+display_order: 20
+hidden: false
+secret: false
+active: true
+unlock_message: "&7You are a Miner now!"
+requirements:
+  target:
+    id: "blocks_broken"
+    amount: 500
+rewards:
+  experience: 80
+  coins: 20

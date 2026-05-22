@@ -1,0 +1,23 @@
+id: on_fire
+name: "On Fire"
+display_name: "On Fire"
+description: "Reach a kill streak of %amount% in a single game."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "MEDIUM"
+rarity: 14.0
+icon:
+  material: "BLAZE_ROD"
+  custom_model_data: 0
+display_order: 81
+hidden: false
+secret: false
+active: true
+unlock_message: "&cYou are ON FIRE — %amount% kill streak!"
+requirements:
+  target:
+    id: "kill_streak"
+    amount: 5
+rewards:
+  experience: 400
+  coins: 100

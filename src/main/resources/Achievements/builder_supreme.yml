@@ -1,12 +1,9 @@
-# ==============================================
-#   LocoPillars Custom Achievement Definition
-# ==============================================
 id: builder_supreme
 name: "Builder Supreme"
 display_name: "Builder Supreme"
-description: "Place %amount% blocks in total"
+description: "Place %amount% blocks in total."
 category: "BUILDING"
-type: "PROGRESSIVE"
+type: "PROGRESS"
 difficulty: "HARD"
 rarity: 12.5
 icon:
@@ -16,19 +13,11 @@ display_order: 40
 hidden: false
 secret: false
 active: true
-unlock_message: "&cYou unlocked Builder Supreme!"
+unlock_message: "&cYou are now Builder Supreme!"
 requirements:
   target:
-    id: "block_place"
+    id: "blocks_placed"
     amount: 5000
 rewards:
   experience: 125
   coins: 70
-  commands:
-    - "broadcast &c%player% is now Builder Supreme!"
-milestones:
-  - amount: 1000
-    message: "&e1,000 blocks placed!"
-  - amount: 5000
-    message: "&cYou are a Supreme Builder!"
-# =========================

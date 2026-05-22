@@ -1,0 +1,23 @@
+id: champion
+name: "Champion"
+display_name: "Champion"
+description: "Win %amount% games."
+category: "WINS"
+type: "PROGRESS"
+difficulty: "HARD"
+rarity: 10.0
+icon:
+  material: "DIAMOND"
+  custom_model_data: 0
+display_order: 12
+hidden: false
+secret: false
+active: true
+unlock_message: "&bYou are a Champion!"
+requirements:
+  target:
+    id: "win_game"
+    amount: 50
+rewards:
+  experience: 600
+  coins: 150

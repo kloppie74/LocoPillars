@@ -82,6 +82,16 @@ class GameConfig(
         return (settings["LobbyEnabled"] as? Boolean) ?: true
     }
 
+    fun isLuckyBlocksEnabled(): Boolean {
+        val settings = configMap["Settings"] as? Map<String, Any> ?: return false
+        return (settings["LuckyblockEnabled"] as? Boolean) ?: false
+    }
+
+    fun getLuckyblockChance(): Int {
+        val settings = configMap["Settings"] as? Map<String, Any> ?: return 100
+        return (settings["LuckyblockChance"] as? Number)?.toInt()?.coerceIn(0, 100) ?: 100
+    }
+
     fun getSpawnCenterX(): Double {
         val settings = configMap["Settings"] as? Map<*, *> ?: return 0.0
         val sp = settings["SpawnPoint"] as? Map<*, *> ?: return 0.0

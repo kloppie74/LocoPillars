@@ -114,8 +114,7 @@ class LuckyBlocksListener(private val config: ConfigManager) : Listener {
             // Remove the block
             block.type = Material.AIR
 
-            // Execute traditional LuckyBlock break logic
-            LuckyBlocksUtil.handleTraditionalLuckyBlockBreak(player, block.location)
+            LuckyBlocksUtil.handleLuckyBlockBreak(player, block.location)
         }
     }
 }

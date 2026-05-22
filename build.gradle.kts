@@ -75,6 +75,9 @@ dependencies {
 
     // JSON library
     implementation("org.json:json:20231013")
+
+    // Kotlin scripting — runtime compilation of Luckyblock.kts scripts
+    implementation("org.jetbrains.kotlin:kotlin-scripting-jsr223:2.3.21")
 }
 
 tasks {

@@ -1,0 +1,23 @@
+id: warrior
+name: "Warrior"
+display_name: "Warrior"
+description: "Kill %amount% players across all games."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "MEDIUM"
+rarity: 30.0
+icon:
+  material: "GOLDEN_SWORD"
+  custom_model_data: 0
+display_order: 3
+hidden: false
+secret: false
+active: true
+unlock_message: "&6You are a true Warrior!"
+requirements:
+  target:
+    id: "kill_player"
+    amount: 50
+rewards:
+  experience: 250
+  coins: 60

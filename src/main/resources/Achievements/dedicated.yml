@@ -1,0 +1,23 @@
+id: dedicated
+name: "Dedicated"
+display_name: "Dedicated"
+description: "Play %amount% games."
+category: "GENERAL"
+type: "PROGRESS"
+difficulty: "HARD"
+rarity: 7.0
+icon:
+  material: "DIAMOND_CHESTPLATE"
+  custom_model_data: 0
+display_order: 61
+hidden: false
+secret: false
+active: true
+unlock_message: "&bDedication level: MAX — %amount% games played!"
+requirements:
+  target:
+    id: "games_played"
+    amount: 500
+rewards:
+  experience: 800
+  coins: 200

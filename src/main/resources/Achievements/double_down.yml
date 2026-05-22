@@ -1,0 +1,23 @@
+id: double_down
+name: "Double Down"
+display_name: "Double Down"
+description: "Get your first double kill."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "EASY"
+rarity: 40.0
+icon:
+  material: "CROSSBOW"
+  custom_model_data: 0
+display_order: 70
+hidden: false
+secret: false
+active: true
+unlock_message: "&eDouble Kill — twice the glory!"
+requirements:
+  target:
+    id: "double_kill"
+    amount: 1
+rewards:
+  experience: 120
+  coins: 30

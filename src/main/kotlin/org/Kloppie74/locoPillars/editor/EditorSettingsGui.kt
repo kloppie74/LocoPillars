@@ -141,7 +141,11 @@ class EditorSettingsGui(
                 MSG.chatColors("&7Currently: &f$blacklistCount &7item(s) blacklisted"),
                 MSG.chatColors("&7Click to manage the blacklist")
             )))
-        for (slot in 50..52) inv.setItem(slot, filler())
+        inv.setItem(50, btn(Material.CLOCK, "&eLuckyblock Chance", "${session.getLuckyblockChance()}", "%",
+            "&7Chance that breaking a luckyblock fires an effect",
+            "&7L-click &a+5  &7| R-click &c-5",
+            "&7Shift+click &a+25 &7| &c-25"))
+        for (slot in 51..52) inv.setItem(slot, filler())
         inv.setItem(53, makeButton(Material.BARRIER, "&cClose", listOf("&7Click to close the settings GUI.")))
 
         player.openInventory(inv)
@@ -210,6 +214,7 @@ class EditorSettingsGui(
                 Bukkit.getScheduler().runTask(plugin, Runnable { blacklistedItemsGui.open(player) })
                 return
             }
+            50 -> session.setLuckyblockChance(session.getLuckyblockChance() + step(left, shift, 5, 25))
             53 -> { player.closeInventory(); return }
 
             else -> return

@@ -1,0 +1,23 @@
+id: triple_threat
+name: "Triple Threat"
+display_name: "Triple Threat"
+description: "Get %amount% triple kills."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "MEDIUM"
+rarity: 18.0
+icon:
+  material: "BOW"
+  custom_model_data: 0
+display_order: 71
+hidden: false
+secret: false
+active: true
+unlock_message: "&6Triple Threat — %amount% triple kills achieved!"
+requirements:
+  target:
+    id: "triple_kill"
+    amount: 5
+rewards:
+  experience: 350
+  coins: 90

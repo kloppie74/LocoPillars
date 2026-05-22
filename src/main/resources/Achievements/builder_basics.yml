@@ -1,0 +1,23 @@
+id: builder_basics
+name: "Builder Basics"
+display_name: "Builder Basics"
+description: "Place %amount% blocks in total."
+category: "BUILDING"
+type: "PROGRESS"
+difficulty: "EASY"
+rarity: 65.0
+icon:
+  material: "OAK_PLANKS"
+  custom_model_data: 0
+display_order: 30
+hidden: false
+secret: false
+active: true
+unlock_message: "&aYou placed your first %amount% blocks!"
+requirements:
+  target:
+    id: "blocks_placed"
+    amount: 1000
+rewards:
+  experience: 80
+  coins: 20

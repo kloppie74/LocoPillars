@@ -92,7 +92,9 @@ class EditorSession(
     private var blacklistedItems: MutableList<String> = mapRepository.loadMapSettings(mapName)
         ?.getStringList("Settings.RandomItems.BlacklistedItems")?.toMutableList() ?: mutableListOf()
     private var luckyBlocksEnabled: Boolean = mapRepository.loadMapSettings(mapName)
-        ?.let { cfg -> cfg.getList("Settings.Luckyblocks")?.isNotEmpty() == true } ?: false
+        ?.getBoolean("Settings.LuckyblockEnabled", false) ?: false
+    private var luckyblockChance: Int = mapRepository.loadMapSettings(mapName)
+        ?.getInt("Settings.LuckyblockChance", 100) ?: 100
 
     private var particleTask: BukkitTask? = null
     private val spawnHolograms = mutableListOf<TextDisplay>()
@@ -278,6 +280,7 @@ class EditorSession(
     fun isLoadMap(): Boolean      = loadMap
     fun getRandomItemsType(): String = randomItemsType
     fun isLuckyBlocksEnabled(): Boolean = luckyBlocksEnabled
+    fun getLuckyblockChance(): Int = luckyblockChance
 
     /**
      * Get the current schematic radius
@@ -582,11 +585,14 @@ class EditorSession(
 
     fun toggleLuckyBlocks() {
         luckyBlocksEnabled = !luckyBlocksEnabled
-        // When disabled store an empty list; when enabled store a default placeholder
-        val config = mapRepository.loadMapSettings(mapName) ?: return
-        config.set("Settings.Luckyblocks", if (luckyBlocksEnabled) listOf<String>() else listOf<String>())
-        mapRepository.saveMapSettings(mapName, config)
+        persist("Settings.LuckyblockEnabled", luckyBlocksEnabled)
         player.sendActionBar(MSG.chatColors("&aLucky Blocks: &f${if (luckyBlocksEnabled) "enabled" else "disabled"}"))
+    }
+
+    fun setLuckyblockChance(value: Int) {
+        luckyblockChance = value.coerceIn(0, 100)
+        persist("Settings.LuckyblockChance", luckyblockChance)
+        player.sendActionBar(MSG.chatColors("&aLuckyblock Chance: &f$luckyblockChance%"))
     }
 
     private fun persist(path: String, value: Any) {

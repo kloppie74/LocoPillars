@@ -1,0 +1,23 @@
+id: demolisher
+name: "Demolisher"
+display_name: "Demolisher"
+description: "Break %amount% blocks in total."
+category: "BUILDING"
+type: "PROGRESS"
+difficulty: "MEDIUM"
+rarity: 22.0
+icon:
+  material: "DIAMOND_PICKAXE"
+  custom_model_data: 0
+display_order: 21
+hidden: false
+secret: false
+active: true
+unlock_message: "&cYou are a Demolisher!"
+requirements:
+  target:
+    id: "blocks_broken"
+    amount: 5000
+rewards:
+  experience: 200
+  coins: 55

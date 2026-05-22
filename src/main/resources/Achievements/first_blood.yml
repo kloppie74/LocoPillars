@@ -1,0 +1,23 @@
+id: first_blood
+name: "First Blood"
+display_name: "First Blood"
+description: "Kill your first player in a game."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "EASY"
+rarity: 80.0
+icon:
+  material: "IRON_SWORD"
+  custom_model_data: 0
+display_order: 1
+hidden: false
+secret: false
+active: true
+unlock_message: "&cYou drew first blood!"
+requirements:
+  target:
+    id: "kill_player"
+    amount: 1
+rewards:
+  experience: 50
+  coins: 10

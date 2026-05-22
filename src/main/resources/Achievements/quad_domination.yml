@@ -1,0 +1,23 @@
+id: quad_domination
+name: "Quad Domination"
+display_name: "Quad Domination"
+description: "Get a quad kill in a single game."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "HARD"
+rarity: 5.0
+icon:
+  material: "TRIDENT"
+  custom_model_data: 0
+display_order: 72
+hidden: false
+secret: false
+active: true
+unlock_message: "&cQUAD KILL — you dominated the entire game!"
+requirements:
+  target:
+    id: "quad_kill"
+    amount: 1
+rewards:
+  experience: 500
+  coins: 130

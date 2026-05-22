@@ -70,8 +70,7 @@ class ItemHotBarListener(
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             if (plugin.adminEditorManager.isActive(player)) return@Runnable
             val oldType = HotbarUtils.getCurrentHotbarType(player, plugin)
-            HotbarUtils.setupPlayerHotbar(player, plugin)
-            val newType = HotbarUtils.getCurrentHotbarType(player, plugin)
+            val newType = HotbarUtils.determineHotbarType(player, plugin)
             if (oldType != newType) HotbarUtils.handleHotbarTypeChange(player, oldType, newType, plugin)
         }, 5L)
     }

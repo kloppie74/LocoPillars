@@ -1,0 +1,11 @@
+{
+  "id": "freeze_trap",
+  "display_name": "Freeze Trap",
+  "description": "Frozen solid! Slowness, blindness and fatigue hit all at once.",
+  "icon": {
+    "material": "PACKED_ICE",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "UNCOMMON"
+}

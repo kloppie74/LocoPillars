@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\Documenten Rowan Klop\\\\Documents\\\\GitHub\\\\LocoPillars\" -Force)",
+      "Bash(Select-Object Name, FullName)"
+    ]
+  }
+}

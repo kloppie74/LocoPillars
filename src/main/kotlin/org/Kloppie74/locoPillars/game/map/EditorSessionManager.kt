@@ -219,7 +219,7 @@ class EditorSessionManager(
             .whenComplete { success, _ -> runOnMain { callback(success ?: false) } }
     }
 
-    fun saveAndEndSession(player: Player): Boolean {
+    fun saveAndEndSession(player: Player, onComplete: ((Boolean) -> Unit)? = null): Boolean {
         val session = activeSessions[player.uniqueId] ?: run {
             player.sendMessage(MSG.chatColors("&cYou don't have an active editor session!"))
             return false
@@ -233,14 +233,15 @@ class EditorSessionManager(
 
         player.sendMessage(MSG.chatColors("&eSaving map changes..."))
 
+        val mapName  = session.mapName
         val (loc1, loc2) = session.getSaveRegionBounds()
-        val schemFile    = mapRepository.getMapSchematicFile(session.mapName)
+        val schemFile    = mapRepository.getMapSchematicFile(mapName)
         schemFile.parentFile?.mkdirs()
 
         saveSchematicAsync(loc1, loc2, schemFile)
             .exceptionally { ex ->
                 plugin.logger.severe(
-                    "[EditorSessionManager] Failed to save schematic for ${session.mapName}: ${ex.message}")
+                    "[EditorSessionManager] Failed to save schematic for $mapName: ${ex.message}")
                 false
             }
             .whenComplete { success, _ ->
@@ -248,20 +249,22 @@ class EditorSessionManager(
                     if (!success) {
                         player.sendMessage(MSG.chatColors("&cFailed to save schematic!"))
                         player.sendMessage(MSG.chatColors("&7Your session will remain active"))
+                        onComplete?.invoke(false)
                         return@runOnMain
                     }
 
-                    player.sendMessage(MSG.chatColors("&aSuccessfully saved: &f${session.mapName}"))
+                    player.sendMessage(MSG.chatColors("&aSuccessfully saved: &f$mapName"))
                     player.sendMessage(MSG.chatColors("&7Schematic saved to: &f${schemFile.name}"))
 
-                    mapRepository.loadMapSettings(session.mapName)?.let { config ->
+                    mapRepository.loadMapSettings(mapName)?.let { config ->
                         config.set("SaveRadius",      session.getSaveRadius())
                         config.set("SchematicRadius", session.getSaveRadius())
-                        mapRepository.saveMapSettings(session.mapName, config)
+                        mapRepository.saveMapSettings(mapName, config)
                     }
 
-                    debugLog("Map ${session.mapName} saved")
+                    debugLog("Map $mapName saved")
                     endSession(player, true)
+                    onComplete?.invoke(true)
                 }
             }
 

@@ -1,0 +1,23 @@
+id: legend
+name: "Legend"
+display_name: "Legend"
+description: "Win %amount% games."
+category: "WINS"
+type: "PROGRESS"
+difficulty: "EXPERT"
+rarity: 2.0
+icon:
+  material: "NETHER_STAR"
+  custom_model_data: 0
+display_order: 13
+hidden: false
+secret: false
+active: true
+unlock_message: "&6You are a LEGEND!"
+requirements:
+  target:
+    id: "win_game"
+    amount: 200
+rewards:
+  experience: 2000
+  coins: 500

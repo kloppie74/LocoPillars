@@ -1,0 +1,23 @@
+id: first_win
+name: "First Win"
+display_name: "First Win"
+description: "Win your very first game."
+category: "WINS"
+type: "PROGRESS"
+difficulty: "EASY"
+rarity: 70.0
+icon:
+  material: "GOLD_INGOT"
+  custom_model_data: 0
+display_order: 10
+hidden: false
+secret: false
+active: true
+unlock_message: "&aYour first victory — many more to come!"
+requirements:
+  target:
+    id: "win_game"
+    amount: 1
+rewards:
+  experience: 75
+  coins: 20

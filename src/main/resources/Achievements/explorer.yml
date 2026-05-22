@@ -1,0 +1,23 @@
+id: explorer
+name: "Explorer"
+display_name: "Explorer"
+description: "Walk %amount% blocks in total."
+category: "GENERAL"
+type: "PROGRESS"
+difficulty: "EASY"
+rarity: 58.0
+icon:
+  material: "COMPASS"
+  custom_model_data: 0
+display_order: 50
+hidden: false
+secret: false
+active: true
+unlock_message: "&aYou are an Explorer!"
+requirements:
+  target:
+    id: "walk_distance"
+    amount: 10000
+rewards:
+  experience: 100
+  coins: 25

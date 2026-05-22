@@ -1,0 +1,23 @@
+id: architect
+name: "Architect"
+display_name: "Architect"
+description: "Place %amount% blocks in total."
+category: "BUILDING"
+type: "PROGRESS"
+difficulty: "MEDIUM"
+rarity: 20.0
+icon:
+  material: "CHISELED_STONE_BRICKS"
+  custom_model_data: 0
+display_order: 31
+hidden: false
+secret: false
+active: true
+unlock_message: "&6The Architect has arrived!"
+requirements:
+  target:
+    id: "blocks_placed"
+    amount: 10000
+rewards:
+  experience: 280
+  coins: 70

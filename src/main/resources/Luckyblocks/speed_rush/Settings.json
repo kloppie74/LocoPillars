@@ -1,0 +1,11 @@
+{
+  "id": "speed_rush",
+  "display_name": "Speed Rush",
+  "description": "30 seconds of turbo speed and super jump!",
+  "icon": {
+    "material": "FEATHER",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "COMMON"
+}

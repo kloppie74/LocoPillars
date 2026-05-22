@@ -1,0 +1,23 @@
+id: win_streak_master
+name: "Win Streak Master"
+display_name: "Win Streak Master"
+description: "Win %amount% games in a row."
+category: "WINS"
+type: "PROGRESS"
+difficulty: "HARD"
+rarity: 6.0
+icon:
+  material: "GOLDEN_APPLE"
+  custom_model_data: 0
+display_order: 82
+hidden: false
+secret: false
+active: true
+unlock_message: "&6%amount% wins in a row — unstoppable!"
+requirements:
+  target:
+    id: "win_streak"
+    amount: 5
+rewards:
+  experience: 600
+  coins: 160

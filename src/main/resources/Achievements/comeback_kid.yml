@@ -1,0 +1,23 @@
+id: comeback_kid
+name: "Comeback Kid"
+display_name: "Comeback Kid"
+description: "Win %amount% comeback games after being behind."
+category: "WINS"
+type: "PROGRESS"
+difficulty: "MEDIUM"
+rarity: 16.0
+icon:
+  material: "TOTEM_OF_UNDYING"
+  custom_model_data: 0
+display_order: 80
+hidden: false
+secret: false
+active: true
+unlock_message: "&aComeback Kid — you never give up!"
+requirements:
+  target:
+    id: "comeback_win"
+    amount: 3
+rewards:
+  experience: 350
+  coins: 90

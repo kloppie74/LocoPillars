@@ -1,0 +1,23 @@
+id: executioner
+name: "Executioner"
+display_name: "Executioner"
+description: "Kill %amount% players across all games."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "EXPERT"
+rarity: 3.0
+icon:
+  material: "NETHERITE_SWORD"
+  custom_model_data: 0
+display_order: 5
+hidden: false
+secret: false
+active: true
+unlock_message: "&4You are the Executioner — feared by all!"
+requirements:
+  target:
+    id: "kill_player"
+    amount: 500
+rewards:
+  experience: 1500
+  coins: 400

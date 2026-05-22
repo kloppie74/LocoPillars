@@ -1,0 +1,11 @@
+{
+  "id": "treasure_chest",
+  "display_name": "Treasure Chest",
+  "description": "A lucky haul of diamonds, gold and food!",
+  "icon": {
+    "material": "GOLD_NUGGET",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "UNCOMMON"
+}

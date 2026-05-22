@@ -23,10 +23,37 @@ class AchievementLoader(
     private val plugin: Plugin
 ) {
 
+    private val defaultAchievements = listOf(
+        "first_blood", "apprentice_warrior", "warrior", "gladiator", "executioner",
+        "first_win", "rising_star", "champion", "legend", "win_master",
+        "miner", "demolisher", "master_demolisher",
+        "builder_basics", "architect", "builder_supreme",
+        "explorer", "marathon_runner",
+        "veteran", "dedicated",
+        "double_down", "triple_threat", "quad_domination",
+        "comeback_kid", "on_fire", "win_streak_master", "perfect_game_master"
+    )
+
+    private fun extractDefaults(folder: File) {
+        folder.mkdirs()
+        for (name in defaultAchievements) {
+            val target = File(folder, "$name.yml")
+            if (!target.exists()) {
+                val stream = plugin.getResource("Achievements/$name.yml") ?: continue
+                try {
+                    target.outputStream().use { stream.copyTo(it) }
+                } catch (e: Exception) {
+                    plugin.logger.warning("[AchievementLoader] Could not extract $name.yml: ${e.message}")
+                }
+            }
+        }
+    }
+
     /**
      * Loads achievements from YAML files in the specified folder.
      */
     fun loadAchievements(folder: File, manager: AchievementManager) {
+        extractDefaults(folder)
         if (!folder.exists() || !folder.isDirectory) {
             plugin.logger.severe("[AchievementLoader] ❌ Achievement folder not found: ${folder.absolutePath}")
             return

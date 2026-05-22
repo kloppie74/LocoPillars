@@ -1,0 +1,23 @@
+id: veteran
+name: "Veteran"
+display_name: "Veteran"
+description: "Play %amount% games."
+category: "GENERAL"
+type: "PROGRESS"
+difficulty: "MEDIUM"
+rarity: 20.0
+icon:
+  material: "IRON_CHESTPLATE"
+  custom_model_data: 0
+display_order: 60
+hidden: false
+secret: false
+active: true
+unlock_message: "&7You are a Veteran — %amount% games played!"
+requirements:
+  target:
+    id: "games_played"
+    amount: 100
+rewards:
+  experience: 300
+  coins: 80

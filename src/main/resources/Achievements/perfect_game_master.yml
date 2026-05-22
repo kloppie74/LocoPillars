@@ -1,0 +1,23 @@
+id: perfect_game_master
+name: "Perfect Game Master"
+display_name: "Perfect Game Master"
+description: "Win a perfect game without dying once."
+category: "WINS"
+type: "PROGRESS"
+difficulty: "HARD"
+rarity: 6.5
+icon:
+  material: "ENCHANTED_GOLDEN_APPLE"
+  custom_model_data: 0
+display_order: 83
+hidden: false
+secret: false
+active: true
+unlock_message: "&6Perfect. Not a single death — FLAWLESS!"
+requirements:
+  target:
+    id: "perfect_game"
+    amount: 1
+rewards:
+  experience: 700
+  coins: 180

@@ -1,0 +1,11 @@
+{
+  "id": "tnt_surprise",
+  "display_name": "TNT Surprise",
+  "description": "BOOM! The lucky block explodes in your face.",
+  "icon": {
+    "material": "TNT",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "COMMON"
+}

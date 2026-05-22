@@ -1,0 +1,11 @@
+{
+  "id": "firework_frenzy",
+  "display_name": "Firework Frenzy",
+  "description": "Colorful fireworks explode in every direction!",
+  "icon": {
+    "material": "FIREWORK_ROCKET",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "COMMON"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "chaos_swap",
+  "display_name": "Chaos Swap",
+  "description": "Your position swaps with a random other player!",
+  "icon": {
+    "material": "COMPASS",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "RARE"
+}

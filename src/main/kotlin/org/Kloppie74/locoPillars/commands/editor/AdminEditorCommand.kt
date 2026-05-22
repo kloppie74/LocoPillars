@@ -341,9 +341,8 @@ class AdminEditorCommand(
             return
         }
         val mapName = adminEditorManager.getState(player)?.activeMapName
-        editorSessionManager.saveAndEndSession(player)
-
-        if (mapName != null) {
+        editorSessionManager.saveAndEndSession(player) { success ->
+            if (!success || mapName == null) return@saveAndEndSession
             val result = gameFileService.runSetupForMap(mapName)
             player.sendMessage(MSG.chatColors(result.summary()))
             result.warnings.forEach { player.sendMessage(MSG.lang("editor.setup.warning_entry", "warning" to it)) }

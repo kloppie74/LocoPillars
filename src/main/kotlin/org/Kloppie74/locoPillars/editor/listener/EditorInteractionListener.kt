@@ -303,8 +303,11 @@ class EditorInteractionListener(
             player.sendMessage(MSG.lang("editor.session.no_session_save"))
             return
         }
+        val mapName = adminEditorManager.getState(player)?.activeMapName
         player.sendMessage(MSG.lang("editor.session.saving"))
-        editorSessionManager.saveAndEndSession(player)
+        editorSessionManager.saveAndEndSession(player) { success ->
+            if (success && mapName != null) plugin.gameFileService.runSetupForMap(mapName)
+        }
         adminEditorManager.disable(player)
     }
 

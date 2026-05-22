@@ -1,0 +1,23 @@
+id: gladiator
+name: "Gladiator"
+display_name: "Gladiator"
+description: "Kill %amount% players across all games."
+category: "COMBAT"
+type: "PROGRESS"
+difficulty: "HARD"
+rarity: 15.0
+icon:
+  material: "DIAMOND_SWORD"
+  custom_model_data: 0
+display_order: 4
+hidden: false
+secret: false
+active: true
+unlock_message: "&bThe arena belongs to you, Gladiator!"
+requirements:
+  target:
+    id: "kill_player"
+    amount: 100
+rewards:
+  experience: 500
+  coins: 125

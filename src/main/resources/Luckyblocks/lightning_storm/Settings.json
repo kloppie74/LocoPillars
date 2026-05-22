@@ -1,0 +1,11 @@
+{
+  "id": "lightning_storm",
+  "display_name": "Lightning Storm",
+  "description": "Multiple bolts of lightning crash down around you!",
+  "icon": {
+    "material": "BLAZE_ROD",
+    "custom_model_data": 0
+  },
+  "block_type": "LUCKY_BLOCK",
+  "rarity": "RARE"
+}
