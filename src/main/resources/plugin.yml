@@ -4,7 +4,8 @@ version: 1.0.0
 api-version: 1.21
 authors: [kloppie74]
 description: "Pillars of the Fortune - memory-friendly multi-instance minigame!"
-depend: [WorldEdit, WorldGuard, PlaceholderAPI]
+depend: [WorldEdit, PlaceholderAPI]
+softdepend: [WorldGuard]
 
 commands:
   pillars:
@@ -80,6 +81,18 @@ commands:
     usage: "/luckyblocks [menu|getluckyblock]"
     aliases: [ luckyblock, luckyb ]
 
+  spawn:
+    description: "Teleport to the lobby spawn (or teleport another player there)"
+    usage: "/spawn [player]"
+    permission: locopillars.spawn
+    aliases: [ hub, lobby ]
+
+  setspawn:
+    description: "Set the lobby spawn to your current location"
+    usage: "/setspawn"
+    permission: locopillars.setspawn
+    permission-message: "§cYou don't have permission to set the spawn!"
+
   editor:
     description: "Admin Editor System – toggle edit mode and manage maps"
     usage: "/editor <toggle|map|info|doctor|hotbar|holograms|setup|create|edit|delete|list|save|cancel|resize|settings|validate|files|spawn|help> [args]"
@@ -116,6 +129,19 @@ permissions:
 
   locopillars.memory.use:
     description: "Use /memory command"
+    default: op
+
+  # === SPAWN PERMISSIONS ===
+  locopillars.spawn:
+    description: "Use /spawn to teleport to the lobby spawn"
+    default: true
+
+  locopillars.spawn.others:
+    description: "Teleport other players to spawn with /spawn <player>"
+    default: op
+
+  locopillars.setspawn:
+    description: "Set the lobby spawn location with /setspawn"
     default: op
 
   locoPillars.play:

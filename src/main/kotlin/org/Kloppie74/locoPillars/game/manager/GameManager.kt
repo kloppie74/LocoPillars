@@ -101,6 +101,14 @@ class GameManager(private val plugin: LocoPillars) {
         return playerToInstance[player.uniqueId]
     }
 
+    /**
+     * Returns the game instance in which this player is a spectator (i.e. they were eliminated).
+     * Unlike getPlayerInstance(), this looks at the spectators list rather than playerToInstance.
+     */
+    fun getSpectatorInstance(player: Player): GameInstance? {
+        return instances.find { it.spectators.contains(player.uniqueId) }
+    }
+
     fun getAllInstances(): List<GameInstance> = instances
 
     fun getInstancesByGameType(gameTypeName: String): List<GameInstance> {

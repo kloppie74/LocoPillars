@@ -91,6 +91,16 @@ object SpectatorUtils {
     }
 
     /**
+     * Mark a player as a spectator in the map only — no property changes.
+     * Used when a player dies mid-game so visibility systems treat them as spectator
+     * before they have actually respawned.
+     */
+    @JvmStatic
+    fun markAsEliminatedSpectator(player: Player) {
+        SPECTATOR_MAP[player.uniqueId] = true
+    }
+
+    /**
      * Clear the spectator cache for the specified player
      */
     @JvmStatic

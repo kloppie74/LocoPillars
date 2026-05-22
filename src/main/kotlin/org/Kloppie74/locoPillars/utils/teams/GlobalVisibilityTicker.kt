@@ -462,16 +462,20 @@ object GlobalVisibilityTicker {
                 return false
             }
 
-            // Special rules for different game instances with spectators
+            // Special rules for spectators in pillars worlds
             if (viewer.world.name.startsWith("pillars_") && target.world.name.startsWith("pillars_")) {
                 val viewerInstance = plugin.gameManager.getPlayerInstance(viewer)
                 val targetInstance = plugin.gameManager.getPlayerInstance(target)
 
+                // Always hide spectators from non-spectators inside pillars worlds.
+                // This covers both the normal in-game case (different instances) and the
+                // end-of-game edge case where both players have a null instance but the
+                // dead player is still in the arena world.
+                if (targetIsSpectator && !viewerIsSpectator) {
+                    return false
+                }
+
                 if (viewerInstance != targetInstance) {
-                    // Different game instances in pillars worlds
-                    if (targetIsSpectator && !viewerIsSpectator) {
-                        return false
-                    }
                     if (viewerIsSpectator && !targetIsSpectator) {
                         return true
                     }

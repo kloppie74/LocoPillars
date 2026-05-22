@@ -58,6 +58,9 @@ import org.Kloppie74.locoPillars.utils.vanish.commands.ShowOthersCommand
 import org.Kloppie74.locoPillars.utils.vanish.commands.VanishCommand
 import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import org.Kloppie74.locoPillars.utils.teams.tab.ProtocolLibTabVisibilityManager
+import org.Kloppie74.locoPillars.worldregion.WorldRegionListener
+import org.Kloppie74.locoPillars.worldregion.WorldRegionManager
+import org.Kloppie74.locoPillars.worldregion.commands.SpawnCommand
 import org.bukkit.Bukkit
 import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
@@ -80,6 +83,8 @@ class LocoPillars : JavaPlugin() {
     lateinit var arenaManager: ArenaManager
         private set
     lateinit var worldManager: ArenaWorldManager
+        private set
+    lateinit var worldRegionManager: WorldRegionManager
         private set
     lateinit var spawnAreaManager: SpawnAreaManager
         private set
@@ -206,6 +211,8 @@ class LocoPillars : JavaPlugin() {
             logger.info("[LocoPillars] ✓ Map Editor & Admin Editor System initialized")
 
             worldManager = ArenaWorldManager(this, configManager)
+            worldRegionManager = WorldRegionManager(this)
+            logger.info("[LocoPillars] ✓ WorldRegionManager initialized (no WorldGuard required)")
             arenaManager = ArenaManager(this, worldManager, configManager)
 
             // 4. GAME MANAGER & INSTANCES
@@ -289,6 +296,9 @@ class LocoPillars : JavaPlugin() {
             hotbarItemManager = HotbarItemManager(this, itemsConfig)
 
             // 11. EVENT LISTENERS
+            server.pluginManager.registerEvents(WorldRegionListener(this), this)
+            debugLog("✓ WorldRegionListener registered (custom arena boundary enforcement)")
+
             gameListener = GameListener(this)
             server.pluginManager.registerEvents(gameListener, this)
             debugLog("✓ GameListener registered")
@@ -484,6 +494,11 @@ class LocoPillars : JavaPlugin() {
                 arenaManager.onDisable()
             }
 
+            if (::worldRegionManager.isInitialized) {
+                worldRegionManager.clearAll()
+                logger.info("[LocoPillars] ✓ WorldRegionManager cleared")
+            }
+
             // Cleanup editor sessions
             if (::editorSessionManager.isInitialized) {
                 logger.info("[LocoPillars] Cleaning up editor sessions...")
@@ -539,19 +554,27 @@ class LocoPillars : JavaPlugin() {
     private fun checkDependencies(): Boolean {
         debugLog("Checking dependencies...")
 
-        val requiredPlugins = listOf("WorldEdit", "WorldGuard")
-        val missingPlugins = mutableListOf<String>()
-        val foundPlugins = mutableListOf<String>()
+        // WorldGuard is NO LONGER required — region management is handled internally.
+        // WorldEdit (or FAWE) is still needed for schematic loading/pasting.
+        val requiredPlugins = listOf("WorldEdit")
+        val missingPlugins  = mutableListOf<String>()
+        val foundPlugins    = mutableListOf<String>()
 
         requiredPlugins.forEach { pluginName ->
-            val plugin = server.pluginManager.getPlugin(pluginName)
-            if (plugin != null && plugin.isEnabled) {
-                foundPlugins.add("$pluginName v${plugin.description.version}")
-                debugLog("✓ Found $pluginName v${plugin.description.version}")
+            val dep = server.pluginManager.getPlugin(pluginName)
+            if (dep != null && dep.isEnabled) {
+                foundPlugins.add("$pluginName v${dep.description.version}")
+                debugLog("✓ Found $pluginName v${dep.description.version}")
             } else {
                 missingPlugins.add(pluginName)
                 logger.severe("[LocoPillars] ✗ Missing or disabled: $pluginName")
             }
+        }
+
+        // Log optional WorldGuard presence as info (not required)
+        val wg = server.pluginManager.getPlugin("WorldGuard")
+        if (wg != null && wg.isEnabled) {
+            logger.info("[LocoPillars] ℹ WorldGuard is installed but LocoPillars no longer uses it for region management.")
         }
 
         if (missingPlugins.isNotEmpty()) {
@@ -559,9 +582,7 @@ class LocoPillars : JavaPlugin() {
             logger.severe("[LocoPillars] MISSING REQUIRED DEPENDENCIES!")
             logger.severe("[LocoPillars] ==========================================")
             logger.severe("[LocoPillars] Missing: ${missingPlugins.joinToString(", ")}")
-            logger.severe("[LocoPillars] Download links:")
-            logger.severe("[LocoPillars]   - WorldEdit: https://dev.bukkit.org/projects/worldedit")
-            logger.severe("[LocoPillars]   - WorldGuard: https://dev.bukkit.org/projects/worldguard")
+            logger.severe("[LocoPillars] Download WorldEdit: https://dev.bukkit.org/projects/worldedit")
             logger.severe("[LocoPillars] ==========================================")
             return false
         }
@@ -594,6 +615,19 @@ class LocoPillars : JavaPlugin() {
         } else {
             logger.severe("[LocoPillars] ✗ Failed to register '/memory' command")
         }
+
+        // Spawn / SetSpawn commands
+        val spawnCmd = SpawnCommand(this)
+        getCommand("spawn")?.let {
+            it.setExecutor(spawnCmd)
+            it.tabCompleter = spawnCmd
+            debugLog("✓ Command '/spawn' registered")
+        } ?: logger.warning("[LocoPillars] '/spawn' command not found in plugin.yml")
+
+        getCommand("setspawn")?.let {
+            it.setExecutor(spawnCmd)
+            debugLog("✓ Command '/setspawn' registered")
+        } ?: logger.warning("[LocoPillars] '/setspawn' command not found in plugin.yml")
 
         // Admin Editor System command
         getCommand("editor")?.let {

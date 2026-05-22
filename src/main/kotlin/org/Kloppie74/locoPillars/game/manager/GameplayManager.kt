@@ -271,6 +271,9 @@ class GameplayManager(
                             player.sendTitle(MSG.lang("game.cage.go_title"), "", 0, 20, 10)
                             player.removePotionEffect(PotionEffectType.SLOWNESS)
                             player.removePotionEffect(PotionEffectType.JUMP_BOOST)
+                            // Guarantee combat-ready state: isInvulnerable must be false the
+                            // moment cages open regardless of any prior hotbar-state residue.
+                            player.isInvulnerable = false
                             plugin.gameListener.setCageProtection(player.uniqueId, false)
                         }
                         removeCagesForInstance(instance)
@@ -463,6 +466,9 @@ class GameplayManager(
 
         instance.players.remove(player.uniqueId)
         playerToInstance.remove(player.uniqueId)
+        // Mark in spectator map immediately so GlobalVisibilityTicker hides this player
+        // from alive players before they have respawned and been formally set as spectator.
+        SpectatorUtils.markAsEliminatedSpectator(player)
 
         broadcastToGame(instance, MSG.lang("game.elimination.broadcast", "player" to player.name))
         player.sendMessage(MSG.lang("game.elimination.self"))
@@ -742,6 +748,12 @@ class GameplayManager(
 
     fun handleEliminatedPlayerRespawn(player: Player): Boolean {
         if (!player.isOnline) return false
+        // If the player is still on the death screen, defer until the actual respawn fires.
+        // Calling restorePlayerState (and thus player.spigot().respawn()) while inside a
+        // PlayerDeathEvent handler chain corrupts the entity state → ghost player.
+        // scheduleForcedRespawn (1-tick delay) will trigger the PlayerRespawnEvent safely,
+        // which then re-invokes this function once the player is alive.
+        if (player.isDead) return false
         val session = eliminatedPlayerSessions[player.uniqueId] ?: return false
         val instance = session.instance
 

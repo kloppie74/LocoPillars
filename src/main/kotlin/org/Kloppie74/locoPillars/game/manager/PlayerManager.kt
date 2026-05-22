@@ -20,7 +20,7 @@ class PlayerManager(private val plugin: LocoPillars) {
         player.gameMode = GameMode.SURVIVAL
         player.health = 20.0
         player.foodLevel = 20
-        player.saturation = 20f
+        player.saturation = 5f   // Low saturation so hunger kicks in quickly once the game goes ACTIVE
         player.inventory.clear()
         player.enderChest.clear()
         player.exp = 0f
@@ -56,7 +56,7 @@ class PlayerManager(private val plugin: LocoPillars) {
         player.gameMode = GameMode.SURVIVAL
         player.health = 20.0
         player.foodLevel = 20
-        player.saturation = 20f
+        player.saturation = 5f   // Low saturation so hunger kicks in quickly once the game goes ACTIVE
         player.inventory.clear()
         player.enderChest.clear()
         player.exp = 0f

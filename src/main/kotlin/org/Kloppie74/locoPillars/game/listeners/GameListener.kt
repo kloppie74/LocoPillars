@@ -453,11 +453,13 @@ class GameListener(private val plugin: LocoPillars) : Listener {
         val player = event.entity as Player
         val instance = plugin.gameManager.getPlayerInstance(player) ?: return
 
-        // Cancel hunger for spectators or non-active games
+        // Cancel hunger for spectators or non-active games.
+        // Keep food bar full but do NOT reset saturation — letting it deplete
+        // naturally means players enter the ACTIVE phase with low saturation,
+        // so hunger kicks in as soon as combat starts.
         if (SpectatorUtils.isSpectator(player, plugin) || instance.state != GameState.ACTIVE) {
             event.isCancelled = true
             player.foodLevel = 20
-            player.saturation = 20f
         }
     }
 

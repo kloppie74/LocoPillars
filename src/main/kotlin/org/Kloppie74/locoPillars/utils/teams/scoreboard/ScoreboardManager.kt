@@ -4,7 +4,9 @@ import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.scheduler.BukkitRunnable
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.utils.MSG
+import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import me.clip.placeholderapi.PlaceholderAPI
 import java.util.concurrent.ConcurrentHashMap
 import java.util.*
@@ -26,6 +28,7 @@ class ScoreboardManager(private val plugin: LocoPillars) {
 
     init {
         loadConfig()
+        if (globalEnabled) startAutoUpdate()
     }
 
     fun loadConfig() {
@@ -141,7 +144,7 @@ class ScoreboardManager(private val plugin: LocoPillars) {
                 scoreHelper.setTitle(titleWithPlaceholders)
 
                 val processedLines = parseConfigLines(section.lines, player)
-                scoreHelper.setSlotsFromList(processedLines)
+                scoreHelper.setSlotsFromMap(processedLines)
 
                 // FIXED: Use UNIQUE sidebar teams that don't conflict with tab teams!
                 updateSidebarTeams(player, processedLines)
@@ -159,68 +162,59 @@ class ScoreboardManager(private val plugin: LocoPillars) {
     }
 
     /**
-     * Parse config lines: genummerde lines worden gesorteerd op nummer (ASC),
-     * if-statements blijven op hun YAML positie en schuiven genummerde lines op.
+     * Parse config lines into a score→text map.
+     *
+     * Numeric keys (e.g. "6", "3") become their Minecraft sidebar score directly.
+     * This means key 6 always sits at position 6 on the scoreboard (higher = higher on screen),
+     * regardless of YAML insertion order — no more position swapping bugs.
+     *
+     * if-condition keys (e.g. "if1", "if2") are evaluated in YAML order; those that evaluate
+     * to true receive scores above the highest numeric key, so they always appear above the
+     * numeric section (maxNumericKey + 1, + 2, …).
      */
-    private fun parseConfigLines(lines: LinkedHashMap<String, String>, player: Player): List<String> {
-        val result = mutableListOf<String>()
+    private fun parseConfigLines(lines: LinkedHashMap<String, String>, player: Player): Map<Int, String> {
+        val result = mutableMapOf<Int, String>()
 
-        // Eerst alle genummerde lines verzamelen en sorteren
-        val numericLines = mutableMapOf<Int, String>()
-
-        // Verzamel alle genummerde lines
-        for ((key, value) in lines.entries) {
-            val numKey = key.toIntOrNull()
-            if (numKey != null) {
-                numericLines[numKey] = value
-            }
+        // First pass: find the highest numeric key for if-condition score offset
+        var maxNumericKey = 0
+        for (key in lines.keys) {
+            val n = key.toIntOrNull()
+            if (n != null && n > maxNumericKey) maxNumericKey = n
         }
 
-        // Sorteer genummerde lines in ascending order (1, 2, 3, etc.)
-        val sortedNumericLines = numericLines.toSortedMap().values.toMutableList()
-
-        // Nu door de originele YAML volgorde gaan en dynamisch lines toewijzen
-        val orderedKeys = lines.keys.toList()
-        var numericIndex = 0
-
-        for (key in orderedKeys) {
-            if (key.toIntOrNull() != null) {
-                // Dit is een genummerde line - neem volgende uit gesorteerde lijst
-                if (numericIndex < sortedNumericLines.size) {
-                    var line = sortedNumericLines[numericIndex]
-                    line = PlaceholderAPI.setPlaceholders(player, line)
-                    line = MSG.chatColors(line)
-                    result.add(line)
-                    numericIndex++
+        var ifCounter = 0
+        for ((key, value) in lines.entries) {
+            val numKey = key.toIntOrNull()
+            when {
+                numKey != null -> {
+                    // Use the YAML key value directly as the Minecraft score
+                    result[numKey] = MSG.chatColors(PlaceholderAPI.setPlaceholders(player, value))
                 }
-            } else if (key.startsWith("if")) {
-                // Dit is een if-statement - verwerk direct op deze positie
-                val value = lines[key] ?: continue
+                key.startsWith("if") -> {
+                    val regexBracket = Regex("""(.+?)\s+LINE=\[(.+)]""")
+                    val regexQuote  = Regex("""(.+?)\s+LINE="(.+)"""")
+                    val matchBracket = regexBracket.find(value)
+                    val matchQuote   = regexQuote.find(value)
 
-                val regexBracket = Regex("""(.+?)\s+LINE=\[(.+)]""")
-                val regexQuote = Regex("""(.+?)\s+LINE="(.+)"""")
-                val matchBracket = regexBracket.find(value)
-                val matchQuote = regexQuote.find(value)
+                    var condition = ""
+                    var lineText  = ""
 
-                var condition = ""
-                var lineText = ""
+                    if (matchBracket != null) {
+                        condition = matchBracket.groups[1]?.value?.trim() ?: ""
+                        lineText  = matchBracket.groups[2]?.value ?: ""
+                    } else if (matchQuote != null) {
+                        condition = matchQuote.groups[1]?.value?.trim() ?: ""
+                        lineText  = matchQuote.groups[2]?.value ?: ""
+                    }
 
-                if (matchBracket != null) {
-                    condition = matchBracket.groups[1]?.value?.trim() ?: ""
-                    lineText = matchBracket.groups[2]?.value ?: ""
-                } else if (matchQuote != null) {
-                    condition = matchQuote.groups[1]?.value?.trim() ?: ""
-                    lineText = matchQuote.groups[2]?.value ?: ""
+                    if (condition.isNotEmpty() && lineText.isNotEmpty() && evaluateCondition(condition, player)) {
+                        ifCounter++
+                        val score = maxNumericKey + ifCounter
+                        result[score] = MSG.chatColors(PlaceholderAPI.setPlaceholders(player, lineText))
+                    }
                 }
-
-                // Alleen toevoegen als condition waar is
-                if (condition.isNotEmpty() && lineText.isNotEmpty() && evaluateCondition(condition, player)) {
-                    lineText = PlaceholderAPI.setPlaceholders(player, lineText)
-                    lineText = MSG.chatColors(lineText)
-                    result.add(lineText)
-                }
+                // Other keys are ignored
             }
-            // Andere keys worden genegeerd
         }
 
         return result
@@ -246,24 +240,38 @@ class ScoreboardManager(private val plugin: LocoPillars) {
     }
 
     private fun getTeamAmount(player: Player): Int {
+        // getPlayerInstance() returns null for eliminated spectators; fall back to spectatorInstance
         val instance = plugin.gameManager.getPlayerInstance(player)
+            ?: plugin.gameManager.getSpectatorInstance(player)
         return instance?.arenaInstance?.config?.teams?.size ?: 0
     }
 
     /**
      * FIXED: Create UNIQUE sidebar teams that don't conflict with tab teams!
+     * Accepts a score→text map from parseConfigLines; entries are sorted by score ascending
+     * so that entry index 1 = lowest score, entry index N = highest score.
+     * Teams beyond the current map size are cleaned up to avoid stale display lines.
      */
-    private fun updateSidebarTeams(player: Player, lines: List<String>) {
-        for (i in 1..lines.size.coerceAtMost(15)) {
-            val entry = ScoreHelper.ENTRIES[i]
-            val line = lines[i - 1]
+    private fun updateSidebarTeams(player: Player, scoreToText: Map<Int, String>) {
+        val sorted = scoreToText.entries.sortedBy { it.key }
+        val size = sorted.size.coerceAtMost(15)
+
+        for (i in 0 until size) {
+            val entryIndex = i + 1
+            val entry = ScoreHelper.ENTRIES[entryIndex]
+            val line = sorted[i].value
             if (line.isNotEmpty()) {
                 val (prefix, suffix) = extractPrefixSuffix(line)
-                // FIXED: Use unique prefix for sidebar teams to avoid conflicts!
-                plugin.teamManager.createSidebarTeam(player, i, entry, prefix, suffix)
+                plugin.teamManager.createSidebarTeam(player, entryIndex, entry, prefix, suffix)
             } else {
-                plugin.teamManager.removeSidebarTeam(player, i, entry)
+                plugin.teamManager.removeSidebarTeam(player, entryIndex, entry)
             }
+        }
+
+        // Clean up sidebar teams that are no longer in use
+        for (i in (size + 1)..15) {
+            val entry = ScoreHelper.ENTRIES[i]
+            plugin.teamManager.removeSidebarTeam(player, i, entry)
         }
     }
 
@@ -373,14 +381,20 @@ class ScoreboardManager(private val plugin: LocoPillars) {
     }
 
     private fun getDefaultTypeForPlayer(player: Player): String {
+        // Spectator check FIRST — eliminated players have null in playerToInstance.
+        // The plugin uses SURVIVAL gamemode for spectators, so gameMode == SPECTATOR never matches.
+        if (SpectatorUtils.isSpectator(player, plugin)) {
+            debugLog("Determined type 'Spectate' for spectating player ${player.name}")
+            return "Spectate"
+        }
+
         val instance = plugin.gameManager.getPlayerInstance(player)
         val type = when {
             instance == null -> "Lobby"
-            instance.state == org.Kloppie74.locoPillars.game.data.GameState.WAITING -> "GameLobby"
-            instance.state == org.Kloppie74.locoPillars.game.data.GameState.STARTING -> "Cage"
-            instance.state == org.Kloppie74.locoPillars.game.data.GameState.ACTIVE && player.gameMode == org.bukkit.GameMode.SPECTATOR -> "Spectate"
-            instance.state == org.Kloppie74.locoPillars.game.data.GameState.ACTIVE -> "Game"
-            instance.state == org.Kloppie74.locoPillars.game.data.GameState.ENDED || instance.state == org.Kloppie74.locoPillars.game.data.GameState.RESETTING -> "Spectate"
+            instance.state == GameState.WAITING -> "GameLobby"
+            instance.state == GameState.STARTING -> "Cage"
+            instance.state == GameState.ACTIVE -> "Game"
+            instance.state == GameState.ENDED || instance.state == GameState.RESETTING -> "Spectate"
             else -> "Lobby"
         }
         debugLog("Determined type '$type' for player ${player.name}")

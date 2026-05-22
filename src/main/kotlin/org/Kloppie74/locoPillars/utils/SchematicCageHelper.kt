@@ -1,47 +1,36 @@
 package org.Kloppie74.locoPillars.utils
 
-import com.sk89q.worldedit.WorldEdit
 import com.sk89q.worldedit.bukkit.BukkitAdapter
-import com.sk89q.worldedit.extent.clipboard.Clipboard
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats
-import com.sk89q.worldedit.function.operation.Operations
-import com.sk89q.worldedit.math.BlockVector3
-import com.sk89q.worldedit.regions.CuboidRegion
-import com.sk89q.worldedit.session.ClipboardHolder
-import com.sk89q.worldedit.world.block.BlockTypes
-import org.bukkit.Bukkit
 import org.bukkit.Location
+import org.bukkit.Material
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import java.io.File
 import java.io.FileInputStream
 import java.util.UUID
 
+/**
+ * Handles cage placement and removal by reading schematics via WorldEdit's clipboard
+ * and writing blocks directly through the Bukkit API.
+ *
+ * This bypasses all WorldGuard / FAWE region restrictions entirely — plugin block-writes
+ * are not subject to player-based region checks.
+ */
 object SchematicCageHelper {
 
-    data class CageInfo(
-        val location: BlockVector3,
-        val dimensions: BlockVector3,
-        val world: com.sk89q.worldedit.world.World,
-        val originalBlocks: Map<BlockVector3, com.sk89q.worldedit.world.block.BlockState>
+    data class BlockSnapshot(
+        val x: Int,
+        val y: Int,
+        val z: Int,
+        val worldName: String,
+        val data: org.bukkit.block.data.BlockData
     )
 
-    private val playerCageInfo = mutableMapOf<UUID, MutableList<CageInfo>>()
+    private val playerCageSnapshots = mutableMapOf<UUID, MutableList<BlockSnapshot>>()
 
     private fun debugLog(plugin: JavaPlugin, configManager: ConfigManager, message: String) {
-        if (configManager.debugMode) {
-            plugin.logger.info("[SchematicCageHelper] $message")
-        }
-    }
-
-    private fun getPlayerWorldEditSession(playerUUID: UUID) = try {
-        val player = Bukkit.getPlayer(playerUUID)
-        if (player != null) {
-            val wePlayer = BukkitAdapter.adapt(player)
-            WorldEdit.getInstance().sessionManager.get(wePlayer)
-        } else null
-    } catch (e: Exception) {
-        null
+        if (configManager.debugMode) plugin.logger.info("[SchematicCageHelper] $message")
     }
 
     fun pasteCageForPlayer(
@@ -51,314 +40,130 @@ object SchematicCageHelper {
         schemFile: File,
         location: Location
     ): Boolean {
-        debugLog(plugin, configManager, "Pasting cage for player UUID: $playerUUID")
-        debugLog(plugin, configManager, "Cage file: ${schemFile.name}")
-        debugLog(plugin, configManager, "Player spawn location: ${location.world?.name} at ${location.blockX}, ${location.blockY}, ${location.blockZ}")
+        debugLog(plugin, configManager, "Pasting cage for UUID: $playerUUID at ${location.blockX},${location.blockY},${location.blockZ}")
 
-        try {
-            if (!SchematicHelper.validateSchematicFile(plugin, configManager, schemFile)) return false
-            val bWorld = location.world ?: run {
-                plugin.logger.severe("[SchematicCageHelper] Location world is null!")
-                return false
-            }
+        if (!SchematicHelper.validateSchematicFile(plugin, configManager, schemFile)) return false
 
-            val weWorld = BukkitAdapter.adapt(bWorld)
-            val player = Bukkit.getPlayer(playerUUID)
+        val bWorld = location.world ?: run {
+            plugin.logger.severe("[SchematicCageHelper] Location world is null!")
+            return false
+        }
 
-            if (player == null || !player.isOnline) {
-                debugLog(plugin, configManager, "Player $playerUUID is not online, cannot use WorldEdit session")
-                return fallbackPasteCage(plugin, configManager, playerUUID, schemFile, location)
-            }
-
-            val wePlayer = BukkitAdapter.adapt(player)
-            val sessionManager = WorldEdit.getInstance().sessionManager
-            val playerSession = sessionManager.get(wePlayer)
-
+        return try {
             val format = ClipboardFormats.findByFile(schemFile) ?: run {
-                plugin.logger.severe("[SchematicCageHelper] Could not determine format for cage file")
+                plugin.logger.severe("[SchematicCageHelper] Unknown clipboard format for ${schemFile.name}")
                 return false
             }
 
-            val clipboard: Clipboard = FileInputStream(schemFile).use { inputStream ->
-                format.getReader(inputStream).use { reader -> reader.read() }
+            val clipboard = FileInputStream(schemFile).use { format.getReader(it).use { r -> r.read() } }
+
+            // WorldEdit's paste aligns clipboard.origin to the target location.
+            // So: worldPos = target + (clipPos - origin)
+            val origin = clipboard.origin
+            val targetX = location.blockX
+            val targetY = location.blockY
+            val targetZ = location.blockZ
+
+            val snapshots = mutableListOf<BlockSnapshot>()
+
+            for (clipPos in clipboard.region) {
+                val blockState = clipboard.getBlock(clipPos) // BlockState, no NBT needed
+
+                val wx = targetX + (clipPos.x - origin.x)
+                val wy = targetY + (clipPos.y - origin.y)
+                val wz = targetZ + (clipPos.z - origin.z)
+
+                val block = bWorld.getBlockAt(wx, wy, wz)
+
+                // Snapshot original block before overwriting
+                snapshots.add(BlockSnapshot(wx, wy, wz, bWorld.name, block.blockData.clone()))
+
+                // Place directly via Bukkit — no WorldGuard events fired by plugin edits
+                block.setBlockData(BukkitAdapter.adapt(blockState), false)
             }
 
-            val pasteLocation = BlockVector3.at(location.blockX, location.blockY, location.blockZ)
-            debugLog(plugin, configManager, "Cage paste location (exact spawn): $pasteLocation")
-
-            val dimensions = clipboard.dimensions
-            val minPoint = pasteLocation
-            val maxPoint = pasteLocation.add(dimensions.subtract(1, 1, 1))
-            val affectedRegion = CuboidRegion(weWorld, minPoint, maxPoint)
-
-            val originalBlocks = mutableMapOf<BlockVector3, com.sk89q.worldedit.world.block.BlockState>()
-            WorldEdit.getInstance().newEditSession(weWorld).use { readSession ->
-                for (vector in affectedRegion) {
-                    originalBlocks[vector] = readSession.getBlock(vector)
-                }
-            }
-
-            val editSession = sessionManager.get(wePlayer).createEditSession(wePlayer)
-            try {
-                val operation = ClipboardHolder(clipboard)
-                    .createPaste(editSession)
-                    .to(pasteLocation)
-                    .ignoreAirBlocks(false)
-                    .build()
-
-                Operations.complete(operation)
-                editSession.flushSession()
-
-                playerSession.remember(editSession)
-
-                debugLog(plugin, configManager, "✓ Cage pasted and remembered in WorldEdit session for UUID: $playerUUID")
-                debugLog(plugin, configManager, "Player can now use //undo to remove their cage")
-
-                val cageInfo = CageInfo(
-                    location = pasteLocation,
-                    dimensions = dimensions,
-                    world = weWorld,
-                    originalBlocks = originalBlocks
-                )
-                playerCageInfo.computeIfAbsent(playerUUID) { mutableListOf() }.add(cageInfo)
-
-                debugLog(plugin, configManager, "Player $playerUUID now has ${playerCageInfo[playerUUID]?.size ?: 0} cages stored (fallback)")
-                return true
-
-            } finally {
-            }
+            playerCageSnapshots.computeIfAbsent(playerUUID) { mutableListOf() }.addAll(snapshots)
+            debugLog(plugin, configManager, "✓ Cage pasted: ${snapshots.size} blocks written for UUID $playerUUID")
+            true
 
         } catch (e: Exception) {
             plugin.logger.severe("[SchematicCageHelper] Exception while pasting cage for UUID $playerUUID: ${e.message}")
             e.printStackTrace()
-            return fallbackPasteCage(plugin, configManager, playerUUID, schemFile, location)
-        }
-    }
-
-    private fun fallbackPasteCage(
-        plugin: JavaPlugin,
-        configManager: ConfigManager,
-        playerUUID: UUID,
-        schemFile: File,
-        location: Location
-    ): Boolean {
-        debugLog(plugin, configManager, "Using fallback paste for UUID: $playerUUID")
-
-        try {
-            val bWorld = location.world ?: return false
-            val weWorld = BukkitAdapter.adapt(bWorld)
-
-            val format = ClipboardFormats.findByFile(schemFile) ?: return false
-            val clipboard: Clipboard = FileInputStream(schemFile).use { inputStream ->
-                format.getReader(inputStream).use { reader -> reader.read() }
-            }
-
-            val pasteLocation = BlockVector3.at(location.blockX, location.blockY, location.blockZ)
-            val dimensions = clipboard.dimensions
-            val minPoint = pasteLocation
-            val maxPoint = pasteLocation.add(dimensions.subtract(1, 1, 1))
-            val affectedRegion = CuboidRegion(weWorld, minPoint, maxPoint)
-
-            val originalBlocks = mutableMapOf<BlockVector3, com.sk89q.worldedit.world.block.BlockState>()
-            WorldEdit.getInstance().newEditSession(weWorld).use { readSession ->
-                for (vector in affectedRegion) {
-                    originalBlocks[vector] = readSession.getBlock(vector)
-                }
-            }
-
-            WorldEdit.getInstance().newEditSession(weWorld).use { editSession ->
-                val operation = ClipboardHolder(clipboard)
-                    .createPaste(editSession)
-                    .to(pasteLocation)
-                    .ignoreAirBlocks(false)
-                    .build()
-
-                Operations.complete(operation)
-                editSession.flushSession()
-            }
-
-            val cageInfo = CageInfo(
-                location = pasteLocation,
-                dimensions = dimensions,
-                world = weWorld,
-                originalBlocks = originalBlocks
-            )
-            playerCageInfo.computeIfAbsent(playerUUID) { mutableListOf() }.add(cageInfo)
-
-            debugLog(plugin, configManager, "✓ Fallback cage paste successful for UUID: $playerUUID")
-            return true
-
-        } catch (e: Exception) {
-            plugin.logger.severe("[SchematicCageHelper] Fallback paste failed for UUID $playerUUID: ${e.message}")
-            return false
+            false
         }
     }
 
     fun undoCageForPlayer(plugin: JavaPlugin, configManager: ConfigManager, playerUUID: UUID): Boolean {
-        debugLog(plugin, configManager, "Undoing cage for player UUID: $playerUUID")
-
-        val playerSession = getPlayerWorldEditSession(playerUUID)
-        if (playerSession != null) {
-            try {
-                debugLog(plugin, configManager, "Attempting WorldEdit undo with player session")
-
-                val player = Bukkit.getPlayer(playerUUID)
-                if (player != null && player.isOnline) {
-                    val wePlayer = BukkitAdapter.adapt(player)
-
-                    val editSession = playerSession.createEditSession(wePlayer)
-                    try {
-                        val undoEditSession = playerSession.undo(null, wePlayer)
-                        if (undoEditSession != null) {
-                            debugLog(plugin, configManager, "✓ WorldEdit undo successful for $playerUUID")
-
-                            playerCageInfo[playerUUID]?.clear()
-                            return true
-                        } else {
-                            debugLog(plugin, configManager, "WorldEdit undo returned null for $playerUUID")
-                        }
-                    } finally {
-                        editSession.close()
-                    }
-                }
-            } catch (e: Exception) {
-                debugLog(plugin, configManager, "WorldEdit undo exception for $playerUUID: ${e.message}")
-            }
-        } else {
-            debugLog(plugin, configManager, "No WorldEdit session found for $playerUUID")
-        }
-
-        debugLog(plugin, configManager, "Using fallback restoration for $playerUUID")
-        return fallbackUndoCage(plugin, configManager, playerUUID)
-    }
-
-    private fun fallbackUndoCage(plugin: JavaPlugin, configManager: ConfigManager, playerUUID: UUID): Boolean {
-        val playerCages = playerCageInfo[playerUUID]
-        if (playerCages.isNullOrEmpty()) {
-            debugLog(plugin, configManager, "No cages found for fallback undo of UUID: $playerUUID")
+        debugLog(plugin, configManager, "Undoing cage for UUID: $playerUUID")
+        val snapshots = playerCageSnapshots[playerUUID]
+        if (snapshots.isNullOrEmpty()) {
+            debugLog(plugin, configManager, "No cage snapshots found for UUID: $playerUUID")
             return false
         }
 
-        var undoSuccessCount = 0
-        val totalCages = playerCages.size
-        debugLog(plugin, configManager, "Fallback restoring ${totalCages} cage(s) for UUID: $playerUUID")
-
-        playerCages.forEach { cageInfo ->
+        var restored = 0
+        for (snap in snapshots) {
+            val world = plugin.server.getWorld(snap.worldName) ?: continue
             try {
-                WorldEdit.getInstance().newEditSession(cageInfo.world).use { editSession ->
-                    var restoredCount = 0
-                    var errorCount = 0
-
-                    cageInfo.originalBlocks.forEach { (position, originalBlock) ->
-                        try {
-                            editSession.setBlock(position, originalBlock)
-                            restoredCount++
-                        } catch (e: Exception) {
-                            errorCount++
-                            debugLog(plugin, configManager, "Failed to restore block at $position: ${e.message}")
-                        }
-                    }
-
-                    editSession.flushSession()
-                    debugLog(plugin, configManager, "Restored $restoredCount/${cageInfo.originalBlocks.size} blocks (${errorCount} errors)")
-                    if (restoredCount > 0) undoSuccessCount++
-                }
+                world.getBlockAt(snap.x, snap.y, snap.z).setBlockData(snap.data, false)
+                restored++
             } catch (e: Exception) {
-                plugin.logger.severe("[SchematicCageHelper] Failed fallback undo for UUID $playerUUID: ${e.message}")
-                e.printStackTrace()
+                debugLog(plugin, configManager, "Failed to restore block at ${snap.x},${snap.y},${snap.z}: ${e.message}")
             }
         }
 
-        debugLog(plugin, configManager, "Fallback undo completed: $undoSuccessCount/$totalCages cages restored successfully")
-
-        playerCages.clear()
-        return undoSuccessCount > 0
+        snapshots.clear()
+        playerCageSnapshots.remove(playerUUID)
+        debugLog(plugin, configManager, "✓ Cage undo: $restored blocks restored for UUID $playerUUID")
+        return restored > 0
     }
 
     fun forceRemoveCageForPlayer(plugin: JavaPlugin, configManager: ConfigManager, playerUUID: UUID): Boolean {
-        debugLog(plugin, configManager, "FORCE removing cages for player UUID: $playerUUID")
-
-        val playerCages = playerCageInfo[playerUUID]
-        if (playerCages.isNullOrEmpty()) {
-            debugLog(plugin, configManager, "No cages found for force removal of UUID: $playerUUID")
+        debugLog(plugin, configManager, "Force removing cage for UUID: $playerUUID")
+        val snapshots = playerCageSnapshots[playerUUID]
+        if (snapshots.isNullOrEmpty()) {
+            debugLog(plugin, configManager, "No cage snapshots for force removal of UUID: $playerUUID")
             return false
         }
 
-        var removedCount = 0
-        playerCages.forEach { cageInfo ->
+        var cleared = 0
+        for (snap in snapshots) {
+            val world = plugin.server.getWorld(snap.worldName) ?: continue
             try {
-                WorldEdit.getInstance().newEditSession(cageInfo.world).use { editSession ->
-                    val region = CuboidRegion(
-                        cageInfo.world,
-                        cageInfo.location,
-                        cageInfo.location.add(cageInfo.dimensions.subtract(1, 1, 1))
-                    )
-
-                    var clearedBlocks = 0
-                    for (vector in region) {
-                        try {
-                            editSession.setBlock(vector, BlockTypes.AIR!!.defaultState)
-                            clearedBlocks++
-                        } catch (_: Exception) {
-                        }
-                    }
-
-                    editSession.flushSession()
-                    debugLog(plugin, configManager, "Force cleared $clearedBlocks blocks")
-                    removedCount++
-                }
+                world.getBlockAt(snap.x, snap.y, snap.z).type = Material.AIR
+                cleared++
             } catch (e: Exception) {
-                plugin.logger.severe("[SchematicCageHelper] Failed to force remove cage: ${e.message}")
+                debugLog(plugin, configManager, "Failed to clear block at ${snap.x},${snap.y},${snap.z}: ${e.message}")
             }
         }
 
-        playerCages.clear()
-        return removedCount > 0
+        snapshots.clear()
+        playerCageSnapshots.remove(playerUUID)
+        debugLog(plugin, configManager, "✓ Force removal: $cleared blocks cleared for UUID $playerUUID")
+        return cleared > 0
     }
 
     fun clearCageInfoForPlayer(plugin: JavaPlugin, configManager: ConfigManager, playerUUID: UUID) {
         debugLog(plugin, configManager, "Clearing cage info for UUID: $playerUUID")
-        val playerCages = playerCageInfo[playerUUID]
-        if (playerCages != null) {
-            debugLog(plugin, configManager, "Cleared ${playerCages.size} cage info entries for UUID: $playerUUID")
-            playerCages.clear()
-            playerCageInfo.remove(playerUUID)
-        }
+        val removed = playerCageSnapshots.remove(playerUUID)
+        if (removed != null) debugLog(plugin, configManager, "Cleared ${removed.size} snapshot entries for UUID: $playerUUID")
     }
 
+    // Kept for API compatibility — snapshots are self-contained, no separate sessions needed.
     fun clearCageSessionsForPlayer(plugin: JavaPlugin, configManager: ConfigManager, playerUUID: UUID) {
-        debugLog(plugin, configManager, "Clearing sessions for UUID: $playerUUID")
         clearCageInfoForPlayer(plugin, configManager, playerUUID)
-
-        val player = Bukkit.getPlayer(playerUUID)
-        if (player != null) {
-            try {
-                val wePlayer = BukkitAdapter.adapt(player)
-                val sessionManager = WorldEdit.getInstance().sessionManager
-                debugLog(plugin, configManager, "WorldEdit session will be cleared automatically for UUID: $playerUUID")
-            } catch (e: Exception) {
-                debugLog(plugin, configManager, "Error clearing WorldEdit session for $playerUUID: ${e.message}")
-            }
-        }
     }
 
-    fun getCageSessionCount(playerUUID: UUID): Int {
-        return playerCageInfo[playerUUID]?.size ?: 0
-    }
+    fun getCageSessionCount(playerUUID: UUID): Int = playerCageSnapshots[playerUUID]?.size ?: 0
 
-    fun hasCageSessions(playerUUID: UUID): Boolean {
-        return getCageSessionCount(playerUUID) > 0
-    }
+    fun hasCageSessions(playerUUID: UUID): Boolean = playerCageSnapshots[playerUUID]?.isNotEmpty() == true
 
     fun cleanupAllCageSessions(plugin: JavaPlugin, configManager: ConfigManager) {
         debugLog(plugin, configManager, "Cleaning up all cage sessions...")
-        val totalPlayers = playerCageInfo.size
-        var totalCages = 0
-        playerCageInfo.values.forEach { cages ->
-            totalCages += cages.size
-            cages.clear()
-        }
-        playerCageInfo.clear()
-        debugLog(plugin, configManager, "✓ Cleaned up $totalCages cage sessions for $totalPlayers players")
+        val totalPlayers = playerCageSnapshots.size
+        var totalSnapshots = 0
+        playerCageSnapshots.values.forEach { totalSnapshots += it.size; it.clear() }
+        playerCageSnapshots.clear()
+        debugLog(plugin, configManager, "✓ Cleaned up $totalSnapshots snapshots for $totalPlayers players")
     }
 }

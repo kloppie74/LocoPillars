@@ -58,6 +58,7 @@ class ChatCommand(private val plugin: LocoPillars, private val chatUtils: ChatUt
 
         sender.sendMessage("§6=== Chat System Statistics ===")
         sender.sendMessage("§7Players with active cooldown: §e${stats["players_with_cooldown"]}")
+        sender.sendMessage("§7Players with cooldown override: §e${stats["players_with_cooldown_override"]}")
         sender.sendMessage("§7Active social spy users: §e${stats["social_spy_users"]}")
         sender.sendMessage("§7Active team chat users: §e${stats["team_chat_users"]}")
         sender.sendMessage("§7Chat enabled globally: §e${stats["chat_enabled"]}")
@@ -274,8 +275,11 @@ class ChatCommand(private val plugin: LocoPillars, private val chatUtils: ChatUt
         if (!checkPermission(sender, "locopillars.chat.admin.cooldown")) return
 
         if (args.size < 2) {
-            sender.sendMessage("§cUsage: /chatadmin cooldown <player> [seconds]")
-            sender.sendMessage("§7Use without seconds to check current cooldown")
+            sender.sendMessage("§cUsage: /chatadmin cooldown <player> [seconds|-1]")
+            sender.sendMessage("§7Omit [seconds] to inspect the player's current cooldown status.")
+            sender.sendMessage("§7  §e0 §7= remove cooldown entirely")
+            sender.sendMessage("§7  §e-1 §7= reset to the global default")
+            sender.sendMessage("§7  §e<n> §7= set personal override to n seconds")
             return
         }
 
@@ -283,36 +287,57 @@ class ChatCommand(private val plugin: LocoPillars, private val chatUtils: ChatUt
         val targetPlayer = Bukkit.getPlayer(playerName)
 
         if (targetPlayer == null) {
-            sender.sendMessage("§cPlayer not found: $playerName")
+            sender.sendMessage("§cPlayer '$playerName' is not online.")
             return
         }
 
+        // Inspect mode — no seconds argument
         if (args.size == 2) {
-            // Show current cooldown
-            val remainingCooldown = chatUtils.getCooldownRemaining(targetPlayer)
-            if (remainingCooldown > 0) {
-                sender.sendMessage("§7Player §e${targetPlayer.name} §7has §e${remainingCooldown}s §7cooldown remaining.")
+            val remaining = chatUtils.getCooldownRemaining(targetPlayer)
+            val override = chatUtils.getPlayerCooldownOverride(targetPlayer)
+            val global = plugin.configManager.chatCooldownSeconds
+
+            sender.sendMessage("§6=== Cooldown: §e${targetPlayer.name} §6===")
+            if (override != null) {
+                sender.sendMessage("§7Personal override: §e${override}s §8(global is ${global}s)")
             } else {
-                sender.sendMessage("§7Player §e${targetPlayer.name} §7has no active cooldown.")
+                sender.sendMessage("§7Using global cooldown: §e${global}s §8(no personal override)")
+            }
+            if (remaining > 0) {
+                sender.sendMessage("§7Active cooldown remaining: §c${remaining}s")
+            } else {
+                sender.sendMessage("§7No active cooldown.")
             }
             return
         }
 
-        if (args.size >= 3) {
-            try {
-                val seconds = args[2].toInt()
-                if (seconds < 0) {
-                    sender.sendMessage("§cCooldown must be 0 or positive.")
-                    return
-                }
+        // Set / reset mode
+        val seconds = args[2].toIntOrNull()
+        if (seconds == null) {
+            sender.sendMessage("§cInvalid value '${args[2]}' — must be an integer (use -1 to reset to global default).")
+            return
+        }
 
-                // Set player cooldown (not implemented yet)
-                sender.sendMessage("§cIndividual player cooldown setting is not yet implemented.")
-                sender.sendMessage("§7Current global cooldown: §e${plugin.configManager.chatCooldownSeconds}s")
-                sender.sendMessage("§7Player §e${targetPlayer.name} §7current cooldown: §e${chatUtils.getCooldownRemaining(targetPlayer)}s")
-
-            } catch (e: NumberFormatException) {
-                sender.sendMessage("§cInvalid number: ${args[2]}")
+        when {
+            seconds == -1 -> {
+                // Reset to global default
+                chatUtils.clearPlayerCooldownOverride(targetPlayer)
+                val global = plugin.configManager.chatCooldownSeconds
+                sender.sendMessage("§aReset §e${targetPlayer.name}§a's cooldown to global default §e(${global}s)§a.")
+                targetPlayer.sendMessage("§7Your chat cooldown has been reset to the global default §e(${global}s)§7 by an admin.")
+            }
+            seconds < 0 -> {
+                sender.sendMessage("§cInvalid value — use §e-1 §cto reset to global default, §e0 §cto disable, or a positive number.")
+            }
+            seconds == 0 -> {
+                chatUtils.setPlayerCooldownOverride(targetPlayer, 0)
+                sender.sendMessage("§aDisabled chat cooldown for §e${targetPlayer.name}§a.")
+                targetPlayer.sendMessage("§aYour chat cooldown has been removed by an admin.")
+            }
+            else -> {
+                chatUtils.setPlayerCooldownOverride(targetPlayer, seconds)
+                sender.sendMessage("§aSet §e${targetPlayer.name}§a's personal chat cooldown to §e${seconds}s§a.")
+                targetPlayer.sendMessage("§7Your personal chat cooldown has been set to §e${seconds}s §7by an admin.")
             }
         }
     }
@@ -329,7 +354,7 @@ class ChatCommand(private val plugin: LocoPillars, private val chatUtils: ChatUt
         sender.sendMessage("§e/chatadmin spy §7- Toggle social spy for yourself (players only)")
         sender.sendMessage("§e/chatadmin toggle <feature> §7- Toggle chat features")
         sender.sendMessage("§7  §8• §7Features: §echat§7, §esocialspy§7, §eprofanity§7, §elogging")
-        sender.sendMessage("§e/chatadmin cooldown <player> [seconds] §7- Check/manage player cooldown")
+        sender.sendMessage("§e/chatadmin cooldown <player> [seconds|-1] §7- Check/set per-player cooldown (§e-1§7=reset to global)")
         sender.sendMessage("§e/chatadmin help §7- Show this help message")
 
         // Show current status
@@ -398,7 +423,7 @@ class ChatCommand(private val plugin: LocoPillars, private val chatUtils: ChatUt
         if (args.size == 3) {
             when (args[0].lowercase()) {
                 "cooldown" -> {
-                    return listOf("0", "5", "10", "30", "60")
+                    return listOf("-1", "0", "5", "10", "30", "60")
                         .filter { it.startsWith(args[2]) }
                 }
 

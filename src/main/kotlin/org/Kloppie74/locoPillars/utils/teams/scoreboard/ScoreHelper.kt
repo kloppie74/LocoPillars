@@ -131,6 +131,61 @@ class ScoreHelper private constructor(private val player: Player) {
     }
 
     /**
+     * Set slots using a score→text map.
+     * The map key is used directly as the Minecraft score (determines vertical position:
+     * higher score = higher on screen). Entry slots are allocated by sorted-key index.
+     * Anti-flicker: only updates entries whose score or text actually changed.
+     */
+    fun setSlotsFromMap(scoreToText: Map<Int, String>?) {
+        if (scoreToText.isNullOrEmpty()) {
+            for (i in 1..15) removeSlot(i)
+            return
+        }
+
+        try {
+            val sorted = scoreToText.entries.sortedBy { it.key }
+            val size = sorted.size.coerceAtMost(15)
+            val updatedSlots = HashSet<Int>(size)
+
+            for (i in 0 until size) {
+                val entryIndex = i + 1
+                updatedSlots.add(entryIndex)
+                setSlotWithScore(entryIndex, sorted[i].key, sorted[i].value)
+            }
+
+            // Remove slots that are no longer in use
+            for (i in 1..15) {
+                if (i !in updatedSlots) removeSlot(i)
+            }
+            debugLog("Set $size slots from map for ${player.name}")
+        } catch (e: Exception) {
+            plugin.logger.warning("[ScoreHelper] Error setting slots from map for ${player.name}: ${e.message}")
+        }
+    }
+
+    /**
+     * Set a single slot entry with an explicit Minecraft score value.
+     * @param entryIndex  Which ENTRIES[] index to use (1..15) — picks the ChatColor entry string
+     * @param score       The Minecraft score assigned to that entry (determines vertical position)
+     * @param text        Display text handled by the sidebar team (prefix/suffix via TeamManager)
+     * Anti-flicker: skips the update if score + text are unchanged.
+     */
+    fun setSlotWithScore(entryIndex: Int, score: Int, text: String?) {
+        if (entryIndex !in 1..15) return
+        val safeText = text ?: ""
+        val entry = ENTRIES[entryIndex]
+        val cacheKey = "$score:$safeText"
+        if (activeSlots[entryIndex] == cacheKey) return // nothing changed
+        try {
+            sidebar.getScore(entry).score = score
+            activeSlots[entryIndex] = cacheKey
+            debugLog("Set slot $entryIndex (score=$score) for ${player.name}: '$safeText'")
+        } catch (e: Exception) {
+            plugin.logger.warning("[ScoreHelper] Error setting slot $entryIndex for ${player.name}: ${e.message}")
+        }
+    }
+
+    /**
      * Zet alle regels van boven naar beneden (regel 1 bovenaan).
      * Flikker fix: Alleen updaten als de tekst echt verandert.
      */

@@ -126,12 +126,16 @@ object HotbarUtils {
                 player.isCollidable = true
             }
             "game_lobby", "cage" -> {
+                // NOTE: do NOT set isInvulnerable = true here.
+                // Damage during WAITING/STARTING is already blocked by the
+                // onEntityDamage event handler.  Setting isInvulnerable = true
+                // leaks into the ACTIVE phase and makes players unkillable.
                 player.gameMode = GameMode.SURVIVAL
                 player.allowFlight = false
                 player.isFlying = false
                 player.flySpeed = 0.1f
                 player.walkSpeed = 0.2f
-                player.isInvulnerable = true
+                player.isInvulnerable = false
                 player.isCollidable = true
             }
             "game" -> {

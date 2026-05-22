@@ -40,6 +40,10 @@ class ConfigManager(private val plugin: JavaPlugin) {
         private set
     var lobbySpawnZ: Double = 0.5
         private set
+    var lobbySpawnYaw: Float = 0.0f
+        private set
+    var lobbySpawnPitch: Float = 0.0f
+        private set
 
     // Chat Configuration
     var chatEnabled: Boolean = true
@@ -146,10 +150,12 @@ class ConfigManager(private val plugin: JavaPlugin) {
 
         // Load Lobby Spawn settings
         val spawnSection = config.getConfigurationSection("Spawn")
-        lobbyWorld = spawnSection?.getString("World") ?: "world"
-        lobbySpawnX = spawnSection?.getDouble("X", 0.5) ?: 0.5
-        lobbySpawnY = spawnSection?.getDouble("Y", 68.0) ?: 68.0
-        lobbySpawnZ = spawnSection?.getDouble("Z", 0.5) ?: 0.5
+        lobbyWorld    = spawnSection?.getString("World") ?: "world"
+        lobbySpawnX   = spawnSection?.getDouble("X",     0.5)  ?: 0.5
+        lobbySpawnY   = spawnSection?.getDouble("Y",    68.0)  ?: 68.0
+        lobbySpawnZ   = spawnSection?.getDouble("Z",     0.5)  ?: 0.5
+        lobbySpawnYaw   = (spawnSection?.getDouble("Yaw",   0.0) ?: 0.0).toFloat()
+        lobbySpawnPitch = (spawnSection?.getDouble("Pitch", 0.0) ?: 0.0).toFloat()
 
         // Load Chat Configuration
         val chatSection = config.getConfigurationSection("chat")
@@ -257,6 +263,8 @@ class ConfigManager(private val plugin: JavaPlugin) {
         config.set("Spawn.X", 0.5)
         config.set("Spawn.Y", 68.0)
         config.set("Spawn.Z", 0.5)
+        config.set("Spawn.Yaw", 0.0)
+        config.set("Spawn.Pitch", 0.0)
 
         // Chat Configuration
         config.createSection("chat")
@@ -515,7 +523,34 @@ class ConfigManager(private val plugin: JavaPlugin) {
 
     fun getLobbySpawnLocation(): org.bukkit.Location? {
         val world = plugin.server.getWorld(lobbyWorld) ?: return null
-        return org.bukkit.Location(world, lobbySpawnX, lobbySpawnY, lobbySpawnZ)
+        return org.bukkit.Location(world, lobbySpawnX, lobbySpawnY, lobbySpawnZ, lobbySpawnYaw, lobbySpawnPitch)
+    }
+
+    /**
+     * Persist a new lobby spawn location to config.yml and update in-memory state.
+     * Called by /setspawn. All game-leave and /spawn teleports read from [getLobbySpawnLocation].
+     */
+    fun setLobbySpawnLocation(location: org.bukkit.Location) {
+        val worldName = location.world?.name ?: return
+        lobbyWorld      = worldName
+        lobbySpawnX     = location.x
+        lobbySpawnY     = location.y
+        lobbySpawnZ     = location.z
+        lobbySpawnYaw   = location.yaw
+        lobbySpawnPitch = location.pitch
+
+        config.set("Spawn.World", worldName)
+        config.set("Spawn.X",     location.x)
+        config.set("Spawn.Y",     location.y)
+        config.set("Spawn.Z",     location.z)
+        config.set("Spawn.Yaw",   location.yaw.toDouble())
+        config.set("Spawn.Pitch", location.pitch.toDouble())
+        saveConfig()
+
+        if (debugMode) {
+            plugin.logger.info("[ConfigManager] Spawn updated → ($lobbySpawnX, $lobbySpawnY, $lobbySpawnZ) " +
+                "yaw=$lobbySpawnYaw pitch=$lobbySpawnPitch world=$lobbyWorld")
+        }
     }
 
     // Get config values

@@ -18,6 +18,9 @@ class ChatUtils(private val plugin: LocoPillars) {
     // Chat cooldowns per player
     private val chatCooldowns = ConcurrentHashMap<UUID, Long>()
 
+    // Per-player cooldown overrides (null = use global configManager value)
+    private val playerCooldownOverrides = ConcurrentHashMap<UUID, Int>()
+
     // Social spy toggle per player
     private val socialSpyToggle = ConcurrentHashMap<UUID, Boolean>()
 
@@ -44,14 +47,16 @@ class ChatUtils(private val plugin: LocoPillars) {
     }
 
     /**
-     * Get the appropriate chat format based on player state
+     * Get the appropriate chat format based on player state.
+     * Spectator check MUST come first — eliminated players have null playerInstance.
      */
     fun getChatFormat(player: Player): String {
-        val instance = gameManager.getPlayerInstance(player)
+        // Check spectator before instance: eliminated players have instance == null
+        if (SpectatorUtils.isSpectator(player, plugin)) return configManager.gameSpectatorFormat
 
+        val instance = gameManager.getPlayerInstance(player)
         return when {
             instance == null -> configManager.lobbyChatFormat
-            SpectatorUtils.isSpectator(player, plugin) -> configManager.gameSpectatorFormat
             instance.state == GameState.WAITING || instance.state == GameState.STARTING -> configManager.gameLobbyFormat
             instance.state == GameState.ACTIVE && isTeamChatEnabled(player) -> configManager.teamChatFormat
             instance.state == GameState.ACTIVE -> configManager.globalChatFormat
@@ -75,30 +80,38 @@ class ChatUtils(private val plugin: LocoPillars) {
     }
 
     /**
-     * Get recipients for a chat message based on context
+     * Get recipients for a chat message based on context.
+     * Spectator check MUST come first — eliminated players have instance == null,
+     * so checking instance first would route them to lobby chat by mistake.
      */
     fun getChatRecipients(sender: Player, message: String): Set<Player> {
-        val instance = gameManager.getPlayerInstance(sender)
         val recipients = mutableSetOf<Player>()
 
+        // Spectator chat: check BEFORE instance lookup
+        if (SpectatorUtils.isSpectator(sender, plugin)) {
+            val spectatorInstance = gameManager.getSpectatorInstance(sender)
+            if (spectatorInstance != null) {
+                // Route to all spectators watching the same game
+                spectatorInstance.spectators
+                    .mapNotNull { Bukkit.getPlayer(it) }
+                    .forEach { recipients.add(it) }
+            }
+            // If no game instance found (edge case), fall through to lobby behaviour below.
+            // Otherwise return the spectator set immediately.
+            if (recipients.isNotEmpty()) return recipients
+        }
+
+        val instance = gameManager.getPlayerInstance(sender)
+
         when {
-            // Lobby chat - all players in lobby
+            // Lobby chat - all players not in a game (and not spectating)
             instance == null -> {
                 recipients.addAll(Bukkit.getOnlinePlayers().filter {
                     gameManager.getPlayerInstance(it) == null
                 })
             }
 
-            // Spectator chat - all spectators in the same game
-            SpectatorUtils.isSpectator(sender, plugin) -> {
-                recipients.addAll(instance.players.mapNotNull {
-                    Bukkit.getPlayer(it)
-                }.filter {
-                    SpectatorUtils.isSpectator(it, plugin)
-                })
-            }
-
-            // Team chat - only team members
+            // Team chat - only team members in the same game
             instance.state == GameState.ACTIVE && isTeamChatEnabled(sender) -> {
                 val senderTeam = getPlayerTeam(sender)
                 if (senderTeam != null) {
@@ -177,14 +190,15 @@ class ChatUtils(private val plugin: LocoPillars) {
     }
 
     /**
-     * Get the chat type for social spy
+     * Get the chat type for social spy.
+     * Spectator check MUST come first — eliminated players have instance == null.
      */
     private fun getChatType(player: Player): String {
-        val instance = gameManager.getPlayerInstance(player)
+        if (SpectatorUtils.isSpectator(player, plugin)) return "Spectator"
 
+        val instance = gameManager.getPlayerInstance(player)
         return when {
             instance == null -> "Lobby"
-            SpectatorUtils.isSpectator(player, plugin) -> "Spectator"
             instance.state == GameState.WAITING || instance.state == GameState.STARTING -> "Game-Lobby"
             instance.state == GameState.ACTIVE && isTeamChatEnabled(player) -> "Team"
             instance.state == GameState.ACTIVE -> "Game"
@@ -242,24 +256,56 @@ class ChatUtils(private val plugin: LocoPillars) {
     }
 
     /**
+     * Returns the effective cooldown for this player:
+     * 0 if they have bypass permission, their personal override if set, otherwise the global value.
+     */
+    private fun getEffectiveCooldownSeconds(player: Player): Int {
+        if (player.hasPermission("locopillars.chat.bypass-cooldown")) return 0
+        return playerCooldownOverrides.getOrDefault(player.uniqueId, configManager.chatCooldownSeconds)
+    }
+
+    /**
+     * Set a per-player cooldown override. Use seconds = 0 to remove the cooldown entirely.
+     * Pass seconds < 0 to delete the override (reverts to global default).
+     */
+    fun setPlayerCooldownOverride(player: Player, seconds: Int) {
+        if (seconds < 0) {
+            playerCooldownOverrides.remove(player.uniqueId)
+        } else {
+            playerCooldownOverrides[player.uniqueId] = seconds
+        }
+    }
+
+    /**
+     * Remove a player's personal cooldown override AND reset their active cooldown timer.
+     */
+    fun clearPlayerCooldownOverride(player: Player) {
+        playerCooldownOverrides.remove(player.uniqueId)
+        chatCooldowns.remove(player.uniqueId)
+    }
+
+    /**
+     * Returns the current per-player override in seconds, or null if none is set.
+     */
+    fun getPlayerCooldownOverride(player: Player): Int? = playerCooldownOverrides[player.uniqueId]
+
+    /**
      * Check if player is on chat cooldown
      */
     fun checkChatCooldown(player: Player): Boolean {
-        if (player.hasPermission("locopillars.chat.bypass-cooldown")) return true
-        if (configManager.chatCooldownSeconds <= 0) return true
+        val effectiveCooldown = getEffectiveCooldownSeconds(player)
+        if (effectiveCooldown <= 0) return true
 
         val lastChatTime = chatCooldowns[player.uniqueId] ?: 0L
-        val currentTime = System.currentTimeMillis()
-        val cooldownMs = configManager.chatCooldownSeconds * 1000L
-
-        return (currentTime - lastChatTime) >= cooldownMs
+        val cooldownMs = effectiveCooldown * 1000L
+        return (System.currentTimeMillis() - lastChatTime) >= cooldownMs
     }
 
     /**
      * Set chat cooldown for player
      */
     private fun setChatCooldown(player: Player) {
-        if (configManager.chatCooldownSeconds > 0 && !player.hasPermission("locopillars.chat.bypass-cooldown")) {
+        if (getEffectiveCooldownSeconds(player) > 0) {
             chatCooldowns[player.uniqueId] = System.currentTimeMillis()
         }
     }
@@ -268,12 +314,12 @@ class ChatUtils(private val plugin: LocoPillars) {
      * Get remaining cooldown time in seconds
      */
     fun getCooldownRemaining(player: Player): Int {
-        if (player.hasPermission("locopillars.chat.bypass-cooldown")) return 0
-        if (configManager.chatCooldownSeconds <= 0) return 0
+        val effectiveCooldown = getEffectiveCooldownSeconds(player)
+        if (effectiveCooldown <= 0) return 0
 
         val lastChatTime = chatCooldowns[player.uniqueId] ?: 0L
         val currentTime = System.currentTimeMillis()
-        val cooldownMs = configManager.chatCooldownSeconds * 1000L
+        val cooldownMs = effectiveCooldown * 1000L
         val elapsedMs = currentTime - lastChatTime
 
         return if (elapsedMs >= cooldownMs) {
@@ -424,6 +470,7 @@ class ChatUtils(private val plugin: LocoPillars) {
         chatCooldowns.remove(player.uniqueId)
         socialSpyToggle.remove(player.uniqueId)
         teamChatToggle.remove(player.uniqueId)
+        playerCooldownOverrides.remove(player.uniqueId)
     }
 
     /**
@@ -432,6 +479,7 @@ class ChatUtils(private val plugin: LocoPillars) {
     fun getChatStats(): Map<String, Any> {
         return mapOf(
             "players_with_cooldown" to chatCooldowns.size,
+            "players_with_cooldown_override" to playerCooldownOverrides.size,
             "social_spy_users" to socialSpyToggle.values.count { it },
             "team_chat_users" to teamChatToggle.values.count { it },
             "chat_enabled" to configManager.chatEnabled,
@@ -449,6 +497,7 @@ class ChatUtils(private val plugin: LocoPillars) {
         chatCooldowns.clear()
         socialSpyToggle.clear()
         teamChatToggle.clear()
+        playerCooldownOverrides.clear()
     }
 
     /**

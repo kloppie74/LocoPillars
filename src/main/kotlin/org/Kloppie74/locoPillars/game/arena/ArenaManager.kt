@@ -2,17 +2,11 @@ package org.Kloppie74.locoPillars.game.arena
 
 import org.bukkit.Location
 import org.bukkit.World
-import org.bukkit.plugin.java.JavaPlugin
-import java.io.File
-import java.util.*
-import com.sk89q.worldedit.bukkit.BukkitAdapter
-import com.sk89q.worldedit.math.BlockVector3
-import com.sk89q.worldguard.WorldGuard
-import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion
-import com.sk89q.worldguard.protection.flags.Flags
-import com.sk89q.worldguard.protection.flags.StateFlag
+import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.game.config.GameConfig
+import java.io.File
+import java.util.*
 import kotlin.random.Random
 
 enum class ArenaStatus {
@@ -37,14 +31,13 @@ data class ArenaInstance(
 )
 
 class ArenaManager(
-    private val plugin: JavaPlugin,
+    private val plugin: LocoPillars,
     private val worldManager: ArenaWorldManager,
-    private val configManager: ConfigManager // <-- debug modus via configManager!
+    private val configManager: ConfigManager
 ) {
     private val templates = mutableMapOf<String, ArenaTemplate>()
     private val instances = mutableListOf<ArenaInstance>()
-    private val instanceDistance = 1000
-    private val worldGuard = WorldGuard.getInstance()
+    private val instanceDistance = configManager.instanceDistance
 
     private fun debugLog(message: String) {
         if (configManager.debugMode) {
@@ -246,8 +239,8 @@ class ArenaManager(
                 instances.add(instance)
                 debugLog("Instance added to list, total: ${instances.size}")
 
-                createWorldGuardRegion(instance)
-                debugLog("WorldGuard region created for instance $instanceIndex")
+                plugin.worldRegionManager.registerArenaRegion(instance)
+                debugLog("WorldRegion registered for instance $instanceIndex")
 
                 resetArena(instance)
                 debugLog("Arena reset completed for instance $instanceIndex")
@@ -273,82 +266,6 @@ class ArenaManager(
             val typeInstances = instances.filter { it.template.name == config.name }
             debugLog("${config.name}: ${typeInstances.size} instances")
         }
-    }
-
-    private fun createWorldGuardRegion(instance: ArenaInstance) {
-        debugLog("Creating WorldGuard region for ${instance.regionId}")
-
-        val regionManager = worldGuard.platform.regionContainer.get(BukkitAdapter.adapt(instance.world))
-        if (regionManager == null) {
-            plugin.logger.severe("[ArenaManager] Could not get WorldGuard region manager for world ${instance.world.name}")
-            return
-        }
-
-        val origin = instance.origin
-        val halfDistance = instanceDistance / 2
-
-        val min = BlockVector3.at(
-            origin.blockX - halfDistance,
-            0,
-            origin.blockZ - halfDistance
-        )
-        val max = BlockVector3.at(
-            origin.blockX + halfDistance,
-            255,
-            origin.blockZ + halfDistance
-        )
-
-        debugLog("Region bounds: ($min) to ($max)")
-
-        val region = ProtectedCuboidRegion(instance.regionId, min, max)
-
-        region.setFlag(Flags.PVP, StateFlag.State.ALLOW)
-        region.setFlag(Flags.BLOCK_BREAK, StateFlag.State.ALLOW)
-        region.setFlag(Flags.BLOCK_PLACE, StateFlag.State.ALLOW)
-        region.setFlag(Flags.TNT, StateFlag.State.ALLOW)
-        region.setFlag(Flags.MOB_SPAWNING, StateFlag.State.ALLOW)
-        region.setFlag(Flags.ENTITY_PAINTING_DESTROY, StateFlag.State.ALLOW)
-        region.setFlag(Flags.ENTITY_ITEM_FRAME_DESTROY, StateFlag.State.ALLOW)
-        region.setFlag(Flags.CHEST_ACCESS, StateFlag.State.ALLOW)
-        region.setFlag(Flags.USE_ANVIL, StateFlag.State.ALLOW)
-        region.setFlag(Flags.USE_DRIPLEAF, StateFlag.State.ALLOW)
-        region.setFlag(Flags.EXIT, StateFlag.State.DENY)
-        region.setFlag(Flags.EXIT_VIA_TELEPORT, StateFlag.State.ALLOW)
-        region.setFlag(Flags.ENDER_BUILD, StateFlag.State.ALLOW)
-        region.setFlag(Flags.FALL_DAMAGE, StateFlag.State.ALLOW)
-        region.setFlag(Flags.FIRE_SPREAD, StateFlag.State.ALLOW)
-        region.setFlag(Flags.LAVA_FLOW, StateFlag.State.ALLOW)
-        region.setFlag(Flags.LEAF_DECAY, StateFlag.State.ALLOW)
-        region.setFlag(Flags.POTION_SPLASH, StateFlag.State.ALLOW)
-        region.setFlag(Flags.SLEEP, StateFlag.State.ALLOW)
-        region.setFlag(Flags.SNOW_FALL, StateFlag.State.ALLOW)
-        region.setFlag(Flags.SNOW_MELT, StateFlag.State.ALLOW)
-        region.setFlag(Flags.VINE_GROWTH, StateFlag.State.ALLOW)
-        region.setFlag(Flags.WATER_FLOW, StateFlag.State.ALLOW)
-        region.setFlag(Flags.WITHER_DAMAGE, StateFlag.State.ALLOW)
-        region.setFlag(Flags.ITEM_PICKUP, StateFlag.State.ALLOW)
-        region.setFlag(Flags.ITEM_DROP, StateFlag.State.ALLOW)
-        region.setFlag(Flags.HUNGER_DRAIN, StateFlag.State.ALLOW)
-        region.setFlag(Flags.INVINCIBILITY, StateFlag.State.DENY)
-        region.setFlag(Flags.HEALTH_REGEN, StateFlag.State.ALLOW)
-        region.setFlag(Flags.CREEPER_EXPLOSION, StateFlag.State.ALLOW)
-        region.setFlag(Flags.ENDERDRAGON_BLOCK_DAMAGE, StateFlag.State.ALLOW)
-        region.setFlag(Flags.GHAST_FIREBALL, StateFlag.State.ALLOW)
-        region.setFlag(Flags.OTHER_EXPLOSION, StateFlag.State.ALLOW)
-        region.setFlag(Flags.PISTONS, StateFlag.State.ALLOW)
-        region.setFlag(Flags.TRAMPLE_BLOCKS, StateFlag.State.ALLOW)
-        region.setFlag(Flags.DESTROY_VEHICLE, StateFlag.State.ALLOW)
-        region.setFlag(Flags.PLACE_VEHICLE, StateFlag.State.ALLOW)
-        region.setFlag(Flags.USE, StateFlag.State.ALLOW)
-        region.setFlag(Flags.INTERACT, StateFlag.State.ALLOW)
-        region.setFlag(Flags.DAMAGE_ANIMALS, StateFlag.State.ALLOW)
-        region.setFlag(Flags.DENY_MESSAGE, "&cYou cannot leave the arena!")
-        region.setFlag(Flags.SEND_CHAT, StateFlag.State.ALLOW)
-        region.setFlag(Flags.RECEIVE_CHAT, StateFlag.State.ALLOW)
-
-        regionManager.addRegion(region)
-
-        debugLog("WorldGuard region created successfully: ${instance.regionId}")
     }
 
     fun getAvailableInstance(templateName: String): ArenaInstance? {

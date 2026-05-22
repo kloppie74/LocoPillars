@@ -34,7 +34,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
-    // WorldEdit en WorldGuard - gebruik core modules om conflicten te vermijden
+    // WorldEdit - for schematic loading/pasting (WorldGuard is no longer a dependency)
     compileOnly("com.sk89q.worldedit:worldedit-core:7.3.10") {
         exclude(group = "org.apache.logging.log4j")
     }
@@ -46,12 +46,8 @@ dependencies {
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.12.2")
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit:2.12.2") { isTransitive = false } // <-- ADDED VERSION
 
-    compileOnly("com.sk89q.worldguard:worldguard-core:7.0.12") {
-        exclude(group = "org.apache.logging.log4j")
-    }
-    compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.12") {
-        exclude(group = "org.apache.logging.log4j")
-    }
+    // WorldGuard removed — region management is now handled by WorldRegionManager internally.
+    // If WorldGuard is present on the server it will be treated as a softdepend and ignored.
 
     compileOnly("com.github.NEZNAMY", "TAB-API", "5.2.5")
     compileOnly("me.clip", "placeholderapi", "2.11.6")
@@ -68,7 +64,7 @@ dependencies {
     compileOnly("com.github.LoneDev6:API-ItemsAdder:3.6.1")
     implementation("org.snakeyaml:snakeyaml-engine:2.7")
 
-    // Verwijder gson uit dependencies - dit wordt al door WorldEdit/WorldGuard geleverd
+    // gson is provided by the server/WorldEdit at runtime
     // implementation("com.google.code.gson:gson:2.10.1")
 
     // Forceer ASM 9.6 voor Java 21 class compatibility
