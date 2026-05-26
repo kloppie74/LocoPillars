@@ -1,0 +1,15 @@
+{
+  "id": "ghost_kill",
+  "type": "KILL",
+  "display_name": "§fGhost Haunt",
+  "lore": ["§7Their soul rises as a ghost,", "§7haunting the kill spot.", "§8Rare kill effect."],
+  "price": 900,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "PHANTOM_MEMBRANE",
+    "custom_model_data": 0
+  }
+}

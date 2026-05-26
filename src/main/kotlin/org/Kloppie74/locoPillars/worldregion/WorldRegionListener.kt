@@ -28,7 +28,7 @@ class WorldRegionListener(private val plugin: LocoPillars) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlayerMove(event: PlayerMoveEvent) {
-        val to = event.to ?: return
+        val to = event.to
 
         // Optimisation: skip if still in the same XZ block
         val from = event.from
@@ -49,6 +49,7 @@ class WorldRegionListener(private val plugin: LocoPillars) : Listener {
         }
     }
 
+    @Suppress("DEPRECATION")
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlayerTeleport(event: PlayerTeleportEvent) {
         // Only intercept player-initiated teleport types that could bypass the boundary.
@@ -64,7 +65,7 @@ class WorldRegionListener(private val plugin: LocoPillars) : Listener {
         if (state == GameState.ENDED || state == GameState.RESETTING) return
 
         val region = plugin.worldRegionManager.getRegion(instance.arenaInstance.regionId) ?: return
-        val to = event.to ?: return
+        val to = event.to
 
         if (!region.containsXZ(to)) {
             event.isCancelled = true

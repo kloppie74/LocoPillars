@@ -1,0 +1,15 @@
+{
+  "id": "default_kill",
+  "type": "KILL",
+  "display_name": "§fDefault Kill",
+  "lore": ["§7A subtle particle burst on kill.", "§8Available to everyone."],
+  "price": 0,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "COMMON",
+  "active": true,
+  "icon": {
+    "material": "GRAY_DYE",
+    "custom_model_data": 0
+  }
+}

@@ -29,6 +29,8 @@ import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.utils.LanguageManager
 import org.Kloppie74.locoPillars.database.DatabaseManager
 import org.Kloppie74.locoPillars.events.listeners.PlayerJoinListener
+import org.Kloppie74.locoPillars.cosmetics.CosmeticManager
+import org.Kloppie74.locoPillars.cosmetics.CosmeticsCommand
 import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksCommand
 import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksListener
 import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksMenu
@@ -134,6 +136,14 @@ class LocoPillars : JavaPlugin() {
     lateinit var placeholders: Placeholders
         private set
 
+    // Cosmetics system
+    lateinit var cosmeticManager: CosmeticManager
+        private set
+
+    /** True once cosmeticManager has been initialised — safe to call from any class. */
+    val isCosmeticManagerReady: Boolean
+        get() = ::cosmeticManager.isInitialized
+
     // ProtocolLib vars
     lateinit var protocolLibTabVisibilityManager: ProtocolLibTabVisibilityManager
         private set
@@ -154,8 +164,8 @@ class LocoPillars : JavaPlugin() {
         logger.info("[LocoPillars] ==========================================")
         logger.info("[LocoPillars] PILLARS OF FORTUNE - Starting Up...")
         logger.info("[LocoPillars] ==========================================")
-        logger.info("[LocoPillars] Version: ${description.version}")
-        logger.info("[LocoPillars] Authors: ${description.authors}")
+        logger.info("[LocoPillars] Version: ${pluginMeta.version}")
+        logger.info("[LocoPillars] Authors: ${pluginMeta.authors}")
 
         try {
             // 1. CONFIG & DEPENDENCIES
@@ -343,7 +353,18 @@ class LocoPillars : JavaPlugin() {
             chatManager.initialize()
             debugLog("✓ Chat system initialized successfully")
 
-            // 14. LUCKY BLOCKS SYSTEM
+            // 14. COSMETICS SYSTEM
+            cosmeticManager = CosmeticManager(this)
+            cosmeticManager.init()
+            val cosmeticsCmd = CosmeticsCommand(this)
+            getCommand("cosmetics")?.let {
+                it.setExecutor(cosmeticsCmd)
+                it.tabCompleter = cosmeticsCmd
+                debugLog("✓ Command '/cosmetics' registered")
+            } ?: logger.warning("[LocoPillars] '/cosmetics' command not found in plugin.yml")
+            logger.info("[LocoPillars] ✓ Cosmetics system initialized")
+
+            // 16. LUCKY BLOCKS SYSTEM
             val luckyblockLoader = LuckyblockLoader(this)
             luckyblockLoader.loadAll()
             LuckyBlocksUtil.setLuckyblockLoader(luckyblockLoader)
@@ -359,7 +380,7 @@ class LocoPillars : JavaPlugin() {
 
             Bukkit.getPluginManager().registerEvents(LuckyBlocksMenu, this)
 
-            // 15. PLACEHOLDERS
+            // 17. PLACEHOLDERS
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
                 placeholders.register()
                 logger.info("[LocoPillars] Placeholders registered with PlaceholderAPI!")
@@ -367,7 +388,7 @@ class LocoPillars : JavaPlugin() {
                 logger.warning("[LocoPillars] PlaceholderAPI not found, placeholders will not work.")
             }
 
-            // 16. STARTUP SUMMARY
+            // 18. STARTUP SUMMARY
             showStartupSummary()
         } catch (e: Exception) {
             logger.severe("[LocoPillars] ==========================================")
@@ -391,7 +412,7 @@ class LocoPillars : JavaPlugin() {
 
             protocolManager = ProtocolLibrary.getProtocolManager()
             protocolLibAvailable = true // <-- MARK AS AVAILABLE!
-            logger.info("ProtocolLib integration successful - version: ${protocolLibPlugin.description.version}")
+            logger.info("ProtocolLib integration successful - version: ${protocolLibPlugin.pluginMeta.version}")
             true
         } catch (e: Exception) {
             protocolLibAvailable = false
@@ -566,8 +587,8 @@ class LocoPillars : JavaPlugin() {
         requiredPlugins.forEach { pluginName ->
             val dep = server.pluginManager.getPlugin(pluginName)
             if (dep != null && dep.isEnabled) {
-                foundPlugins.add("$pluginName v${dep.description.version}")
-                debugLog("✓ Found $pluginName v${dep.description.version}")
+                foundPlugins.add("$pluginName v${dep.pluginMeta.version}")
+                debugLog("✓ Found $pluginName v${dep.pluginMeta.version}")
             } else {
                 missingPlugins.add(pluginName)
                 logger.severe("[LocoPillars] ✗ Missing or disabled: $pluginName")
@@ -704,45 +725,20 @@ class LocoPillars : JavaPlugin() {
             logger.info("[LocoPillars] $message")
         }
     }
-
-    fun logMemoryUsage(context: String) {
-        if (::configManager.isInitialized && configManager.debugMode) {
-            val runtime = Runtime.getRuntime()
-            val maxMemory = runtime.maxMemory() / 1024 / 1024
-            val totalMemory = runtime.totalMemory() / 1024 / 1024
-            val freeMemory = runtime.freeMemory() / 1024 / 1024
-            val usedMemory = totalMemory - freeMemory
-
-            logger.info("[LocoPillars] Memory usage ($context):")
-            logger.info("[LocoPillars]   Used: ${usedMemory}MB")
-            logger.info("[LocoPillars]   Total: ${totalMemory}MB")
-            logger.info("[LocoPillars]   Max: ${maxMemory}MB")
-        }
-    }
-
-    fun logSystemInfo() {
-        if (::configManager.isInitialized && configManager.debugMode) {
-            logger.info("[LocoPillars] System information:")
-            logger.info("[LocoPillars]   OS: ${System.getProperty("os.name")} ${System.getProperty("os.version")}")
-            logger.info("[LocoPillars]   Java: ${System.getProperty("java.version")} (${System.getProperty("java.vendor")})")
-            logger.info("[LocoPillars]   Available processors: ${Runtime.getRuntime().availableProcessors()}")
-            logMemoryUsage("System Info")
-        }
-    }
 }
 
 const val DEFAULT_ITEMS_YML = """
 items:
   spectate:
     1:
-      type: itemsadder-locomc:pack_joinrandomgame
+      type: slime_ball
       name: "&bJoin Random Game"
       lore:
         - "&7Click to join a random game"
       command: "/pillars join random"
       slot: 4
     2:
-      type: itemsadder-locomc:pack_changespeed
+      type: feather
       name: "&eSpectate Speed &7(GUI)"
       lore:
         - "&7Select your spectate speed"
@@ -750,21 +746,21 @@ items:
       slot: 6
   lobby:
     1:
-      type: itemsadder-locomc:pack_accountsettings
+      type: comparator
       name: "&aAccount Settings"
       lore:
         - "&7Open the account settings menu"
       command: "/settings"
       slot: 4
     2:
-      type: itemsadder-locomc:pack_playerstats
+      type: emerald
       name: "&e&lPlayer Statistics"
       lore:
         - "&7View your player statistics"
       slot: 6
       command: "/stats"
     3:
-      type: itemsadder-locomc:pack_joinrandomgame
+      type: slime_ball
       name: "&bJoin Random Game"
       lore:
         - "&7Click to join a random game"
@@ -772,14 +768,14 @@ items:
       slot: 8
   game_lobby:
     1:
-      type: itemsadder-locomc:pack_leavegame
+      type: barrier
       name: "&cLeave Game"
       lore:
         - "&7Click to leave this game and return to the lobby"
       command: "/pillars leave"
       slot: 4
     2:
-      type: itemsadder-locomc:pack_vote
+      type: paper
       name: "&eVote for Event"
       lore:
         - "&7Vote for a special event in this game!"
@@ -796,31 +792,31 @@ Menu:
       1:
         Slot: 10
         SpeedLevel: 1
-        Item: itemsadder-locomc:pack_speed1
+        Item: feather
       2:
         Slot: 11
         SpeedLevel: 2
-        Item: itemsadder-locomc:pack_speed2
+        Item: feather
       3:
         Slot: 12
         SpeedLevel: 3
-        Item: itemsadder-locomc:pack_speed3
+        Item: feather
       4:
         Slot: 13
         SpeedLevel: 4
-        Item: itemsadder-locomc:pack_speed4
+        Item: feather
       5:
         Slot: 14
         SpeedLevel: 5
-        Item: itemsadder-locomc:pack_speed5
+        Item: feather
       6:
         Slot: 15
         SpeedLevel: 6
-        Item: itemsadder-locomc:pack_speed6
+        Item: feather
       7:
         Slot: 16
         SpeedLevel: 7
-        Item: itemsadder-locomc:pack_speed7
+        Item: feather
     Close:
       Slot: 22
       Item: BARRIER

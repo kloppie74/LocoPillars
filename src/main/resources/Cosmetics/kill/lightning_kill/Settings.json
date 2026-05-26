@@ -1,0 +1,15 @@
+{
+  "id": "lightning_kill",
+  "type": "KILL",
+  "display_name": "§eThunder Kill",
+  "lore": ["§7Strike lightning where your victim fell!", "§8Pure power."],
+  "price": 600,
+  "required_level": 8,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "LIGHTNING_ROD",
+    "custom_model_data": 0
+  }
+}

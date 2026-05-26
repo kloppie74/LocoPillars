@@ -1,0 +1,15 @@
+{
+  "id": "flower_death",
+  "type": "DEATH",
+  "display_name": "§aFlower Bloom",
+  "lore": ["§7Beautiful flowers bloom where", "§7you fall — rest in peace.", "§8Uncommon death effect."],
+  "price": 400,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "SUNFLOWER",
+    "custom_model_data": 0
+  }
+}

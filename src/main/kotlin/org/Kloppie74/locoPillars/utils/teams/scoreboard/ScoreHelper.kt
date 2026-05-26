@@ -2,7 +2,6 @@ package org.Kloppie74.locoPillars.utils.teams.scoreboard
 
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
-import org.bukkit.ChatColor
 import org.bukkit.entity.Player
 import org.bukkit.scoreboard.Criteria
 import org.bukkit.scoreboard.DisplaySlot
@@ -23,8 +22,10 @@ class ScoreHelper private constructor(private val player: Player) {
         val ENTRIES = Array(16) { "" }
 
         init {
+            // Use §0–§9 and §a–§f as unique entry strings (avoids deprecated ChatColor.values())
+            val codes = "0123456789abcdef"
             for (i in 1..15) {
-                ENTRIES[i] = ChatColor.values()[i].toString()
+                ENTRIES[i] = "§${codes[i]}"
             }
         }
 

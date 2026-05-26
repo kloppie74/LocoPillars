@@ -1,0 +1,15 @@
+{
+  "id": "smoke_cloud_death",
+  "type": "DEATH",
+  "display_name": "§8Smoke Cloud",
+  "lore": ["§7A thick cloud of smoke billows", "§7from your resting place.", "§8Uncommon death effect."],
+  "price": 350,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "GRAY_DYE",
+    "custom_model_data": 0
+  }
+}

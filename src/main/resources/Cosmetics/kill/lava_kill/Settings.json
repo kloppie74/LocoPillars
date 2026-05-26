@@ -1,0 +1,15 @@
+{
+  "id": "lava_kill",
+  "type": "KILL",
+  "display_name": "§6Lava Burst",
+  "lore": ["§7Molten rock erupts at", "§7the feet of the fallen.", "§8Rare kill effect."],
+  "price": 800,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "LAVA_BUCKET",
+    "custom_model_data": 0
+  }
+}

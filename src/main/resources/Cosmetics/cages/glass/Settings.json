@@ -1,0 +1,15 @@
+{
+  "id": "glass",
+  "type": "CAGE",
+  "display_name": "§b§lCrystal Dome",
+  "lore": ["§7A sleek transparent crystal cage.", "§bSee everything — be seen by all."],
+  "price": 2000,
+  "required_level": 20,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "GLASS",
+    "custom_model_data": 0
+  }
+}

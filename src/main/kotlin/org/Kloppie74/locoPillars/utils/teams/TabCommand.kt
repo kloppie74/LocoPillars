@@ -321,12 +321,10 @@ class TabCommand(
                 }
             } else {
                 // Fallback to legacy system
-                val visibilityStats = plugin.tabVisibilityManager?.getVisibilityStats()
-                if (visibilityStats != null) {
-                    sender.sendMessage("§eTabVisibilityManager Details (Legacy):")
-                    visibilityStats.forEach { (key, value) ->
-                        sender.sendMessage("§7  $key: §f$value")
-                    }
+                val visibilityStats = plugin.tabVisibilityManager.getVisibilityStats()
+                sender.sendMessage("§eTabVisibilityManager Details (Legacy):")
+                visibilityStats.forEach { (key, value) ->
+                    sender.sendMessage("§7  $key: §f$value")
                 }
             }
             sender.sendMessage("")

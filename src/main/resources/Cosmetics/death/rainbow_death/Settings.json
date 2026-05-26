@@ -1,0 +1,15 @@
+{
+  "id": "rainbow_death",
+  "type": "DEATH",
+  "display_name": "§dRainbow Burst",
+  "lore": ["§7Even in defeat, you leave behind", "§7a beautiful rainbow!", "§8Uncommon death effect."],
+  "price": 500,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "PINK_DYE",
+    "custom_model_data": 0
+  }
+}

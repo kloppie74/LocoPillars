@@ -1,5 +1,6 @@
 package org.Kloppie74.locoPillars.utils.teams.tab
 
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.scheduler.BukkitRunnable
@@ -120,7 +121,7 @@ class TabManager(private val plugin: LocoPillars) {
                 updatePlayerTab(player)
             }
             if (displayPerGameInstance) {
-                plugin.tabVisibilityManager?.updateTabVisibilityForAllPlayers()
+                plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
             }
         } catch (e: Exception) {
             plugin.logger.warning("[TabManager] Error updating all tabs: ${e.message}")
@@ -236,7 +237,10 @@ class TabManager(private val plugin: LocoPillars) {
             val footerLine = if (footer.isNotEmpty()) {
                 footer.joinToString("\n") { MSG.chatColors(replaceCustomPlaceholders(it, player)) }
             } else ""
-            player.setPlayerListHeaderFooter(headerLine, footerLine)
+            player.sendPlayerListHeaderAndFooter(
+                LegacyComponentSerializer.legacySection().deserialize(headerLine),
+                LegacyComponentSerializer.legacySection().deserialize(footerLine)
+            )
         } catch (e: Exception) {
             plugin.logger.warning("[TabManager] Error updating header/footer for ${player.name}: ${e.message}")
         }
@@ -276,7 +280,7 @@ class TabManager(private val plugin: LocoPillars) {
             Bukkit.getScheduler().runTaskLater(plugin, Runnable {
                 updatePlayerTab(player)
                 if (displayPerGameInstance) {
-                    plugin.tabVisibilityManager?.updateTabVisibilityForPlayer(player)
+                    plugin.tabVisibilityManager.updateTabVisibilityForPlayer(player)
                 }
             }, 10L)
         } catch (e: Exception) {
@@ -290,7 +294,7 @@ class TabManager(private val plugin: LocoPillars) {
             lastPlayerStates.remove(player.uniqueId)
             if (displayPerGameInstance) {
                 Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-                    plugin.tabVisibilityManager?.updateTabVisibilityForAllPlayers()
+                    plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
                 }, 5L)
             }
         } catch (e: Exception) {
@@ -306,7 +310,7 @@ class TabManager(private val plugin: LocoPillars) {
             if (displayPerGameInstance) {
                 val gameInstance = plugin.gameManager.getPlayerInstance(player)
                 if (gameInstance != null) {
-                    plugin.tabVisibilityManager?.onPlayerJoinGame(player, gameInstance)
+                    plugin.tabVisibilityManager.onPlayerJoinGame(player, gameInstance)
                 }
             }
             Bukkit.getScheduler().runTaskLater(plugin, Runnable {
@@ -324,7 +328,7 @@ class TabManager(private val plugin: LocoPillars) {
             lastPlayerStates.remove(player.uniqueId)
             updatePlayerTab(player)
             if (displayPerGameInstance) {
-                plugin.tabVisibilityManager?.onPlayerLeaveGame(player, gameInstance)
+                plugin.tabVisibilityManager.onPlayerLeaveGame(player, gameInstance)
             }
             Bukkit.getScheduler().runTaskLater(plugin, Runnable {
                 forceUpdateAllPlayers()

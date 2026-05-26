@@ -2,6 +2,7 @@ package org.Kloppie74.locoPillars.game.arena
 
 import org.bukkit.Location
 import org.bukkit.World
+import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.game.config.GameConfig
@@ -301,11 +302,41 @@ class ArenaManager(
         clearPlayersFromInstance(instance)
         debugLog("Players cleared from instance")
 
+        cleanupInstanceEntities(instance)
+        debugLog("Entities cleaned up from instance")
+
         resetArena(instance)
         debugLog("Arena reset completed")
 
         instance.status = ArenaStatus.AVAILABLE
         debugLog("Instance ${instance.id} status changed to AVAILABLE")
+    }
+
+    /**
+     * Removes all non-player entities within this instance's grid cell.
+     * This clears dropped items, armor stands (including LuckyBlock heads),
+     * vehicles (boats/minecarts), experience orbs, projectiles, and any other
+     * entities spawned by game mechanics or LuckyBlock scripts.
+     */
+    private fun cleanupInstanceEntities(instance: ArenaInstance) {
+        val origin = instance.origin
+        val half   = instanceDistance / 2.0
+        val world  = instance.world
+
+        var removed = 0
+        // Snapshot the entity list first — modifying while iterating can cause issues.
+        world.entities.toList().forEach { entity ->
+            if (entity is Player) return@forEach          // never touch players
+            val loc = entity.location
+            if (loc.x >= origin.x - half && loc.x <= origin.x + half &&
+                loc.z >= origin.z - half && loc.z <= origin.z + half) {
+                entity.remove()
+                removed++
+            }
+        }
+
+        if (removed > 0)
+            debugLog("Cleaned up $removed entities from instance ${instance.id} (${instance.template.name})")
     }
 
     private fun clearPlayersFromInstance(instance: ArenaInstance) {

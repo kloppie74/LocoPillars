@@ -1,0 +1,15 @@
+{
+  "id": "time_freeze_win",
+  "type": "WIN",
+  "display_name": "§bTime Freeze",
+  "lore": ["§7Time itself stops to acknowledge", "§7your incredible victory.", "§8Epic win effect."],
+  "price": 3000,
+  "required_level": 12,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "CLOCK",
+    "custom_model_data": 0
+  }
+}

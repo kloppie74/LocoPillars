@@ -10,6 +10,7 @@ import org.Kloppie74.locoPillars.database.tables.ArenaStats.PlayerArenaStatsTabl
 import org.Kloppie74.locoPillars.database.tables.LeaderboardCache.ArenaPerformanceTable
 import org.Kloppie74.locoPillars.database.tables.LeaderboardCache.LeaderboardCacheTable
 import org.Kloppie74.locoPillars.database.tables.LeaderboardCache.LeaderboardMetadataTable
+import org.Kloppie74.locoPillars.cosmetics.database.CosmeticTables
 import org.Kloppie74.locoPillars.database.tables.achievements.AchievementDefinitionsTable
 import org.Kloppie74.locoPillars.database.tables.achievements.AchievementProgressTable
 import org.Kloppie74.locoPillars.database.tables.achievements.PlayerAchievementsTable
@@ -182,7 +183,9 @@ object DatabaseManager {
                             PlayerArenaStatsTable.CREATE_SQL_SQLITE,
                             ArenaPerformanceTable.CREATE_SQL_SQLITE,
                             LeaderboardCacheTable.CREATE_SQL_SQLITE,
-                            LeaderboardMetadataTable.CREATE_SQL_SQLITE
+                            LeaderboardMetadataTable.CREATE_SQL_SQLITE,
+                            CosmeticTables.OwnedTable.CREATE_SQL_SQLITE,
+                            CosmeticTables.SelectedTable.CREATE_SQL_SQLITE
                         )
                         "mysql", "mariadb" -> listOf(
                             PlayersTable.CREATE_SQL_MYSQL,
@@ -195,7 +198,9 @@ object DatabaseManager {
                             PlayerArenaStatsTable.CREATE_SQL_MYSQL,
                             ArenaPerformanceTable.CREATE_SQL_MYSQL,
                             LeaderboardCacheTable.CREATE_SQL_MYSQL,
-                            LeaderboardMetadataTable.CREATE_SQL_MYSQL
+                            LeaderboardMetadataTable.CREATE_SQL_MYSQL,
+                            CosmeticTables.OwnedTable.CREATE_SQL_MYSQL,
+                            CosmeticTables.SelectedTable.CREATE_SQL_MYSQL
                         )
                         else -> throw IllegalArgumentException("Unsupported database type: $dbType")
                     }

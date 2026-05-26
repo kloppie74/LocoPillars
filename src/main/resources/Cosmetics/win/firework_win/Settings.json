@@ -1,0 +1,15 @@
+{
+  "id": "firework_win",
+  "type": "WIN",
+  "display_name": "§6Fireworks Victory",
+  "lore": ["§7Three fireworks explode to celebrate your win!"],
+  "price": 400,
+  "required_level": 5,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "FIREWORK_STAR",
+    "custom_model_data": 0
+  }
+}

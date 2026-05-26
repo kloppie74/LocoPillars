@@ -1,6 +1,7 @@
 package org.Kloppie74.locoPillars.utils.teams.scoreboard
 
 import me.neznamy.tab.api.TabAPI
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.scoreboard.Scoreboard
@@ -32,7 +33,7 @@ object DisplayNameAboveHead {
     }
 
     private fun updateTabNameTag(playerName: String, prefix: String?, suffix: String?) {
-        val api = TabAPI.getInstance() ?: return
+        val api = TabAPI.getInstance()
         val nameTagManager = api.nameTagManager ?: return
         val tabPlayer = api.getPlayer(playerName) ?: return
         nameTagManager.setPrefix(tabPlayer, prefix)
@@ -40,7 +41,7 @@ object DisplayNameAboveHead {
     }
 
     private fun updateVanillaNameTag(player: Player, prefix: String?, suffix: String?) {
-        val manager = Bukkit.getScoreboardManager() ?: return
+        val manager = Bukkit.getScoreboardManager()
         val playerName = player.name
         Bukkit.getOnlinePlayers().forEach { online ->
             if (!online.canSee(player)) return@forEach
@@ -49,8 +50,8 @@ object DisplayNameAboveHead {
             if (team == null) {
                 team = scoreboard.registerNewTeam(playerName)
             }
-            team.prefix = prefix ?: ""
-            team.suffix = suffix ?: ""
+            team.prefix(LegacyComponentSerializer.legacySection().deserialize(prefix ?: ""))
+            team.suffix(LegacyComponentSerializer.legacySection().deserialize(suffix ?: ""))
             if (!team.hasEntry(playerName)) {
                 team.addEntry(playerName)
             }

@@ -22,12 +22,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
             debugLog("Skipping update for null/offline player")
             return
         }
-        val playerUUID = try {
-            player.uniqueId ?: return
-        } catch (e: Exception) {
-            plugin.logger.warning("[TabVisibility] Error getting player UUID for ${player.name}: ${e.message}")
-            return
-        }
+        val playerUUID = player.uniqueId
         if (!isPerGameInstanceEnabled()) {
             debugLog("Per-game-instance disabled for ${player.name}, showing all players")
             showAllPlayersToPlayer(player)
@@ -38,7 +33,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
             return
         }
         try {
-            val gameManager = plugin.gameManager ?: return
+            val gameManager = plugin.gameManager
             val currentGameInstance = try {
                 gameManager.getPlayerInstance(player)
             } catch (e: Exception) {
@@ -82,11 +77,11 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun applyLobbyTabVisibility(lobbyPlayer: Player) {
         try {
-            val onlinePlayers = Bukkit.getOnlinePlayers()?.toList() ?: return
+            val onlinePlayers = Bukkit.getOnlinePlayers().toList()
             debugLog("Applying lobby tab visibility for ${lobbyPlayer.name} (${onlinePlayers.size} online)")
 
             onlinePlayers.forEach { otherPlayer ->
-                if (otherPlayer == null || otherPlayer == lobbyPlayer || !otherPlayer.isOnline) return@forEach
+                if (otherPlayer == lobbyPlayer || !otherPlayer.isOnline) return@forEach
 
                 try {
                     if (shouldDeferToOtherSystems(lobbyPlayer, otherPlayer)) {
@@ -109,11 +104,11 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun applyGameTabVisibility(gamePlayer: Player, gameInstance: GameInstance) {
         try {
-            val onlinePlayers = Bukkit.getOnlinePlayers()?.toList() ?: return
-            val gamePlayerIds = gameInstance.players?.toSet() ?: emptySet()
+            val onlinePlayers = Bukkit.getOnlinePlayers().toList()
+            val gamePlayerIds = gameInstance.players.toSet()
             debugLog("Applying game tab visibility for ${gamePlayer.name} in game ${gameInstance.id} (${gamePlayerIds.size} game players)")
             onlinePlayers.forEach { otherPlayer ->
-                if (otherPlayer == null || otherPlayer == gamePlayer || !otherPlayer.isOnline) return@forEach
+                if (otherPlayer == gamePlayer || !otherPlayer.isOnline) return@forEach
 
                 try {
                     if (shouldDeferToOtherSystems(gamePlayer, otherPlayer)) {
@@ -176,7 +171,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun shouldLobbyPlayerSeeOtherInTab(lobbyPlayer: Player, otherPlayer: Player): Boolean {
         try {
-            val otherInstance = plugin.gameManager?.getPlayerInstance(otherPlayer)
+            val otherInstance = plugin.gameManager.getPlayerInstance(otherPlayer)
             val shouldSee = otherInstance == null
             debugLog("Lobby player ${lobbyPlayer.name} should see ${otherPlayer.name}: $shouldSee (other in game: ${otherInstance != null})")
             return shouldSee
@@ -188,7 +183,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun shouldOtherPlayerSeeLobbyPlayerInTab(otherPlayer: Player, lobbyPlayer: Player): Boolean {
         try {
-            val otherInstance = plugin.gameManager?.getPlayerInstance(otherPlayer)
+            val otherInstance = plugin.gameManager.getPlayerInstance(otherPlayer)
             val shouldSee = otherInstance == null
             debugLog("Player ${otherPlayer.name} should see lobby player ${lobbyPlayer.name}: $shouldSee (other in game: ${otherInstance != null})")
             return shouldSee
@@ -204,7 +199,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
         gamePlayerIds: Set<UUID>
     ): Boolean {
         try {
-            val otherPlayerUUID = otherPlayer.uniqueId ?: return false
+            val otherPlayerUUID = otherPlayer.uniqueId
             val shouldSee = gamePlayerIds.contains(otherPlayerUUID)
             debugLog("Game player ${gamePlayer.name} should see ${otherPlayer.name}: $shouldSee (same game: $shouldSee)")
             return shouldSee
@@ -220,12 +215,12 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
         gamePlayerIds: Set<UUID>
     ): Boolean {
         try {
-            val otherInstance = plugin.gameManager?.getPlayerInstance(otherPlayer)
+            val otherInstance = plugin.gameManager.getPlayerInstance(otherPlayer)
             if (otherInstance == null) {
                 debugLog("Lobby player ${otherPlayer.name} should NOT see game player ${gamePlayer.name}")
                 return false
             } else {
-                val otherPlayerUUID = otherPlayer.uniqueId ?: return false
+                val otherPlayerUUID = otherPlayer.uniqueId
                 val shouldSee = gamePlayerIds.contains(otherPlayerUUID)
                 debugLog("Game player ${otherPlayer.name} should see game player ${gamePlayer.name}: $shouldSee (same game: $shouldSee)")
                 return shouldSee
@@ -238,8 +233,8 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun updatePlayerVisibility(viewer: Player, target: Player, shouldSee: Boolean, context: String) {
         try {
-            val viewerUUID = viewer.uniqueId ?: return
-            val targetUUID = target.uniqueId ?: return
+            val viewerUUID = viewer.uniqueId
+            val targetUUID = target.uniqueId
             val cacheKey = Pair(viewerUUID, targetUUID)
             val lastState = lastVisibilityStates[cacheKey]
             if (lastState == shouldSee) {
@@ -273,14 +268,14 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
             return
         }
         val onlinePlayers = try {
-            Bukkit.getOnlinePlayers()?.toList() ?: return
+            Bukkit.getOnlinePlayers().toList()
         } catch (e: Exception) {
             plugin.logger.warning("[TabVisibility] Error getting online players: ${e.message}")
             return
         }
         debugLog("Updating tab visibility for ${onlinePlayers.size} online players with per-game-instance rules")
         onlinePlayers.forEach { player ->
-            if (player != null && player.isOnline) {
+            if (player.isOnline) {
                 try {
                     updateTabVisibilityForPlayer(player)
                 } catch (e: Exception) {
@@ -303,11 +298,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
             return
         }
         debugLog("${player.name} joined game ${gameInstance.id}")
-        val playerUUID = try {
-            player.uniqueId ?: return
-        } catch (e: Exception) {
-            return
-        }
+        val playerUUID = player.uniqueId
         playerGameStates.remove(playerUUID)
         clearPlayerVisibilityCache(playerUUID)
         updateTabVisibilityForAllPlayers()
@@ -318,11 +309,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
             return
         }
         debugLog("${player.name} left game and went to LOBBY")
-        val playerUUID = try {
-            player.uniqueId ?: return
-        } catch (e: Exception) {
-            return
-        }
+        val playerUUID = player.uniqueId
         playerGameStates.remove(playerUUID)
         clearPlayerVisibilityCache(playerUUID)
         updateTabVisibilityForAllPlayers()
@@ -337,8 +324,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun isPerGameInstanceEnabled(): Boolean {
         return try {
-            plugin.tabManager?.isEnabled() == true &&
-                    plugin.tabManager?.displayPerGameInstance == true
+            plugin.tabManager.isEnabled() && plugin.tabManager.displayPerGameInstance
         } catch (e: Exception) {
             false
         }
@@ -347,18 +333,14 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
     fun getVisibilityStats(): Map<String, Any> {
         return try {
             val onlinePlayers = Bukkit.getOnlinePlayers()
-            val totalPlayers = onlinePlayers?.size ?: 0
+            val totalPlayers = onlinePlayers.size
             val gameManager = plugin.gameManager
-            val playersInGames = if (gameManager != null) {
-                onlinePlayers?.count { player ->
-                    try {
-                        player != null && gameManager.getPlayerInstance(player) != null
-                    } catch (e: Exception) {
-                        false
-                    }
-                } ?: 0
-            } else {
-                0
+            val playersInGames = onlinePlayers.count { player ->
+                try {
+                    gameManager.getPlayerInstance(player) != null
+                } catch (e: Exception) {
+                    false
+                }
             }
             val playersInLobby = totalPlayers - playersInGames
             mapOf(
@@ -369,7 +351,7 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
                 "cachedVisibilityStates" to lastVisibilityStates.size,
                 "activeUpdates" to isUpdating.size,
                 "perGameInstanceEnabled" to isPerGameInstanceEnabled(),
-                "tabManagerEnabled" to (plugin.tabManager?.isEnabled() ?: false)
+                "tabManagerEnabled" to plugin.tabManager.isEnabled()
             )
         } catch (e: Exception) {
             mapOf("error" to "Failed to get stats: ${e.message}")
@@ -385,8 +367,8 @@ class TabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun debugLog(message: String) {
         try {
-            if (plugin.configManager?.debugMode == true) {
-                plugin.logger?.info("[TabVisibility] $message")
+            if (plugin.configManager.debugMode) {
+                plugin.logger.info("[TabVisibility] $message")
             }
         } catch (_: Exception) {}
     }

@@ -1,0 +1,15 @@
+{
+  "id": "volcano_win",
+  "type": "WIN",
+  "display_name": "§cVolcano Eruption",
+  "lore": ["§7An unstoppable force erupts —", "§7hot lava celebrates with you!", "§8Epic win effect."],
+  "price": 2200,
+  "required_level": 10,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "MAGMA_BLOCK",
+    "custom_model_data": 0
+  }
+}

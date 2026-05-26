@@ -1,0 +1,15 @@
+{
+  "id": "lightning_death",
+  "type": "DEATH",
+  "display_name": "§eLightning Strike",
+  "lore": ["§7A lightning bolt strikes", "§7at the moment of death.", "§8Rare death effect."],
+  "price": 900,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "FLINT",
+    "custom_model_data": 0
+  }
+}

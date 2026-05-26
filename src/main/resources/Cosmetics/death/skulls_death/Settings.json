@@ -1,0 +1,15 @@
+{
+  "id": "skulls_death",
+  "type": "DEATH",
+  "display_name": "§8Skull Shower",
+  "lore": ["§7A ring of skulls surrounds", "§7your fallen form.", "§8Epic death effect."],
+  "price": 1800,
+  "required_level": 10,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "SKELETON_SKULL",
+    "custom_model_data": 0
+  }
+}

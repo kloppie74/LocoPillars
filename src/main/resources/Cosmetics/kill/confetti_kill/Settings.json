@@ -1,0 +1,15 @@
+{
+  "id": "confetti_kill",
+  "type": "KILL",
+  "display_name": "§eConfetti Blast",
+  "lore": ["§7A festive confetti explosion", "§7marks every kill!", "§8Uncommon kill effect."],
+  "price": 400,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "PAPER",
+    "custom_model_data": 0
+  }
+}

@@ -1,0 +1,6 @@
+// Kaboom! — visual explosion at death location (no block damage)
+val loc = player.location.clone()
+game.spawnExplosion(loc, 0f, false)
+game.spawnParticles(loc.add(0.0, 1.0, 0.0), org.bukkit.Particle.EXPLOSION, 6, 0.6, 0.6, 0.6, 0.0)
+game.spawnParticles(loc, org.bukkit.Particle.FLAME, 25, 0.5, 0.5, 0.5, 0.08)
+game.playSound(player, org.bukkit.Sound.ENTITY_GENERIC_EXPLODE, 0.6f, 1.1f)

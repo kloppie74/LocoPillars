@@ -1,0 +1,15 @@
+{
+  "id": "ice_kill",
+  "type": "KILL",
+  "display_name": "§bIce Shatter",
+  "lore": ["§7Frozen in their tracks —", "§7shards of ice explode outward.", "§8Rare kill effect."],
+  "price": 600,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "BLUE_ICE",
+    "custom_model_data": 0
+  }
+}

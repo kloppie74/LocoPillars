@@ -1,0 +1,15 @@
+{
+  "id": "obsidian",
+  "type": "CAGE",
+  "display_name": "§8Obsidian Fortress",
+  "lore": ["§7Forged from the depths.", "§8Unbreakable. Imposing."],
+  "price": 1000,
+  "required_level": 10,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "OBSIDIAN",
+    "custom_model_data": 0
+  }
+}

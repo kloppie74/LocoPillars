@@ -1,0 +1,15 @@
+{
+  "id": "neon_win",
+  "type": "WIN",
+  "display_name": "§aNeon Glow",
+  "lore": ["§7Electric neon pulses", "§7illuminate your victory.", "§8Rare win effect."],
+  "price": 1100,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "LIME_STAINED_GLASS",
+    "custom_model_data": 0
+  }
+}

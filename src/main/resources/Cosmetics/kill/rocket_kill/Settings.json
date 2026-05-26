@@ -1,0 +1,15 @@
+{
+  "id": "rocket_kill",
+  "type": "KILL",
+  "display_name": "§6Rocket Launch",
+  "lore": ["§7Launch a firework rocket from", "§7the kill location!", "§8Rare kill effect."],
+  "price": 700,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "FIREWORK_ROCKET",
+    "custom_model_data": 0
+  }
+}

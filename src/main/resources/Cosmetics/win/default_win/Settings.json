@@ -1,0 +1,15 @@
+{
+  "id": "default_win",
+  "type": "WIN",
+  "display_name": "§fDefault Win",
+  "lore": ["§7A simple celebration.", "§8Available to everyone."],
+  "price": 0,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "COMMON",
+  "active": true,
+  "icon": {
+    "material": "YELLOW_DYE",
+    "custom_model_data": 0
+  }
+}

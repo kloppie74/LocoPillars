@@ -20,9 +20,8 @@ class TeamsListener(
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onPlayerJoin(event: PlayerJoinEvent) {
-        val player = event.player ?: return
+        val player = event.player
         try {
-            val playerUUID = player.uniqueId ?: return
             debugLog("Processing join for ${player.name}")
             object : BukkitRunnable() {
                 override fun run() {
@@ -56,7 +55,7 @@ class TeamsListener(
                         if (plugin.isProtocolLibAvailable()) {
                             plugin.getProtocolLibTabManager()?.onPlayerJoin(player)
                             debugLog("Updated ProtocolLib tab visibility for ${player.name}")
-                        } else if (plugin.tabVisibilityManager != null) {
+                        } else {
                             plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
                         }
                     }
@@ -71,9 +70,8 @@ class TeamsListener(
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onPlayerQuit(event: PlayerQuitEvent) {
-        val player = event.player ?: return
+        val player = event.player
         try {
-            val playerUUID = player.uniqueId ?: return
             debugLog("Processing quit for ${player.name}")
 
             // Cleanup tab/scoreboard/teams
@@ -99,7 +97,7 @@ class TeamsListener(
                     if (plugin.tabManager.displayPerGameInstance) {
                         if (plugin.isProtocolLibAvailable()) {
                             plugin.getProtocolLibTabManager()?.updateTabVisibilityForAllPlayers()
-                        } else if (plugin.tabVisibilityManager != null) {
+                        } else {
                             plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
                         }
                     }
@@ -115,9 +113,8 @@ class TeamsListener(
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun onPlayerChangedWorld(event: PlayerChangedWorldEvent) {
-        val player = event.player ?: return
+        val player = event.player
         try {
-            val playerUUID = player.uniqueId ?: return
             debugLog("Processing world change for ${player.name} (${event.from.name} -> ${player.world.name})")
             object : BukkitRunnable() {
                 override fun run() {
@@ -143,7 +140,7 @@ class TeamsListener(
                         if (plugin.tabManager.displayPerGameInstance) {
                             if (plugin.isProtocolLibAvailable()) {
                                 plugin.getProtocolLibTabManager()?.updateTabVisibilityForAllPlayers()
-                            } else if (plugin.tabVisibilityManager != null) {
+                            } else {
                                 plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
                             }
                         }
@@ -157,7 +154,6 @@ class TeamsListener(
     }
 
     fun onPlayerJoinGame(player: Player) {
-        if (player == null) return
         try {
             debugLog("${player.name} joined a game instance")
 
@@ -182,7 +178,7 @@ class TeamsListener(
                         val gameInstance = plugin.gameManager.getPlayerInstance(player)
                         plugin.getProtocolLibTabManager()?.onPlayerJoinGame(player, gameInstance)
                         debugLog("Updated ProtocolLib tab visibility for ${player.name} joining game")
-                    } else if (plugin.tabVisibilityManager != null) {
+                    } else {
                         val gameInstance = plugin.gameManager.getPlayerInstance(player)
                         plugin.tabVisibilityManager.onPlayerJoinGame(player, gameInstance)
                     }
@@ -198,7 +194,6 @@ class TeamsListener(
     }
 
     fun onPlayerLeaveGame(player: Player) {
-        if (player == null) return
         try {
             debugLog("${player.name} left a game instance")
             val gameInstance = plugin.gameManager.getPlayerInstance(player)
@@ -223,7 +218,7 @@ class TeamsListener(
                     if (plugin.isProtocolLibAvailable()) {
                         plugin.getProtocolLibTabManager()?.onPlayerLeaveGame(player, gameInstance)
                         debugLog("Updated ProtocolLib tab visibility for ${player.name} leaving game")
-                    } else if (plugin.tabVisibilityManager != null) {
+                    } else {
                         plugin.tabVisibilityManager.onPlayerLeaveGame(player, gameInstance)
                     }
                 }
@@ -248,7 +243,7 @@ class TeamsListener(
                     if (plugin.isProtocolLibAvailable()) {
                         plugin.getProtocolLibTabManager()?.forceUpdateAllPlayers()
                         debugLog("Force updated ProtocolLib tab visibility")
-                    } else if (plugin.tabVisibilityManager != null) {
+                    } else {
                         plugin.tabVisibilityManager.forceUpdateAllPlayers()
                     }
                 }

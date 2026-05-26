@@ -1,0 +1,15 @@
+{
+  "id": "grim_reaper_kill",
+  "type": "KILL",
+  "display_name": "§8Grim Reaper",
+  "lore": ["§7The Reaper has come to claim", "§7another soul.", "§8Legendary kill effect."],
+  "price": 3000,
+  "required_level": 15,
+  "permission": "",
+  "rarity": "LEGENDARY",
+  "active": true,
+  "icon": {
+    "material": "WITHER_SKELETON_SKULL",
+    "custom_model_data": 0
+  }
+}

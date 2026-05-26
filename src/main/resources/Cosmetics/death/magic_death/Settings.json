@@ -1,0 +1,15 @@
+{
+  "id": "magic_death",
+  "type": "DEATH",
+  "display_name": "§5Arcane Dissipate",
+  "lore": ["§7Arcane energy scatters", "§7as your form dissolves.", "§8Rare death effect."],
+  "price": 700,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "AMETHYST_SHARD",
+    "custom_model_data": 0
+  }
+}

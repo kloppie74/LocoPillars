@@ -1,0 +1,15 @@
+{
+  "id": "lightning_win",
+  "type": "WIN",
+  "display_name": "§e§lStorm Champion",
+  "lore": ["§7Lightning crowns the victor!", "§6The gods cheer your triumph."],
+  "price": 2000,
+  "required_level": 20,
+  "permission": "",
+  "rarity": "LEGENDARY",
+  "active": true,
+  "icon": {
+    "material": "NETHER_STAR",
+    "custom_model_data": 0
+  }
+}

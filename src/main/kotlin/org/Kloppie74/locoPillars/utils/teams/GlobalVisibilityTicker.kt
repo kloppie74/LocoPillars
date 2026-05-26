@@ -280,7 +280,7 @@ object GlobalVisibilityTicker {
             priorityMap[it] in listOf("TAB_UPDATE", "GLOBAL") && !protocolTabUpdates.contains(it)
         }
 
-        if (tabFormatUpdates.isNotEmpty() && plugin.tabManager?.isEnabled() == true) {
+        if (tabFormatUpdates.isNotEmpty() && plugin.tabManager.isEnabled()) {
             tabFormatUpdates.forEach { player ->
                 try {
                     plugin.tabManager.updatePlayerTab(player)
@@ -291,9 +291,10 @@ object GlobalVisibilityTicker {
         }
 
         // Handle ProtocolLib tab visibility updates (highest priority for tab list)
-        if (protocolTabUpdates.isNotEmpty() && plugin.tabManager?.displayPerGameInstance == true) {
+        if (protocolTabUpdates.isNotEmpty() && plugin.tabManager.displayPerGameInstance) {
             try {
-                plugin.protocolLibTabVisibilityManager?.let { protocolTabManager ->
+                if (plugin.isProtocolLibAvailable()) {
+                    val protocolTabManager = plugin.protocolLibTabVisibilityManager
                     protocolTabUpdates.forEach { player ->
                         protocolTabManager.updateTabVisibilityForPlayer(player)
                     }
@@ -590,9 +591,9 @@ object GlobalVisibilityTicker {
                 "tickerActive" to (ticker != null && !ticker!!.isCancelled),
                 "vanishSystemActive" to true,
                 "spectatorSystemActive" to true,
-                "tabManagerEnabled" to (plugin.tabManager?.isEnabled() ?: false),
-                "tabPerGameInstanceEnabled" to (plugin.tabManager?.displayPerGameInstance ?: false),
-                "protocolLibTabManagerActive" to (plugin.protocolLibTabVisibilityManager != null)
+                "tabManagerEnabled" to plugin.tabManager.isEnabled(),
+                "tabPerGameInstanceEnabled" to plugin.tabManager.displayPerGameInstance,
+                "protocolLibTabManagerActive" to plugin.isProtocolLibAvailable()
             )
         } catch (e: Exception) {
             mapOf("error" to "Failed to get stats: ${e.message}")

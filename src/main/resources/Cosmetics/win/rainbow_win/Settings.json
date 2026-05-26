@@ -1,0 +1,15 @@
+{
+  "id": "rainbow_win",
+  "type": "WIN",
+  "display_name": "§dRainbow Burst",
+  "lore": ["§7Rainbow particles fill the air around you!", "§5Pure spectacle."],
+  "price": 800,
+  "required_level": 10,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "MAGENTA_DYE",
+    "custom_model_data": 0
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "disco_win",
+  "type": "WIN",
+  "display_name": "§aDisco Party",
+  "lore": ["§7Turn the arena into a disco,", "§7because you just won!", "§8Uncommon win effect."],
+  "price": 600,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "JUKEBOX",
+    "custom_model_data": 0
+  }
+}

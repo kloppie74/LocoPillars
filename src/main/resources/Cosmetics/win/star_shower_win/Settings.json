@@ -1,0 +1,15 @@
+{
+  "id": "star_shower_win",
+  "type": "WIN",
+  "display_name": "§eStar Shower",
+  "lore": ["§7A cascade of falling stars", "§7showers the champion.", "§8Epic win effect."],
+  "price": 1800,
+  "required_level": 8,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "GLOWSTONE_DUST",
+    "custom_model_data": 0
+  }
+}

@@ -36,12 +36,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
             return
         }
 
-        val playerUUID = try {
-            player.uniqueId ?: return
-        } catch (e: Exception) {
-            debugLog("[ProtocolTabVisibility] Error getting player UUID for ${player.name}: ${e.message}")
-            return
-        }
+        val playerUUID = player.uniqueId
 
         if (!isPerGameInstanceEnabled()) {
             debugLog("Per-game-instance disabled for ${player.name}, showing all players")
@@ -55,7 +50,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
         }
 
         try {
-            val gameManager = plugin.gameManager ?: return
+            val gameManager = plugin.gameManager
             val currentGameInstance = try {
                 gameManager.getPlayerInstance(player)
             } catch (e: Exception) {
@@ -96,14 +91,14 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun applyLobbyTabVisibility(lobbyPlayer: Player) {
         try {
-            val onlinePlayers = Bukkit.getOnlinePlayers()?.toList() ?: return
+            val onlinePlayers = Bukkit.getOnlinePlayers().toList()
             val currentlyVisible = playerTabStates.getOrPut(lobbyPlayer.uniqueId) { ConcurrentHashMap.newKeySet() }
             val shouldBeVisible = mutableSetOf<UUID>()
 
             debugLog("Applying lobby tab visibility for ${lobbyPlayer.name} (${onlinePlayers.size} online)")
 
             onlinePlayers.forEach { otherPlayer ->
-                if (otherPlayer == null || otherPlayer == lobbyPlayer || !otherPlayer.isOnline) return@forEach
+                if (otherPlayer == lobbyPlayer || !otherPlayer.isOnline) return@forEach
 
                 try {
                     if (shouldDeferToOtherSystems(lobbyPlayer, otherPlayer)) {
@@ -146,15 +141,15 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun applyGameTabVisibility(gamePlayer: Player, gameInstance: GameInstance) {
         try {
-            val onlinePlayers = Bukkit.getOnlinePlayers()?.toList() ?: return
-            val gamePlayerIds = gameInstance.players?.toSet() ?: emptySet()
+            val onlinePlayers = Bukkit.getOnlinePlayers().toList()
+            val gamePlayerIds = gameInstance.players.toSet()
             val currentlyVisible = playerTabStates.getOrPut(gamePlayer.uniqueId) { ConcurrentHashMap.newKeySet() }
             val shouldBeVisible = mutableSetOf<UUID>()
 
             debugLog("Applying game tab visibility for ${gamePlayer.name} in game ${gameInstance.id} (${gamePlayerIds.size} game players)")
 
             onlinePlayers.forEach { otherPlayer ->
-                if (otherPlayer == null || otherPlayer == gamePlayer || !otherPlayer.isOnline) return@forEach
+                if (otherPlayer == gamePlayer || !otherPlayer.isOnline) return@forEach
 
                 try {
                     if (shouldDeferToOtherSystems(gamePlayer, otherPlayer)) {
@@ -235,7 +230,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun shouldLobbyPlayerSeeOtherInTab(lobbyPlayer: Player, otherPlayer: Player): Boolean {
         try {
-            val otherInstance = plugin.gameManager?.getPlayerInstance(otherPlayer)
+            val otherInstance = plugin.gameManager.getPlayerInstance(otherPlayer)
             // Lobby players should only see other lobby players
             val shouldSee = otherInstance == null
             debugLog("Lobby player ${lobbyPlayer.name} should see ${otherPlayer.name}: $shouldSee (other in game: ${otherInstance != null})")
@@ -252,7 +247,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
         gamePlayerIds: Set<UUID>
     ): Boolean {
         try {
-            val otherPlayerUUID = otherPlayer.uniqueId ?: return false
+            val otherPlayerUUID = otherPlayer.uniqueId
             // Game players should only see players in the same game instance
             val shouldSee = gamePlayerIds.contains(otherPlayerUUID)
             debugLog("Game player ${gamePlayer.name} should see ${otherPlayer.name}: $shouldSee (same game: $shouldSee)")
@@ -273,7 +268,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
                 val targetPlayer = Bukkit.getPlayer(playerUUID)
                 if (targetPlayer != null && targetPlayer.isOnline) {
                     val gameProfile = WrappedGameProfile.fromPlayer(targetPlayer)
-                    val displayName = WrappedChatComponent.fromText(targetPlayer.displayName)
+                    val displayName = WrappedChatComponent.fromText(targetPlayer.name)
 
                     val playerInfoData = PlayerInfoData(
                         gameProfile,
@@ -341,7 +336,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
         }
 
         val onlinePlayers = try {
-            Bukkit.getOnlinePlayers()?.toList() ?: return
+            Bukkit.getOnlinePlayers().toList()
         } catch (e: Exception) {
             debugLog("[ProtocolTabVisibility] Error getting online players: ${e.message}")
             return
@@ -349,7 +344,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
 
         debugLog("Updating tab visibility for ${onlinePlayers.size} online players with per-game-instance rules")
         onlinePlayers.forEach { player ->
-            if (player != null && player.isOnline) {
+            if (player.isOnline) {
                 try {
                     updateTabVisibilityForPlayer(player)
                 } catch (e: Exception) {
@@ -440,8 +435,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun isPerGameInstanceEnabled(): Boolean {
         return try {
-            plugin.tabManager?.isEnabled() == true &&
-                    plugin.tabManager?.displayPerGameInstance == true
+            plugin.tabManager.isEnabled() && plugin.tabManager.displayPerGameInstance
         } catch (e: Exception) {
             false
         }
@@ -450,18 +444,14 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
     fun getVisibilityStats(): Map<String, Any> {
         return try {
             val onlinePlayers = Bukkit.getOnlinePlayers()
-            val totalPlayers = onlinePlayers?.size ?: 0
+            val totalPlayers = onlinePlayers.size
             val gameManager = plugin.gameManager
-            val playersInGames = if (gameManager != null) {
-                onlinePlayers?.count { player ->
-                    try {
-                        player != null && gameManager.getPlayerInstance(player) != null
-                    } catch (e: Exception) {
-                        false
-                    }
-                } ?: 0
-            } else {
-                0
+            val playersInGames = onlinePlayers.count { player ->
+                try {
+                    gameManager.getPlayerInstance(player) != null
+                } catch (e: Exception) {
+                    false
+                }
             }
             val playersInLobby = totalPlayers - playersInGames
 
@@ -475,7 +465,7 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
                 "totalVisibilityEntries" to totalTabStates,
                 "activeUpdates" to isUpdating.size,
                 "perGameInstanceEnabled" to isPerGameInstanceEnabled(),
-                "tabManagerEnabled" to (plugin.tabManager?.isEnabled() ?: false),
+                "tabManagerEnabled" to plugin.tabManager.isEnabled(),
                 "protocolLibEnabled" to true
             )
         } catch (e: Exception) {
@@ -491,8 +481,8 @@ class ProtocolLibTabVisibilityManager(private val plugin: LocoPillars) {
 
     private fun debugLog(message: String) {
         try {
-            if (plugin.configManager?.debugMode == true) {
-                plugin.logger?.info("[ProtocolTabVisibility] $message")
+            if (plugin.configManager.debugMode) {
+                plugin.logger.info("[ProtocolTabVisibility] $message")
             }
         } catch (_: Exception) {}
     }

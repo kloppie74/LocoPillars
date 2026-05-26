@@ -1,0 +1,15 @@
+{
+  "id": "confetti_win",
+  "type": "WIN",
+  "display_name": "§eParty Confetti",
+  "lore": ["§7It's a party! Multicolour", "§7confetti rains on the winner.", "§8Uncommon win effect."],
+  "price": 500,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "PAPER",
+    "custom_model_data": 0
+  }
+}

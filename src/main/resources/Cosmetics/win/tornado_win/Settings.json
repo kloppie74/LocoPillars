@@ -1,0 +1,15 @@
+{
+  "id": "tornado_win",
+  "type": "WIN",
+  "display_name": "§3Victory Tornado",
+  "lore": ["§7A spiralling vortex of triumph", "§7lifts you to the sky!", "§8Epic win effect."],
+  "price": 1400,
+  "required_level": 5,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "BLUE_DYE",
+    "custom_model_data": 0
+  }
+}

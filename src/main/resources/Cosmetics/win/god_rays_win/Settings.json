@@ -1,0 +1,15 @@
+{
+  "id": "god_rays_win",
+  "type": "WIN",
+  "display_name": "§6God Rays",
+  "lore": ["§7Divine beams of golden light", "§7shine down from the heavens.", "§8Legendary win effect."],
+  "price": 6000,
+  "required_level": 25,
+  "permission": "",
+  "rarity": "LEGENDARY",
+  "active": true,
+  "icon": {
+    "material": "BEACON",
+    "custom_model_data": 0
+  }
+}

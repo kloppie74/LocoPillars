@@ -1,0 +1,15 @@
+{
+  "id": "galaxy_death",
+  "type": "DEATH",
+  "display_name": "§dGalaxy Collapse",
+  "lore": ["§7Your essence implodes into", "§7a miniature galaxy.", "§8Epic death effect."],
+  "price": 2000,
+  "required_level": 10,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "NETHER_STAR",
+    "custom_model_data": 0
+  }
+}

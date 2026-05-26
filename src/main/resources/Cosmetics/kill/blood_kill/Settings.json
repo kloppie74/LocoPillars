@@ -1,0 +1,15 @@
+{
+  "id": "blood_kill",
+  "type": "KILL",
+  "display_name": "§cBlood Splatter",
+  "lore": ["§7Crimson particles burst from", "§7the fallen enemy.", "§8Rare kill effect."],
+  "price": 500,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "RED_DYE",
+    "custom_model_data": 0
+  }
+}

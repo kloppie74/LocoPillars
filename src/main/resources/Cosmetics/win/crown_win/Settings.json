@@ -1,0 +1,15 @@
+{
+  "id": "crown_win",
+  "type": "WIN",
+  "display_name": "§6Royal Crown",
+  "lore": ["§7A golden crown materialises", "§7above the champion's head.", "§8Rare win effect."],
+  "price": 1000,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "GOLD_INGOT",
+    "custom_model_data": 0
+  }
+}

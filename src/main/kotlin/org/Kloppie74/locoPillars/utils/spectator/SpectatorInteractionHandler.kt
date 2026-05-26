@@ -59,6 +59,7 @@ class SpectatorInteractionHandler(
     fun onInventoryClick(event: InventoryClickEvent) {
         val player = event.whoClicked as? Player ?: return
 
+        @Suppress("DEPRECATION")
         if (SpeedGui.isSpeedGui(event.view.title)) {
             return
         }
@@ -171,14 +172,6 @@ class SpectatorInteractionHandler(
     fun onFoodLevelChange(event: FoodLevelChangeEvent) {
         val player = event.entity as? Player ?: return
         if (isSpectator(player)) {
-            event.isCancelled = true
-        }
-    }
-
-    @EventHandler(priority = EventPriority.HIGH)
-    fun onItemPickup(event: PlayerPickupItemEvent) {
-        val player = event.player
-        if (isSpectator(player) && !hasSpectatorOverride(player)) {
             event.isCancelled = true
         }
     }

@@ -100,6 +100,11 @@ commands:
     permission-message: "§cYou do not have permission to use the editor!"
     aliases: [ adminedit, admineditor ]
 
+  cosmetics:
+    description: "Browse, buy and equip cosmetics (Kill/Win/Death effects & Custom Cages)"
+    usage: "/cosmetics [shop|select|give|coins|reload] [args]"
+    aliases: [ cosm, cosmetic ]
+
 
 permissions:
   locopillars.luckyblocks.menu:

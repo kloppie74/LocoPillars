@@ -1,0 +1,15 @@
+{
+  "id": "tornado_death",
+  "type": "DEATH",
+  "display_name": "§3Death Tornado",
+  "lore": ["§7A small tornado rises from", "§7where you fell.", "§8Rare death effect."],
+  "price": 900,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "FEATHER",
+    "custom_model_data": 0
+  }
+}

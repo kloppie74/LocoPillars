@@ -93,6 +93,12 @@ class ConfigManager(private val plugin: JavaPlugin) {
     var tabSection: org.bukkit.configuration.ConfigurationSection? = null
         private set
 
+    // === Cosmetics settings ===
+    var cosmeticsEnabled: Boolean = true
+        private set
+    var cosmeticsCoinsProvider: String = "SELF"
+        private set
+
     // === LuckyBlock settings ===
     var luckyBlocksEnabled: Boolean = true
         private set
@@ -198,6 +204,11 @@ class ConfigManager(private val plugin: JavaPlugin) {
 
         // Load TAB section from config.yml (replacing tab.yml)
         tabSection = config.getConfigurationSection("Tab")
+
+        // === Load Cosmetics ===
+        val cosmeticsSection = config.getConfigurationSection("Cosmetics")
+        cosmeticsEnabled      = cosmeticsSection?.getBoolean("enabled", true) ?: true
+        cosmeticsCoinsProvider = cosmeticsSection?.getString("coins-provider", "SELF")?.uppercase() ?: "SELF"
 
         // === Load LuckyBlocks ===
         val luckySection = config.getConfigurationSection("Luckyblocks")
@@ -369,6 +380,11 @@ class ConfigManager(private val plugin: JavaPlugin) {
         val defaultPS = prefixSuffixSection.createSection("Default")
         defaultPS.set("Prefix", "")
         defaultPS.set("Suffix", "")
+
+        // Cosmetics section
+        val cosmeticsSection = config.createSection("Cosmetics")
+        cosmeticsSection.set("enabled", true)
+        cosmeticsSection.set("coins-provider", "SELF")
 
         // Luckyblocks section
         val luckySection = config.createSection("Luckyblocks")

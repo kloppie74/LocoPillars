@@ -1,0 +1,15 @@
+{
+  "id": "angel_kill",
+  "type": "KILL",
+  "display_name": "§fAngel's Judgment",
+  "lore": ["§7Holy feathers descend upon", "§7your fallen foe.", "§8Epic kill effect."],
+  "price": 1800,
+  "required_level": 10,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "FEATHER",
+    "custom_model_data": 0
+  }
+}

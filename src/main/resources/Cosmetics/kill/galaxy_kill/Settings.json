@@ -1,0 +1,15 @@
+{
+  "id": "galaxy_kill",
+  "type": "KILL",
+  "display_name": "§dGalaxy Collapse",
+  "lore": ["§7Stars and cosmic dust implode", "§7around every kill.", "§8Epic kill effect."],
+  "price": 2000,
+  "required_level": 10,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "NETHER_STAR",
+    "custom_model_data": 0
+  }
+}

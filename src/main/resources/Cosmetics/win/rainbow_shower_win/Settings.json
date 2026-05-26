@@ -1,0 +1,15 @@
+{
+  "id": "rainbow_shower_win",
+  "type": "WIN",
+  "display_name": "§dRainbow Shower",
+  "lore": ["§7A full rainbow pours down", "§7upon the victorious player.", "§8Rare win effect."],
+  "price": 1000,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "PINK_DYE",
+    "custom_model_data": 0
+  }
+}

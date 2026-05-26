@@ -1,0 +1,15 @@
+{
+  "id": "fire_death",
+  "type": "DEATH",
+  "display_name": "§6Inferno Death",
+  "lore": ["§7You go out in a blaze", "§7of glorious fire!", "§8Rare death effect."],
+  "price": 700,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "BLAZE_POWDER",
+    "custom_model_data": 0
+  }
+}

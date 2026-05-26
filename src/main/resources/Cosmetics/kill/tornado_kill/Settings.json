@@ -1,0 +1,15 @@
+{
+  "id": "tornado_kill",
+  "type": "KILL",
+  "display_name": "§3Tornado",
+  "lore": ["§7A swirling vortex sweeps", "§7the kill location clean.", "§8Epic kill effect."],
+  "price": 1500,
+  "required_level": 8,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "FEATHER",
+    "custom_model_data": 0
+  }
+}

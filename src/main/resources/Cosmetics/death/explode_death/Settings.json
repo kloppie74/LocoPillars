@@ -1,0 +1,15 @@
+{
+  "id": "explode_death",
+  "type": "DEATH",
+  "display_name": "§c§lKaboom!",
+  "lore": ["§7Go out with a bang.", "§cMake them remember you."],
+  "price": 700,
+  "required_level": 12,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "TNT",
+    "custom_model_data": 0
+  }
+}

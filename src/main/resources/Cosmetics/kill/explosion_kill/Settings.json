@@ -1,0 +1,15 @@
+{
+  "id": "explosion_kill",
+  "type": "KILL",
+  "display_name": "§cExplosion Kill",
+  "lore": ["§7A shockwave erupts on each kill.", "§4Destroy them all!"],
+  "price": 1000,
+  "required_level": 15,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "TNT",
+    "custom_model_data": 0
+  }
+}

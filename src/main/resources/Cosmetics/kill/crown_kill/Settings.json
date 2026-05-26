@@ -1,0 +1,15 @@
+{
+  "id": "crown_kill",
+  "type": "KILL",
+  "display_name": "§6§lCrown of Victory",
+  "lore": ["§7Gold particles cascade from above.", "§6Worthy of a king."],
+  "price": 2500,
+  "required_level": 25,
+  "permission": "",
+  "rarity": "LEGENDARY",
+  "active": true,
+  "icon": {
+    "material": "GOLDEN_HELMET",
+    "custom_model_data": 0
+  }
+}

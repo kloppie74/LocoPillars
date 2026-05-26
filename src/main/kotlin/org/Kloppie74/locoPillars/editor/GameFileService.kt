@@ -211,8 +211,6 @@ class GameFileService(
         if (!gamesFolder.exists()) { gamesFolder.mkdirs(); foldersCreated++ }
         if (!schemsFolder.exists()) { schemsFolder.mkdirs(); foldersCreated++ }
 
-        //bundledConfigsCopied += copyBundledGameConfigs(warnings)
-
         val legacyGames = File(plugin.dataFolder, "Games")
         if (legacyGames.exists()) {
             legacyGames.listFiles { f -> f.isFile && f.extension == "yml" }?.forEach { src ->
@@ -259,21 +257,6 @@ class GameFileService(
             warnings               = warnings,
             readiness              = readiness
         )
-    }
-
-    private fun copyBundledGameConfigs(warnings: MutableList<String>): Int {
-        val bundled = listOf("Games/solo-garden-8p.yml", "Games/team-garden-4p.yml")
-        var copied = 0
-        bundled.forEach { resourcePath ->
-            val fileName = resourcePath.substringAfterLast("/")
-            val dest = File(gamesFolder, fileName)
-            if (dest.exists()) return@forEach
-            val stream = plugin.getResource(resourcePath)
-            if (stream == null) { warnings += "Bundled resource missing: $resourcePath"; return@forEach }
-            stream.use { input -> dest.outputStream().use { out -> input.copyTo(out) } }
-            copied++
-        }
-        return copied
     }
 
     private fun mirrorMapAssetsToArenaTemplates(warnings: MutableList<String>): Int {

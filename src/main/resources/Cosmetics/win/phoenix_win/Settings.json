@@ -1,0 +1,15 @@
+{
+  "id": "phoenix_win",
+  "type": "WIN",
+  "display_name": "§6Phoenix Rising",
+  "lore": ["§7Rise from the ashes like a", "§7phoenix reborn in victory!", "§8Legendary win effect."],
+  "price": 4000,
+  "required_level": 15,
+  "permission": "",
+  "rarity": "LEGENDARY",
+  "active": true,
+  "icon": {
+    "material": "BLAZE_POWDER",
+    "custom_model_data": 0
+  }
+}

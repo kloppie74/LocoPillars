@@ -1,0 +1,15 @@
+{
+  "id": "ghost_death",
+  "type": "DEATH",
+  "display_name": "§7Ghost Rise",
+  "lore": ["§7Your spirit rises and drifts", "§7upward from your body.", "§8Rare death effect."],
+  "price": 600,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "PHANTOM_MEMBRANE",
+    "custom_model_data": 0
+  }
+}

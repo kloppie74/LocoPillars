@@ -357,20 +357,23 @@ class GameplayManager(
     }
 
     private fun placeCageAtSpawnLocation(playerUUID: UUID, spawnLocation: org.bukkit.Location) {
-        val cagesFolder = File(plugin.dataFolder, "Cages")
-        if (!cagesFolder.exists()) {
-            cagesFolder.mkdirs()
-            debugLog("Created Cages folder: ${cagesFolder.absolutePath}")
-            debugLog("Please add Standard-Cage.schem to this folder")
-            return
+        // Use player's selected cage cosmetic if available, else fall back to Standard-Cage.schem
+        val cageFile: File? = if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
+            val player = Bukkit.getPlayer(playerUUID)
+            if (player != null) plugin.cosmeticManager.getCageSchemForPlayer(player)
+            else null
+        } else {
+            val cagesFolder = File(plugin.dataFolder, "Cages")
+            if (!cagesFolder.exists()) cagesFolder.mkdirs()
+            File(cagesFolder, "Standard-Cage.schem").takeIf { it.exists() }
         }
-        val cageFile = File(cagesFolder, "Standard-Cage.schem")
-        if (!cageFile.exists()) {
-            debugLog("Standard cage file not found: ${cageFile.absolutePath}")
+
+        if (cageFile == null) {
+            debugLog("No cage file found for UUID: $playerUUID — skipping cage placement")
             return
         }
         val success = SchematicCageHelper.pasteCageForPlayer(plugin, configManager, playerUUID, cageFile, spawnLocation)
-        if (success) debugLog("✅ Cage placed at spawn for UUID: $playerUUID")
+        if (success) debugLog("✅ Cage placed at spawn for UUID: $playerUUID (${cageFile.name})")
         else plugin.logger.severe("[GameplayManager] ❌ Failed to place cage for UUID: $playerUUID")
     }
 
@@ -599,6 +602,10 @@ class GameplayManager(
                 onGameWon(winner, durationSeconds)
                 winner.fallDistance = 0f
                 // Do NOT set isInvulnerable here — restorePlayerState() handles full cleanup below
+                // Fire WIN cosmetic
+                if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
+                    plugin.cosmeticManager.fireWin(winner, instance)
+                }
             }
             winners.forEach { winner ->
                 onFastestWin(winner, durationSeconds)
@@ -649,8 +656,11 @@ class GameplayManager(
         instance.players.clear()
 
         // Finalize eliminated players back to normal lobby state.
+        // Spectators get a 5-second (100 tick) grace period to fly around before being sent to lobby.
         val lobbyRespawn = plugin.configManager.getLobbySpawnLocation() ?: plugin.server.worlds.first().spawnLocation
         val spectatorSnapshot = instance.spectators.toList()
+
+        // Prepare their sessions now (sets respawn destination) but don't teleport yet
         spectatorSnapshot.forEach { spectatorId ->
             val existing = eliminatedPlayerSessions[spectatorId]
             if (existing != null) {
@@ -664,21 +674,53 @@ class GameplayManager(
                 )
             }
         }
+
+        // Notify spectators and show countdown
         spectatorSnapshot.forEach { spectatorId ->
             val spectator = Bukkit.getPlayer(spectatorId)
             if (spectator != null && spectator.isOnline) {
-                handleEliminatedPlayerRespawn(spectator)
-                plugin.teamsListener.onPlayerLeaveGame(spectator)
-                plugin.spectateListener.onPlayerGameStatusChange(spectator)
-            } else {
-                eliminatedPlayerSessions.remove(spectatorId)
+                spectator.sendTitle("§c§lGAME OVER", "§7Returning to lobby in §e5 §7seconds...", 5, 30, 10)
+                spectator.sendMessage("§7You have §e5 seconds §7to fly around before being sent to the lobby.")
             }
         }
-        instance.spectators.clear()
 
+        // Countdown: 4, 3, 2, 1
+        for (countdown in 4 downTo 1) {
+            val tickDelay = (5 - countdown) * 20L
+            object : BukkitRunnable() {
+                override fun run() {
+                    spectatorSnapshot.forEach { spectatorId ->
+                        val spectator = Bukkit.getPlayer(spectatorId)
+                        if (spectator != null && spectator.isOnline) {
+                            spectator.sendTitle("§e§l$countdown", "§7Returning to lobby...", 0, 25, 5)
+                        }
+                    }
+                }
+            }.runTaskLater(plugin, tickDelay)
+        }
+
+        // After 5 seconds (100 ticks): teleport spectators to lobby
+        object : BukkitRunnable() {
+            override fun run() {
+                spectatorSnapshot.forEach { spectatorId ->
+                    val spectator = Bukkit.getPlayer(spectatorId)
+                    if (spectator != null && spectator.isOnline) {
+                        spectator.sendTitle("§a§lSEE YOU!", "§7Heading back to lobby...", 5, 30, 15)
+                        handleEliminatedPlayerRespawn(spectator)
+                        plugin.teamsListener.onPlayerLeaveGame(spectator)
+                        plugin.spectateListener.onPlayerGameStatusChange(spectator)
+                    } else {
+                        eliminatedPlayerSessions.remove(spectatorId)
+                    }
+                }
+                instance.spectators.clear()
+            }
+        }.runTaskLater(plugin, 100L)
+
+        // Reset arena 2 seconds after spectators have left (140 ticks total)
         object : BukkitRunnable() {
             override fun run() { resetInstance(instance) }
-        }.runTaskLater(plugin, 100L)
+        }.runTaskLater(plugin, 140L)
     }
 
     private fun getWinningPlayers(instance: GameInstance): List<Player> {

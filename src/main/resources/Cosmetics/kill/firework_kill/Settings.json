@@ -1,0 +1,15 @@
+{
+  "id": "firework_kill",
+  "type": "KILL",
+  "display_name": "§6Firework Kill",
+  "lore": ["§7Launch a firework on every kill!", "§8Lights up the battlefield."],
+  "price": 300,
+  "required_level": 3,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "FIREWORK_ROCKET",
+    "custom_model_data": 0
+  }
+}

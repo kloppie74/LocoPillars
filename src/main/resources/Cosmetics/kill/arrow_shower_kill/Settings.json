@@ -1,0 +1,15 @@
+{
+  "id": "arrow_shower_kill",
+  "type": "KILL",
+  "display_name": "§eArrow Shower",
+  "lore": ["§7A rain of arrows marks", "§7where your enemy fell.", "§8Uncommon kill effect."],
+  "price": 450,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "ARROW",
+    "custom_model_data": 0
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "soul_death",
+  "type": "DEATH",
+  "display_name": "§5§lSoul Farewell",
+  "lore": ["§7Your soul drifts skyward on defeat.", "§5Hauntingly beautiful."],
+  "price": 1500,
+  "required_level": 18,
+  "permission": "",
+  "rarity": "LEGENDARY",
+  "active": true,
+  "icon": {
+    "material": "SOUL_LANTERN",
+    "custom_model_data": 0
+  }
+}

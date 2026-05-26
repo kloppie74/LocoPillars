@@ -1,0 +1,15 @@
+{
+  "id": "magic_kill",
+  "type": "KILL",
+  "display_name": "§5Magic Surge",
+  "lore": ["§7Ancient arcane energy", "§7erupts on every kill.", "§8Epic kill effect."],
+  "price": 1200,
+  "required_level": 5,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "AMETHYST_SHARD",
+    "custom_model_data": 0
+  }
+}

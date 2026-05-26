@@ -1,0 +1,15 @@
+{
+  "id": "angel_win",
+  "type": "WIN",
+  "display_name": "§fAngelic Ascension",
+  "lore": ["§7Holy light showers down as you", "§7ascend to victory!", "§8Epic win effect."],
+  "price": 2000,
+  "required_level": 8,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "FEATHER",
+    "custom_model_data": 0
+  }
+}

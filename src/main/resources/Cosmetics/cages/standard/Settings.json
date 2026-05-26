@@ -1,0 +1,15 @@
+{
+  "id": "standard",
+  "type": "CAGE",
+  "display_name": "§fStandard Cage",
+  "lore": ["§7The default cage.", "§8Available to everyone."],
+  "price": 0,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "COMMON",
+  "active": true,
+  "icon": {
+    "material": "IRON_BARS",
+    "custom_model_data": 0
+  }
+}

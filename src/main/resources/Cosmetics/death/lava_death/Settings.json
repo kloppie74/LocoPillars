@@ -1,0 +1,15 @@
+{
+  "id": "lava_death",
+  "type": "DEATH",
+  "display_name": "§6Lava Pool",
+  "lore": ["§7A pool of lava erupts where", "§7your body hits the ground.", "§8Rare death effect."],
+  "price": 1000,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "LAVA_BUCKET",
+    "custom_model_data": 0
+  }
+}

@@ -30,7 +30,7 @@ class TeamManager(private val plugin: LocoPillars) {
     fun getPlayerScoreboard(player: Player): Scoreboard {
         return playerScoreboards.getOrPut(player.uniqueId) {
             debugLog("Creating scoreboard for ${player.name}")
-            val scoreboard = Bukkit.getScoreboardManager()!!.newScoreboard
+            val scoreboard = Bukkit.getScoreboardManager().newScoreboard
             player.scoreboard = scoreboard
             scoreboard
         }

@@ -1,0 +1,15 @@
+{
+  "id": "golden",
+  "type": "CAGE",
+  "display_name": "§6Golden Cage",
+  "lore": ["§7A shimmering cage of pure gold.", "§6For the wealthy."],
+  "price": 500,
+  "required_level": 5,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "GOLD_BLOCK",
+    "custom_model_data": 0
+  }
+}

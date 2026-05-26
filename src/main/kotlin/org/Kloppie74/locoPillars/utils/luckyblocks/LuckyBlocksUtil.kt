@@ -148,6 +148,7 @@ object LuckyBlocksUtil {
         val meta = item.itemMeta as? SkullMeta ?: return item
         if (textureData.texture.isNotBlank()) setHeadTexture(meta, textureData.texture)
         meta.setDisplayName(MSG.chatColors(config.luckyBlockItemName))
+        @Suppress("DEPRECATION")
         meta.lore = config.getLuckyBlockItemLore(rarity).map { MSG.chatColors(it) }
         val key = org.bukkit.NamespacedKey.minecraft("lucky_block")
         meta.persistentDataContainer.set(key, org.bukkit.persistence.PersistentDataType.STRING, "true")
@@ -168,6 +169,7 @@ object LuckyBlocksUtil {
         val meta = item.itemMeta as? SkullMeta ?: return item
         if (textureData.texture.isNotBlank()) setHeadTexture(meta, textureData.texture)
         meta.setDisplayName(MSG.chatColors(config.luckyBlockItemName))
+        @Suppress("DEPRECATION")
         meta.lore = config.getLuckyBlockItemLore(rarity).map { MSG.chatColors(it) }
         val key = org.bukkit.NamespacedKey.minecraft("lucky_block")
         meta.persistentDataContainer.set(key, org.bukkit.persistence.PersistentDataType.STRING, "true")
@@ -214,7 +216,7 @@ object LuckyBlocksUtil {
         stand.isMarker = true
         stand.setGravity(false)
         stand.isSmall = true
-        stand.equipment?.helmet = createLuckyBlockHead(texture)
+        stand.equipment.helmet = createLuckyBlockHead(texture)
     }
 
     fun removeLuckyBlockArmorStand(loc: Location) {

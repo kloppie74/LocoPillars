@@ -1,0 +1,15 @@
+{
+  "id": "fire_kill",
+  "type": "KILL",
+  "display_name": "§6Fire Pillar",
+  "lore": ["§7A column of flame rises", "§7from where they fell.", "§8Rare kill effect."],
+  "price": 700,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "BLAZE_POWDER",
+    "custom_model_data": 0
+  }
+}

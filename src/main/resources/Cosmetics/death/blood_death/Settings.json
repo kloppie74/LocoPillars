@@ -1,0 +1,15 @@
+{
+  "id": "blood_death",
+  "type": "DEATH",
+  "display_name": "§cBlood Pool",
+  "lore": ["§7A pool of crimson forms", "§7as you fall.", "§8Uncommon death effect."],
+  "price": 300,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "RED_DYE",
+    "custom_model_data": 0
+  }
+}

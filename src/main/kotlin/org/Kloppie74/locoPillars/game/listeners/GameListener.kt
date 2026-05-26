@@ -68,6 +68,11 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             // Clear placed blocks
             clearPlayerPlacedBlocks(instance.id, player.uniqueId)
 
+            // Fire DEATH cosmetic before processing the death
+            if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
+                plugin.cosmeticManager.fireDeath(player, instance)
+            }
+
             // Handle death through game manager (also records stats and sets spectator mode)
             plugin.gameManager.handlePlayerDeath(player)
 
@@ -192,6 +197,11 @@ class GameListener(private val plugin: LocoPillars) : Listener {
      * Handles kill logic including killstreaks, multi-kills, and database stats.
      */
     private fun handlePlayerKill(attacker: Player, victim: Player, instance: GameInstance) {
+        // Fire KILL cosmetic for the attacker
+        if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
+            plugin.cosmeticManager.fireKill(attacker, victim, instance)
+        }
+
         // Handle kill through gameplay manager (also records stats)
         gameplayManager.handlePlayerKill(attacker, victim)
 

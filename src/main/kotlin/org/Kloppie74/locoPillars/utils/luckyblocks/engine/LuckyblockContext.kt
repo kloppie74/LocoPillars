@@ -117,6 +117,7 @@ class LuckyblockContext(
     }
 
     fun sendTitle(player: Player, title: String, subtitle: String = "", fadeIn: Int = 10, stay: Int = 70, fadeOut: Int = 20) {
+        @Suppress("DEPRECATION")
         player.sendTitle(title, subtitle, fadeIn, stay, fadeOut)
     }
 

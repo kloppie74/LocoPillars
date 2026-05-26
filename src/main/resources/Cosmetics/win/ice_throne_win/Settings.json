@@ -1,0 +1,15 @@
+{
+  "id": "ice_throne_win",
+  "type": "WIN",
+  "display_name": "§bIce Throne",
+  "lore": ["§7A majestic throne of ice", "§7forms around the winner.", "§8Rare win effect."],
+  "price": 900,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "PACKED_ICE",
+    "custom_model_data": 0
+  }
+}

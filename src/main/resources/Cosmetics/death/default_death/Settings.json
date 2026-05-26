@@ -1,0 +1,15 @@
+{
+  "id": "default_death",
+  "type": "DEATH",
+  "display_name": "§fDefault Death",
+  "lore": ["§7A simple puff of smoke.", "§8Available to everyone."],
+  "price": 0,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "COMMON",
+  "active": true,
+  "icon": {
+    "material": "GRAY_DYE",
+    "custom_model_data": 0
+  }
+}

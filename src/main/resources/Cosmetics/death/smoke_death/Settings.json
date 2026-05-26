@@ -1,0 +1,15 @@
+{
+  "id": "smoke_death",
+  "type": "DEATH",
+  "display_name": "§8Smoke Bomb",
+  "lore": ["§7Vanish into a cloud of smoke.", "§7Mysterious."],
+  "price": 250,
+  "required_level": 2,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "CHARCOAL",
+    "custom_model_data": 0
+  }
+}

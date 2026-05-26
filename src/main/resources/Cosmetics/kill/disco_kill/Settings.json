@@ -1,0 +1,15 @@
+{
+  "id": "disco_kill",
+  "type": "KILL",
+  "display_name": "§aDisco Fever",
+  "lore": ["§7Strike a pose — every kill", "§7gets its own disco show!", "§8Uncommon kill effect."],
+  "price": 350,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "UNCOMMON",
+  "active": true,
+  "icon": {
+    "material": "JUKEBOX",
+    "custom_model_data": 0
+  }
+}

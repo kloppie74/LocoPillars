@@ -1,0 +1,15 @@
+{
+  "id": "angel_death",
+  "type": "DEATH",
+  "display_name": "§fAngel Feathers",
+  "lore": ["§7White feathers drift down as", "§7you are taken to the heavens.", "§8Rare death effect."],
+  "price": 800,
+  "required_level": 0,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "FEATHER",
+    "custom_model_data": 0
+  }
+}

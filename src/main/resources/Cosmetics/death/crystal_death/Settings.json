@@ -1,0 +1,15 @@
+{
+  "id": "crystal_death",
+  "type": "DEATH",
+  "display_name": "§dCrystal Shatter",
+  "lore": ["§7Like an amethyst, you shatter", "§7into a thousand shards.", "§8Epic death effect."],
+  "price": 1600,
+  "required_level": 8,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "AMETHYST_BLOCK",
+    "custom_model_data": 0
+  }
+}

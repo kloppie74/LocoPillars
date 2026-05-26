@@ -3,6 +3,7 @@ package org.Kloppie74.locoPillars.game.arena
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.utils.ProgressTracker
 import org.bukkit.Bukkit
+import org.bukkit.Difficulty
 import org.bukkit.World
 import org.bukkit.WorldCreator
 import org.bukkit.WorldType
@@ -192,6 +193,9 @@ class ArenaWorldManager(
     private fun configureWorld(world: World) {
         debugLog("Configuring world: ${world.name}")
         try {
+            // MUST be NORMAL (or harder) — PEACEFUL disables hunger depletion entirely.
+            world.difficulty = Difficulty.NORMAL
+
             world.setSpawnFlags(false, false)
             world.setGameRule(org.bukkit.GameRule.DO_MOB_SPAWNING, false)
             world.setGameRule(org.bukkit.GameRule.KEEP_INVENTORY, false)

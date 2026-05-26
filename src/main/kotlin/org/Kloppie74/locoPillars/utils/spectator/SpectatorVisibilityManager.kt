@@ -2,7 +2,6 @@ package org.Kloppie74.locoPillars.utils.spectator
 
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
-import org.bukkit.metadata.FixedMetadataValue
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
@@ -10,7 +9,6 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 object SpectatorVisibilityManager {
-    private const val SPECTATOR_HIDING_KEY = "hiding_spectators"
     private val VISIBILITY_CACHE = ConcurrentHashMap<UUID, Boolean>()
 
     /**
@@ -87,19 +85,7 @@ object SpectatorVisibilityManager {
      */
     @JvmStatic
     fun isHidingSpectators(player: Player): Boolean {
-        // Check cache first
-        VISIBILITY_CACHE[player.uniqueId]?.let { return it }
-
-        // Check metadata
-        val hiding = if (player.hasMetadata(SPECTATOR_HIDING_KEY)) {
-            player.getMetadata(SPECTATOR_HIDING_KEY)[0].asBoolean()
-        } else {
-            false
-        }
-
-        // Cache result
-        VISIBILITY_CACHE[player.uniqueId] = hiding
-        return hiding
+        return VISIBILITY_CACHE[player.uniqueId] ?: false
     }
 
     /**
@@ -107,13 +93,7 @@ object SpectatorVisibilityManager {
      */
     @JvmStatic
     fun setHidingSpectators(player: Player, hiding: Boolean) {
-        player.setMetadata(
-            SPECTATOR_HIDING_KEY,
-            FixedMetadataValue(Bukkit.getPluginManager().getPlugin("LocoPillars")!!, hiding)
-        )
         VISIBILITY_CACHE[player.uniqueId] = hiding
-
-        // FIXED: Queue visibility update with proper priority
         GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "set_hiding_spectators")
     }
 

@@ -1,0 +1,15 @@
+{
+  "id": "lightning_storm_win",
+  "type": "WIN",
+  "display_name": "§eLightning Storm",
+  "lore": ["§7Thunder roars as lightning", "§7celebrates your victory!", "§8Rare win effect."],
+  "price": 1200,
+  "required_level": 5,
+  "permission": "",
+  "rarity": "RARE",
+  "active": true,
+  "icon": {
+    "material": "FLINT",
+    "custom_model_data": 0
+  }
+}

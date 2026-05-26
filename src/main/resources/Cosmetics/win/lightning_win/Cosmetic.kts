@@ -1,0 +1,11 @@
+// Storm Champion — lightning bolts surround the winner
+val loc = player.location.clone()
+game.spawnLightningEffect(loc.clone().add(2.0, 0.0, 0.0))
+game.spawnLightningEffect(loc.clone().add(-2.0, 0.0, 0.0))
+game.spawnLightningEffect(loc.clone().add(0.0, 0.0, 2.0))
+game.spawnLightningEffect(loc.clone().add(0.0, 0.0, -2.0))
+game.spawnParticles(loc.add(0.0, 2.0, 0.0), org.bukkit.Particle.ELECTRIC_SPARK, 50, 1.0, 0.5, 1.0, 0.1)
+game.spawnFirework(loc.clone())
+game.playSound(player, org.bukkit.Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.5f, 0.8f)
+game.sendTitle(player, "§e§l⚡ STORM CHAMPION ⚡", "§7Lightning bows to you.", 5, 70, 20)
+game.broadcastToGame("§e⚡ §f${player.name}§e is crowned §e§lSTORM CHAMPION§e! ⚡")

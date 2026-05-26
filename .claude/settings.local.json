@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path \"D:\\\\Documenten Rowan Klop\\\\Documents\\\\GitHub\\\\LocoPillars\" -Force)",
-      "Bash(Select-Object Name, FullName)"
+      "Bash(Select-Object Name, FullName)",
+      "Bash(dir \"D:\\\\Documenten Rowan Klop\\\\Documents\\\\GitHub\\\\LocoPillars\\\\build\\\\libs\")",
+      "Bash(./gradlew obfuscate *)",
+      "Bash(./gradlew shadowJar --no-daemon)",
+      "Bash(./gradlew --stop)",
+      "Bash(./gradlew --stop --stacktrace)",
+      "PowerShell(Get-Process -Name \"java\" -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq \"\" } | ForEach-Object { Write-Host \"Killing java PID $\\($_.Id\\)\"; $_.Kill\\(\\) }; Write-Host \"Done\")",
+      "Bash(JAVA_OPTS=\"-Djava.nio.channels.spi.SelectorProvider=sun.nio.ch.WindowsSelectorProvider\" GRADLE_OPTS=\"-Djava.nio.channels.spi.SelectorProvider=sun.nio.ch.WindowsSelectorProvider\" ./gradlew obfuscate)"
     ]
   }
 }

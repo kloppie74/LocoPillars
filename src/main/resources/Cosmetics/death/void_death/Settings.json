@@ -1,0 +1,15 @@
+{
+  "id": "void_death",
+  "type": "DEATH",
+  "display_name": "§8Void Consumed",
+  "lore": ["§7The void swallows you whole,", "§7leaving nothing behind.", "§8Epic death effect."],
+  "price": 1500,
+  "required_level": 8,
+  "permission": "",
+  "rarity": "EPIC",
+  "active": true,
+  "icon": {
+    "material": "BLACK_DYE",
+    "custom_model_data": 0
+  }
+}

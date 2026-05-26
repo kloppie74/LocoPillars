@@ -1,0 +1,15 @@
+{
+  "id": "dragon_win",
+  "type": "WIN",
+  "display_name": "§5Dragon Rider",
+  "lore": ["§7Ride an Ender Dragon to celebrate", "§7your glorious victory!", "§8Legendary win effect."],
+  "price": 5000,
+  "required_level": 20,
+  "permission": "",
+  "rarity": "LEGENDARY",
+  "active": true,
+  "icon": {
+    "material": "DRAGON_HEAD",
+    "custom_model_data": 0
+  }
+}

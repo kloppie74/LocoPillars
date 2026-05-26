@@ -1,0 +1,15 @@
+{
+  "id": "void_kill",
+  "type": "KILL",
+  "display_name": "§0Void Corruption",
+  "lore": ["§7The void consumes all traces", "§7of your enemy's existence.", "§8Legendary kill effect."],
+  "price": 4000,
+  "required_level": 20,
+  "permission": "",
+  "rarity": "LEGENDARY",
+  "active": true,
+  "icon": {
+    "material": "BLACK_DYE",
+    "custom_model_data": 0
+  }
+}
