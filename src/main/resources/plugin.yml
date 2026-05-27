@@ -1,6 +1,6 @@
 name: LocoPillars
 main: org.Kloppie74.locoPillars.LocoPillars
-version: 1.0.0
+version: ${version}
 api-version: 1.21
 authors: [kloppie74]
 description: "Pillars of the Fortune - memory-friendly multi-instance minigame!"
@@ -274,4 +274,9 @@ permissions:
 
   locopillars.achievements.admin:
     description: "Administer achievements"
+    default: op
+
+  # === UPDATE CHECKER PERMISSIONS ===
+  locopillars.notify.update:
+    description: "Receive an in-game notification when a newer LocoPillars version is available on Modrinth"
     default: op

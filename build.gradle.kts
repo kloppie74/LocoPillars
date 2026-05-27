@@ -1,4 +1,5 @@
 import java.io.File
+import java.time.LocalDate
 
 // ProGuard must be on the buildscript classpath BEFORE the plugins block
 buildscript {
@@ -17,7 +18,8 @@ plugins {
 }
 
 group = "org.Kloppie74"
-version = "1.0.0.0"
+version = "26.05.1"             // YY.MM.UPDATENUMBER — bump this every release
+val buildType = "RELEASE"       // RELEASE | BETA | ALPHA
 
 repositories {
     mavenCentral()
@@ -112,10 +114,16 @@ tasks {
     }
 
     processResources {
-        val props = mapOf("version" to version)
+        val buildDate = LocalDate.now().toString()
+        val props = mapOf(
+            "version"   to version,
+            "buildType" to buildType,
+            "buildDate" to buildDate
+        )
         inputs.properties(props)
         filteringCharset = "UTF-8"
-        filesMatching("plugin.yml") { expand(props) }
+        filesMatching("plugin.yml")        { expand(props) }
+        filesMatching("build.properties")  { expand(props) }
     }
 }
 

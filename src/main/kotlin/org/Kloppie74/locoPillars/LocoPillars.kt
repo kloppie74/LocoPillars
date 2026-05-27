@@ -61,6 +61,7 @@ import org.Kloppie74.locoPillars.utils.vanish.commands.ShowOthersCommand
 import org.Kloppie74.locoPillars.utils.vanish.commands.VanishCommand
 import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import org.Kloppie74.locoPillars.utils.teams.tab.ProtocolLibTabVisibilityManager
+import org.Kloppie74.locoPillars.utils.UpdateChecker
 import org.Kloppie74.locoPillars.worldregion.WorldRegionListener
 import org.Kloppie74.locoPillars.worldregion.WorldRegionManager
 import org.Kloppie74.locoPillars.worldregion.commands.SpawnCommand
@@ -80,6 +81,8 @@ class LocoPillars : JavaPlugin() {
     lateinit var languageManager: LanguageManager
         private set
     lateinit var configManager: ConfigManager
+        private set
+    lateinit var updateChecker: UpdateChecker
         private set
     lateinit var gameManager: GameManager
         private set
@@ -177,6 +180,17 @@ class LocoPillars : JavaPlugin() {
                 logger.info("[LocoPillars] DEBUG MODE ENABLED")
                 configManager.logCurrentConfig()
             }
+
+            // Lock version & date from JAR — prevents spoofing. build.type stays editable.
+            val bp = java.util.Properties()
+            getResource("build.properties")?.use { bp.load(it) }
+            config.set("build.version", bp.getProperty("build.version", pluginMeta.version))
+            config.set("build.date",    bp.getProperty("build.date",    "unknown"))
+            saveConfig()
+
+            // UPDATE CHECKER
+            updateChecker = UpdateChecker(this)
+            updateChecker.checkAsync()
 
             if (!checkDependencies()) {
                 logger.severe("[LocoPillars] Missing required dependencies! Disabling plugin.")

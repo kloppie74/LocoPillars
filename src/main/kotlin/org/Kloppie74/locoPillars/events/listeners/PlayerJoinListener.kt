@@ -106,6 +106,11 @@ class PlayerJoinListener(private val plugin: LocoPillars) : Listener {
 
             debugLog("Completed join setup for ${player.name} (achievements: $achievementsInitialized initialized)")
 
+            // === 7. UPDATE NOTIFICATION ===
+            if (plugin.config.getBoolean("update-checker.notify-on-join", true)) {
+                plugin.updateChecker.notifyPlayer(player)
+            }
+
         } catch (ex: Exception) {
             logger.severe("[JoinListener] CRITICAL ERROR during join setup for ${player.name}: ${ex.message}")
             ex.printStackTrace()

@@ -1,7 +1,27 @@
 # ==========================================
 # LOCOPILLARS - PILLARS OF FORTUNE CONFIG
 # ==========================================
-# Version: 1.0.0
+
+# ==========================================
+# BUILD INFORMATION
+# ==========================================
+build:
+  # Which Modrinth update channel you want to follow.
+  # RELEASE = only stable releases | BETA = beta + release | ALPHA = all three
+  # Change this freely — it controls which updates you get notified about.
+  type: RELEASE
+  # version & date are locked — overwritten on every startup from the JAR.
+  version: ""
+  date: ""
+
+# ==========================================
+# UPDATE CHECKER (Modrinth)
+# ==========================================
+update-checker:
+  # Check Modrinth for new releases on startup
+  enabled: true
+  # Notify players with 'locopillars.notify.update' permission on join
+  notify-on-join: true
 
 # Enable debug logging - shows detailed information about plugin operations
 # Set to false for production to improve performance
