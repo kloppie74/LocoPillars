@@ -56,6 +56,10 @@ object HotbarUtils {
                     GameState.ACTIVE -> {
                         if (SpectatorUtils.isSpectator(player, plugin)) {
                             "spectate"
+                        } else if (!instance.cagesOpen) {
+                            // Cages still up — keep game_lobby hotbar so teleporting
+                            // players to their spawns does NOT trigger an inventory wipe.
+                            "game_lobby"
                         } else {
                             "game"
                         }

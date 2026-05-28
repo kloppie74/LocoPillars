@@ -18,6 +18,7 @@ general:
   unknown_subcommand: "&cUnknown subcommand: &f{input}"
   player_not_found: "&cPlayer not found or not online."
   database_error: "&cDatabase error occurred. Please try again."
+  feature_unavailable: "&cThis feature is not available right now."
 
 # ─────────────────────────────────────────────────────────────
 # SPELER JOIN (fout bij inloggen)
@@ -92,6 +93,18 @@ pillars:
     type_summary: "&7{name}: &b{available} &7available, &b{active} &7active, &b{players} &7players"
 
   # help
+  vote:
+    not_in_game: "&cYou must be in a game lobby to vote!"
+    voting_closed: "&cVoting is only available before the game starts!"
+
+  autoqueue:
+    start: "&aAuto-queue: &7Rejoining &e{type} &7in 3 seconds. &8(/pillars leave to cancel)"
+    cancelled: "&eAuto-queue cancelled."
+    no_game: "&eAuto-queue: &7No available &e{type} &7games right now. Returning to lobby."
+    toggled_on: "&aAuto-queue is now &lON&r&a — you will be sent to a new game after each match."
+    toggled_off: "&eAuto-queue is now &lOFF&r&e — you will return to the lobby after each match."
+    disabled_server: "&cAuto-queue is disabled on this server."
+
   help:
     header: "&6=== Pillars of Fortune Commands ==="
     join: "&e/pillars join <gametype> &7- Join a game"
@@ -100,6 +113,8 @@ pillars:
     list: "&e/pillars list &7- List available game types"
     status: "&e/pillars status &7- Show your current game status"
     server_stats: "&e/pillars stats &7- Show server statistics"
+    vote: "&e/pillars vote &7- Vote for a special game event"
+    autoqueue: "&e/pillars autoqueue &7- Toggle automatic rejoin after each game"
     help: "&e/pillars help &7- Show this help message"
 
 # ─────────────────────────────────────────────────────────────

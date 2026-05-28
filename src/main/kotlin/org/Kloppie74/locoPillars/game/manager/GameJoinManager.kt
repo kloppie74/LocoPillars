@@ -9,6 +9,7 @@ import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.database.dao.ArenaStatsDAO
 import org.Kloppie74.locoPillars.utils.MSG
+import org.Kloppie74.locoPillars.utils.hotbar.HotbarUtils
 import java.time.LocalDateTime
 import java.util.*
 
@@ -125,8 +126,18 @@ class GameJoinManager(
                 "max" to instance.getMaxPlayers().toString()))
             player.sendMessage(MSG.lang("game.join.welcome", "game" to instance.getDisplayName()))
 
+            // Give game_lobby hotbar items now while state is still WAITING, so every
+            // player (including the one who triggers startGame) sees Leave + Vote buttons
+            // during the cage countdown, regardless of join order.
+            HotbarUtils.setupPlayerHotbar(player, plugin)
+
             if (playersAfterJoin >= instance.getMinPlayers() && instance.state == GameState.WAITING) {
                 debugLog("No-lobby: minimum players reached ($playersAfterJoin/${instance.getMinPlayers()}), starting game")
+                // Refresh all previously waiting players so they also have the correct hotbar
+                instance.players
+                    .filter { it != player.uniqueId }
+                    .mapNotNull { plugin.server.getPlayer(it) }
+                    .forEach { HotbarUtils.setupPlayerHotbar(it, plugin) }
                 gameplayManager.startGame(instance)
             } else {
                 val needed = instance.getMinPlayers() - playersAfterJoin

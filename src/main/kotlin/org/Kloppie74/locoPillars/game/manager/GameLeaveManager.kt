@@ -110,6 +110,15 @@ class GameLeaveManager(
                 debugLog("No players remaining in instance ${instance.id}, resetting instance")
                 resetEmptyInstance(instance, gameplayManager)
             }
+            // No-lobby mode: state jumps from WAITING straight to ACTIVE when min players
+            // reached, and the cage countdown runs while state == ACTIVE / cagesOpen == false.
+            // Treat that window like a STARTING countdown: cancel the start instead of declaring
+            // a "winner" — the remaining player never actually fought anyone.
+            instance.state == GameState.ACTIVE && !instance.cagesOpen &&
+                    instance.players.size < instance.getMinPlayers() -> {
+                debugLog("Below minimum players during pre-cage window, cancelling start")
+                cancelPreCageStart(instance, gameplayManager)
+            }
             instance.state == GameState.ACTIVE && instance.players.size < 2 -> {
                 debugLog("Less than 2 players remaining during active game, ending game")
                 endGameWithWinner(instance, gameplayManager)
@@ -120,6 +129,17 @@ class GameLeaveManager(
             }
             else -> debugLog("Game continues with ${instance.players.size} players")
         }
+    }
+
+    /**
+     * Cage countdown is running but min players dropped — abort without declaring a winner.
+     * Mirrors [cancelGameStart] but also tears down what [startGame] already set up
+     * (game timer, voting effect, cages) so the instance is reusable.
+     */
+    private fun cancelPreCageStart(instance: GameInstance, gameplayManager: GameplayManager) {
+        gameplayManager.abortPreCageStart(instance, playerToInstance)
+        broadcastToGame(instance, MSG.lang("game.leave.cancelled_start"))
+        debugLog("✓ Pre-cage start aborted, reset to WAITING state")
     }
 
     private fun resetEmptyInstance(instance: GameInstance, gameplayManager: GameplayManager) {

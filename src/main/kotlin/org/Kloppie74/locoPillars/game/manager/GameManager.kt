@@ -42,7 +42,13 @@ class GameManager(private val plugin: LocoPillars) {
         return instanceManager.getAvailableInstance(gameTypeName)
     }
 
+    fun cancelAutoQueue(playerId: UUID): Boolean = gameplayManager.cancelAutoQueue(playerId)
+
+    /** Take a player out of the post-match spectator phase and send them to lobby now. */
+    fun exitPostMatchToLobby(player: Player) = gameplayManager.exitPostMatchToLobby(player)
+
     fun joinGame(player: Player, gameTypeName: String): GameInstance? {
+        gameplayManager.cancelAutoQueue(player.uniqueId) // cancel pending queue on manual join
         clearEliminatedState(player.uniqueId)
         if (!SpectatorUtils.ensurePlayerAlive(player, plugin, "GameManager")) {
             player.sendMessage(MSG.chatColors("&cPlease respawn first and try joining again."))

@@ -1,6 +1,7 @@
 package org.Kloppie74.locoPillars.game.arena
 
 import org.bukkit.Location
+import org.bukkit.Material
 import org.bukkit.World
 import org.bukkit.entity.Player
 import org.Kloppie74.locoPillars.LocoPillars
@@ -305,11 +306,57 @@ class ArenaManager(
         cleanupInstanceEntities(instance)
         debugLog("Entities cleaned up from instance")
 
+        clearLiquidOverflow(instance)
+        debugLog("Liquid overflow cleared")
+
         resetArena(instance)
         debugLog("Arena reset completed")
 
         instance.status = ArenaStatus.AVAILABLE
         debugLog("Instance ${instance.id} status changed to AVAILABLE")
+    }
+
+    /**
+     * Removes all LAVA and WATER blocks within the arena's play area plus a
+     * 16-block overflow buffer.  Called before schematic paste so that any
+     * lava or water that escaped the build region during the game doesn't
+     * persist in the world after the arena is reset.
+     *
+     * Scan bounds:
+     *   X/Z : arena center ± (buildRange + 16)
+     *   Y   : (deathHeight - 10) … (buildHeight + 10), clamped to world limits
+     */
+    private fun clearLiquidOverflow(instance: ArenaInstance) {
+        val cfg    = instance.config
+        val origin = instance.origin
+        val world  = instance.world
+
+        val centerX     = origin.blockX + cfg.getSpawnCenterX().toInt()
+        val centerZ     = origin.blockZ + cfg.getSpawnCenterZ().toInt()
+        val buildRange  = cfg.getBuildRange()
+        val deathY      = cfg.getDeathHeight()
+        val buildHeight = cfg.getBuildHeight()
+
+        val scanRadius = buildRange + 16
+        val minY = maxOf(world.minHeight,     deathY - 10)
+        val maxY = minOf(world.maxHeight - 1, buildHeight + 10)
+
+        var removed = 0
+        for (bx in (centerX - scanRadius)..(centerX + scanRadius)) {
+            for (bz in (centerZ - scanRadius)..(centerZ + scanRadius)) {
+                for (by in minY..maxY) {
+                    val block = world.getBlockAt(bx, by, bz)
+                    if (block.type == Material.LAVA || block.type == Material.WATER) {
+                        block.setType(Material.AIR, false)
+                        removed++
+                    }
+                }
+            }
+        }
+
+        if (removed > 0) {
+            debugLog("clearLiquidOverflow: removed $removed lava/water blocks from instance ${instance.id} (${instance.template.name})")
+        }
     }
 
     /**

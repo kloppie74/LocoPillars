@@ -43,7 +43,7 @@ object LuckyBlocksUtil {
             return
         }
         if (l.count() == 0) {
-            player.sendMessage(MSG.chatColors("&c[LuckyBlocks] No luckyblocks loaded in the Luckyblocks/ folder!"))
+            player.sendMessage(MSG.chatColors("&c[LuckyBlocks] No luckyblocks loaded in the modules/luckyblocks/ folder!"))
             return
         }
         val activeGame = game ?: gameManager?.getPlayerInstance(player)

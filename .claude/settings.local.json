@@ -11,7 +11,14 @@
       "PowerShell(Get-Process -Name \"java\" -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq \"\" } | ForEach-Object { Write-Host \"Killing java PID $\\($_.Id\\)\"; $_.Kill\\(\\) }; Write-Host \"Done\")",
       "Bash(JAVA_OPTS=\"-Djava.nio.channels.spi.SelectorProvider=sun.nio.ch.WindowsSelectorProvider\" GRADLE_OPTS=\"-Djava.nio.channels.spi.SelectorProvider=sun.nio.ch.WindowsSelectorProvider\" ./gradlew obfuscate)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\klopr\\\\Documents\\\\GitHub\\\\LocoPillars\" -Recurse -Force)",
-      "Bash(Select-Object FullName)"
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem \"D:\\\\Documenten Rowan Klop\\\\Documents\\\\GitHub\\\\LocoPillars\\\\src\\\\main\\\\resources\\\\Luckyblocks\" -File)",
+      "Bash(Measure-Object)",
+      "Bash(Select-Object -ExpandProperty Count)",
+      "PowerShell(Get-ChildItem \"D:\\\\Documenten Rowan Klop\\\\Documents\\\\GitHub\\\\LocoPillars\\\\src\\\\main\\\\resources\\\\Luckyblocks\" -File | Select-Object Name; Write-Host \"---\"; Get-ChildItem \"D:\\\\Documenten Rowan Klop\\\\Documents\\\\GitHub\\\\LocoPillars\\\\src\\\\main\\\\resources\\\\Cosmetics\" -Directory | ForEach-Object { \"$\\($_.Name\\): $\\(Get-ChildItem $_.FullName -Directory | Measure-Object | Select-Object -ExpandProperty Count\\) cosmetics\" })",
+      "WebFetch(domain:www.spigotmc.org)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Documenten Rowan Klop\\\\Documents\\\\GitHub\\\\LocoPillars\" -Recurse -Force | Where-Object {$_.Extension -in @\\('.kt', '.yml', '.yaml'\\)} | Select-Object FullName | Sort-Object FullName | head -100)",
+      "PowerShell(.\\\\gradlew.bat build 2>&1)"
     ]
   }
 }

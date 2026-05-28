@@ -177,8 +177,14 @@ class CosmeticManager(private val plugin: LocoPillars) {
             debugLog("Using cage '${selected.id}' for ${player.name}")
             return selected.schemFile
         }
-        // Fall back to the original Standard-Cage.schem
-        val fallback = File(plugin.dataFolder, "Cages/Standard-Cage.schem")
+        // No selection or schem missing — fall back to the standard module cage
+        val standard = loader.get(CosmeticType.CAGE, "standard")
+        if (standard?.schemFile != null && standard.schemFile.exists()) {
+            debugLog("Fallback to standard cage for ${player.name}")
+            return standard.schemFile
+        }
+        // Last-resort: direct file path in modules folder
+        val fallback = File(plugin.dataFolder, "modules/cosmetics/cages/standard/Cage.schem")
         return if (fallback.exists()) fallback else null
     }
 

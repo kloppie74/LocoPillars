@@ -83,6 +83,11 @@
 #
 #      CosmeticScriptEngine injects:
 #        import org.Kloppie74.locoPillars.cosmetics.engine.CosmeticContext
+#
+#      VotingScriptEngine injects:
+#        import org.Kloppie74.locoPillars.VotingContextBridge
+#        (VotingContextBridge internally returns VotingGameContext)
+#        gui.kts references: VotingGuiConfig
 # ─────────────────────────────────────────────────────────────────────────────
 -keep public class org.Kloppie74.locoPillars.utils.luckyblocks.engine.LuckyblockContext {
     public *;
@@ -95,6 +100,15 @@
     public *;
 }
 -keep public class org.Kloppie74.locoPillars.cosmetics.engine.CosmeticRarity {
+    public *;
+}
+-keep public class org.Kloppie74.locoPillars.VotingContextBridge {
+    public *;
+}
+-keep public class org.Kloppie74.locoPillars.game.voting.VotingGameContext {
+    public *;
+}
+-keep public class org.Kloppie74.locoPillars.game.voting.VotingGuiConfig {
     public *;
 }
 

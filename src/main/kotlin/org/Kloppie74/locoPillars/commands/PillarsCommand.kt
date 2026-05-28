@@ -13,12 +13,14 @@ import org.Kloppie74.locoPillars.utils.MSG
 class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabCompleter {
 
     private val subPermissions = mapOf(
-        "join"   to "locopillars.pillars.join",
-        "leave"  to "locopillars.pillars.leave",
-        "list"   to "locopillars.pillars.list",
-        "status" to "locopillars.pillars.status",
-        "stats"  to "locopillars.pillars.stats",
-        "help"   to "locopillars.pillars.help"
+        "join"      to "locopillars.pillars.join",
+        "leave"     to "locopillars.pillars.leave",
+        "list"      to "locopillars.pillars.list",
+        "status"    to "locopillars.pillars.status",
+        "stats"     to "locopillars.pillars.stats",
+        "help"      to "locopillars.pillars.help",
+        "vote"      to "locopillars.pillars.vote",
+        "autoqueue" to "locopillars.pillars.autoqueue"
     )
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -59,11 +61,13 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
                 }
                 return true
             }
-            "leave"  -> { leaveGame(sender); return true }
-            "list"   -> { listGames(sender); return true }
-            "status" -> { showStatus(sender); return true }
-            "stats"  -> { showStats(sender); return true }
-            "help"   -> { showHelp(sender); return true }
+            "leave"     -> { leaveGame(sender); return true }
+            "list"      -> { listGames(sender); return true }
+            "status"    -> { showStatus(sender); return true }
+            "stats"     -> { showStats(sender); return true }
+            "help"      -> { showHelp(sender); return true }
+            "vote"      -> { openVoteGui(sender); return true }
+            "autoqueue" -> { toggleAutoQueue(sender); return true }
             else -> {
                 sender.sendMessage(MSG.lang("general.unknown_subcommand", "input" to args[0]))
                 showHelp(sender)
@@ -142,8 +146,18 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
     }
 
     private fun leaveGame(player: Player) {
-        if (!plugin.gameManager.leaveGame(player)) {
-            player.sendMessage(MSG.lang("pillars.leave.not_in_game"))
+        val cancelledQueue = plugin.gameManager.cancelAutoQueue(player.uniqueId)
+        val leftGame = plugin.gameManager.leaveGame(player)
+        when {
+            leftGame -> { /* game left successfully */ }
+            cancelledQueue -> {
+                // Player was in the post-match auto-queue countdown (spectator phase).
+                // Take them out of spectator + send them straight to lobby so the cancel
+                // command actually does what they expect.
+                plugin.gameManager.exitPostMatchToLobby(player)
+                player.sendMessage(MSG.lang("pillars.autoqueue.cancelled"))
+            }
+            else -> player.sendMessage(MSG.lang("pillars.leave.not_in_game"))
         }
     }
 
@@ -215,6 +229,33 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
         }
     }
 
+    private fun toggleAutoQueue(player: Player) {
+        if (!plugin.configManager.autoQueueEnabled) {
+            player.sendMessage(MSG.lang("pillars.autoqueue.disabled_server"))
+            return
+        }
+        val now = plugin.playerPreferences.toggleAutoQueue(player.uniqueId)
+        val key = if (now) "pillars.autoqueue.toggled_on" else "pillars.autoqueue.toggled_off"
+        player.sendMessage(MSG.lang(key))
+    }
+
+    private fun openVoteGui(player: Player) {
+        val instance = plugin.gameManager.getPlayerInstance(player)
+        if (instance == null) {
+            player.sendMessage(MSG.lang("pillars.vote.not_in_game"))
+            return
+        }
+        if (instance.state != GameState.WAITING && instance.state != GameState.STARTING) {
+            player.sendMessage(MSG.lang("pillars.vote.voting_closed"))
+            return
+        }
+        if (!plugin.isVotingReady) {
+            player.sendMessage(MSG.lang("general.feature_unavailable"))
+            return
+        }
+        plugin.votingGui.open(player, instance)
+    }
+
     private fun showHelp(player: Player) {
         player.sendMessage(MSG.lang("pillars.help.header"))
         if (player.hasPermission(subPermissions["join"]!!)) {
@@ -225,7 +266,9 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
         if (player.hasPermission(subPermissions["list"]!!))   player.sendMessage(MSG.lang("pillars.help.list"))
         if (player.hasPermission(subPermissions["status"]!!)) player.sendMessage(MSG.lang("pillars.help.status"))
         if (player.hasPermission(subPermissions["stats"]!!))  player.sendMessage(MSG.lang("pillars.help.server_stats"))
-        if (player.hasPermission(subPermissions["help"]!!))   player.sendMessage(MSG.lang("pillars.help.help"))
+        if (player.hasPermission(subPermissions["vote"]!!))      player.sendMessage(MSG.lang("pillars.help.vote"))
+        if (player.hasPermission(subPermissions["autoqueue"]!!)) player.sendMessage(MSG.lang("pillars.help.autoqueue"))
+        if (player.hasPermission(subPermissions["help"]!!))      player.sendMessage(MSG.lang("pillars.help.help"))
     }
 
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {

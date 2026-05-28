@@ -1,0 +1,14 @@
+{
+  "id": "darkness_battle",
+  "display_name": "Darkness Battle",
+  "description": "Periodic blindness pulses make it hard to see your enemies!",
+  "icon": { "material": "INK_SAC", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§8§lDarkness Battle!",
+    "subtitle": "§7You can barely see anything!",
+    "chat": "§8[Event] §eDarkness Battle! Blindness pulses every 8 seconds — fight in the dark!"
+  }
+}

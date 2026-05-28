@@ -62,6 +62,10 @@ import org.Kloppie74.locoPillars.utils.vanish.commands.VanishCommand
 import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import org.Kloppie74.locoPillars.utils.teams.tab.ProtocolLibTabVisibilityManager
 import org.Kloppie74.locoPillars.utils.UpdateChecker
+import org.Kloppie74.locoPillars.utils.preferences.PlayerPreferences
+import org.Kloppie74.locoPillars.game.voting.VotingLoader
+import org.Kloppie74.locoPillars.game.voting.VotingManager
+import org.Kloppie74.locoPillars.game.voting.VotingGui
 import org.Kloppie74.locoPillars.worldregion.WorldRegionListener
 import org.Kloppie74.locoPillars.worldregion.WorldRegionManager
 import org.Kloppie74.locoPillars.worldregion.commands.SpawnCommand
@@ -138,10 +142,23 @@ class LocoPillars : JavaPlugin() {
         private set
     lateinit var placeholders: Placeholders
         private set
+    lateinit var playerPreferences: PlayerPreferences
+        private set
 
     // Cosmetics system
     lateinit var cosmeticManager: CosmeticManager
         private set
+
+    // Voting system
+    lateinit var votingLoader: VotingLoader
+        private set
+    lateinit var votingManager: VotingManager
+        private set
+    lateinit var votingGui: VotingGui
+        private set
+
+    val isVotingReady: Boolean
+        get() = ::votingManager.isInitialized
 
     /** True once cosmeticManager has been initialised — safe to call from any class. */
     val isCosmeticManagerReady: Boolean
@@ -282,6 +299,10 @@ class LocoPillars : JavaPlugin() {
             registerCommands()
             placeholders = Placeholders(this)
 
+            // Persistent per-player toggles (auto-queue etc.)
+            playerPreferences = PlayerPreferences(this)
+            playerPreferences.load()
+
 
             if (!setupProtocolLib()) {
                 logger.severe("ProtocolLib is required for proper tab functionality! Disabling tab per-game-instance feature.")
@@ -345,7 +366,7 @@ class LocoPillars : JavaPlugin() {
 
             // 12. ACHIEVEMENTS SYSTEM
             achievementManager = AchievementManager()
-            val achievementsFolder = File(dataFolder, "Achievements")
+            val achievementsFolder = File(dataFolder, "modules/achievements")
             if (!achievementsFolder.exists()) achievementsFolder.mkdirs()
             val achievementLoader = AchievementLoader(this)
             achievementLoader.loadAchievements(achievementsFolder, achievementManager)
@@ -377,6 +398,14 @@ class LocoPillars : JavaPlugin() {
                 debugLog("✓ Command '/cosmetics' registered")
             } ?: logger.warning("[LocoPillars] '/cosmetics' command not found in plugin.yml")
             logger.info("[LocoPillars] ✓ Cosmetics system initialized")
+
+            // 15. VOTING SYSTEM
+            votingLoader = VotingLoader(this)
+            votingLoader.loadAll()
+            votingManager = VotingManager(this, votingLoader)
+            votingGui = VotingGui(this, votingManager)
+            server.pluginManager.registerEvents(votingGui, this)
+            logger.info("[LocoPillars] ✓ Voting system initialized (${votingLoader.count()} modules)")
 
             // 16. LUCKY BLOCKS SYSTEM
             val luckyblockLoader = LuckyblockLoader(this)
@@ -607,12 +636,6 @@ class LocoPillars : JavaPlugin() {
                 missingPlugins.add(pluginName)
                 logger.severe("[LocoPillars] ✗ Missing or disabled: $pluginName")
             }
-        }
-
-        // Log optional WorldGuard presence as info (not required)
-        val wg = server.pluginManager.getPlugin("WorldGuard")
-        if (wg != null && wg.isEnabled) {
-            logger.info("[LocoPillars] ℹ WorldGuard is installed but LocoPillars no longer uses it for region management.")
         }
 
         if (missingPlugins.isNotEmpty()) {

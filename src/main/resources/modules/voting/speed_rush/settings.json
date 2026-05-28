@@ -1,0 +1,14 @@
+{
+  "id": "speed_rush",
+  "display_name": "Speed Rush",
+  "description": "Everyone moves at lightning speed the entire round!",
+  "icon": { "material": "SUGAR", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§e§lSpeed Rush!",
+    "subtitle": "§7Everyone has Speed II!",
+    "chat": "§e[Event] §eSpeed Rush! Everyone moves at twice the speed this round!"
+  }
+}

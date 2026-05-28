@@ -1,0 +1,14 @@
+{
+  "id": "one_heart_mode",
+  "display_name": "One Heart Mode",
+  "description": "Survive with only 1 heart! One hit and you're out.",
+  "icon": { "material": "POPPY", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§4§lOne Heart Mode!",
+    "subtitle": "§7One hit and you're dead!",
+    "chat": "§4[Event] §eOne Heart Mode! Everyone has only 1 heart. Be careful!"
+  }
+}

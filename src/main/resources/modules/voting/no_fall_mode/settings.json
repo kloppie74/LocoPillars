@@ -1,0 +1,17 @@
+{
+  "id": "no_fall_mode",
+  "display_name": "No Fall Mode",
+  "description": "Fall damage is completely disabled for everyone in this round.",
+  "icon": {
+    "material": "FEATHER",
+    "custom_model_data": 0
+  },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§6§lNo Fall Mode!",
+    "subtitle": "§7Fall damage is disabled!",
+    "chat": "§6[Event] §eNo Fall Mode is now active! You can't take fall damage."
+  }
+}

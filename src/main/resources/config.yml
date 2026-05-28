@@ -36,6 +36,12 @@ game:
   # Should be larger than your biggest arena
   instance-distance: 1000
 
+# Auto-queue: after a game ends, players are sent directly into a fresh game
+# of the same type after a short countdown.  When disabled here, the feature is
+# fully off regardless of a player's personal /pillars autoqueue setting.
+auto-queue:
+  enabled: true
+
 # Spawn configuration (matches ConfigManager exactly)
 Spawn:
   World: "world"         # Name of your main lobby world

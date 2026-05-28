@@ -1,0 +1,14 @@
+{
+  "id": "ultra_jump",
+  "display_name": "Ultra Jump",
+  "description": "Jump incredibly high the whole round with Jump Boost III!",
+  "icon": { "material": "SLIME_BALL", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§a§lUltra Jump!",
+    "subtitle": "§7Jump Boost III activated!",
+    "chat": "§a[Event] §eUltra Jump! Everyone has Jump Boost III this round!"
+  }
+}

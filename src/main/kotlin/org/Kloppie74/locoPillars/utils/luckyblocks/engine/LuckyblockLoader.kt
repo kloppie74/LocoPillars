@@ -16,7 +16,7 @@ data class LoadedLuckyblock(
 
 /**
  * Manages loading, caching, and execution of all luckyblocks.
- * Each luckyblock lives in plugins/LocoPillars/Luckyblocks/<id>/
+ * Each luckyblock lives in plugins/LocoPillars/modules/luckyblocks/<id>/
  * and requires Settings.json + Luckyblock.kts.
  */
 class LuckyblockLoader(private val plugin: LocoPillars) {
@@ -49,7 +49,7 @@ class LuckyblockLoader(private val plugin: LocoPillars) {
         luckyblocks.clear()
         scriptEngine.clearCache()
 
-        val dir = File(plugin.dataFolder, "Luckyblocks")
+        val dir = File(plugin.dataFolder, "modules/luckyblocks")
         extractDefaults(dir)
 
         val subdirs = dir.listFiles { f -> f.isDirectory } ?: return
@@ -62,14 +62,13 @@ class LuckyblockLoader(private val plugin: LocoPillars) {
 
     private fun extractDefaults(dir: File) {
         dir.mkdirs()
-        // Always overwrite README so it stays current with the plugin version
-        copyResource("Luckyblocks/README.md", File(dir, "README.md"))
+        copyResource("modules/luckyblocks/README.md", File(dir, "README.md"))
         for (id in defaultIds) {
             val target = File(dir, id)
             if (!target.exists()) {
                 target.mkdirs()
-                copyResource("Luckyblocks/$id/Settings.json", File(target, "Settings.json"))
-                copyResource("Luckyblocks/$id/Luckyblock.kts", File(target, "Luckyblock.kts"))
+                copyResource("modules/luckyblocks/$id/Settings.json", File(target, "Settings.json"))
+                copyResource("modules/luckyblocks/$id/Luckyblock.kts", File(target, "Luckyblock.kts"))
             }
         }
     }

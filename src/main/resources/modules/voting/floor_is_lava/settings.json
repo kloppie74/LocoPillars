@@ -1,0 +1,14 @@
+{
+  "id": "floor_is_lava",
+  "display_name": "Floor is Lava",
+  "description": "Standing on solid blocks sets you on fire! Stay in the air.",
+  "icon": { "material": "LAVA_BUCKET", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§6§lFloor is Lava!",
+    "subtitle": "§7Don't touch the ground!",
+    "chat": "§6[Event] §eFloor is Lava! Standing on the ground will set you on fire!"
+  }
+}

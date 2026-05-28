@@ -3,6 +3,7 @@ package org.Kloppie74.locoPillars.game.manager
 import org.bukkit.Bukkit
 import org.bukkit.GameMode
 import org.bukkit.Material
+import org.bukkit.attribute.Attribute
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.Kloppie74.locoPillars.LocoPillars
@@ -18,6 +19,7 @@ class PlayerManager(private val plugin: LocoPillars) {
         SpectatorUtils.clearCache(player)
 
         player.gameMode = GameMode.SURVIVAL
+        resetMaxHealth(player)   // MUST run before setting health (see helper)
         player.health = 20.0
         player.foodLevel = 20
         player.saturation = 5f   // Low saturation so hunger kicks in quickly once the game goes ACTIVE
@@ -54,6 +56,7 @@ class PlayerManager(private val plugin: LocoPillars) {
         forceRespawnIfDead(player)
 
         player.gameMode = GameMode.SURVIVAL
+        resetMaxHealth(player)   // MUST run before setting health (see helper)
         player.health = 20.0
         player.foodLevel = 20
         player.saturation = 5f   // Low saturation so hunger kicks in quickly once the game goes ACTIVE
@@ -76,6 +79,22 @@ class PlayerManager(private val plugin: LocoPillars) {
         }
 
         debugLog("Player state restored for ${player.name}")
+    }
+
+    /**
+     * Restores the player's MAX_HEALTH attribute to the vanilla 20.0 before health is set.
+     *
+     * Voting effects such as one_heart_mode (base value 2.0) and double_health (40.0)
+     * modify this attribute. Their script cleanup only restores players still in the
+     * instance's player list — a player who was eliminated, left, or got auto-queued is
+     * already removed, so the attribute is never reset for them. Subsequently doing
+     * `player.health = 20.0` would throw:
+     *   "Health value (20.0) must be between 0 and 2.0 (attribute base value: 2.0)".
+     * Resetting the attribute here makes every reset path crash-proof regardless of
+     * which voting effect was active.
+     */
+    private fun resetMaxHealth(player: Player) {
+        player.getAttribute(Attribute.MAX_HEALTH)?.baseValue = 20.0
     }
 
     private fun forceRespawnIfDead(player: Player) {

@@ -1,0 +1,14 @@
+{
+  "id": "double_health",
+  "display_name": "Double Health",
+  "description": "Every player's max health is doubled to 20 hearts!",
+  "icon": { "material": "GOLDEN_APPLE", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§c§lDouble Health!",
+    "subtitle": "§7You now have 20 hearts!",
+    "chat": "§c[Event] §eDouble Health active! Everyone now has 20 hearts!"
+  }
+}

@@ -39,7 +39,7 @@ class AchievementLoader(
         for (name in defaultAchievements) {
             val target = File(folder, "$name.yml")
             if (!target.exists()) {
-                val stream = plugin.getResource("Achievements/$name.yml") ?: continue
+                val stream = plugin.getResource("modules/achievements/$name.yml") ?: continue
                 try {
                     target.outputStream().use { stream.copyTo(it) }
                 } catch (e: Exception) {

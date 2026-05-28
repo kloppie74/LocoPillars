@@ -178,7 +178,7 @@ class CosmeticsSelectGui(
                 15 -> { player.closeInventory(); openTypeView(player, CosmeticType.DEATH) }
                 31 -> { player.closeInventory(); openTypeView(player, CosmeticType.CAGE) }
                 49 -> player.closeInventory()
-                53 -> { player.closeInventory(); plugin.cosmeticManager.shopGui.open(player) }
+                53 -> { player.closeInventory(); plugin.cosmeticManager.shopGui.openOverview(player) }
             }
         } else {
             // Type view mode

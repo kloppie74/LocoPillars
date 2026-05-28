@@ -18,6 +18,7 @@ import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.SchematicCageHelper
 import org.Kloppie74.locoPillars.utils.spectator.listeners.SpectateListener
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
+import org.Kloppie74.locoPillars.utils.hotbar.HotbarUtils
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
@@ -64,9 +65,115 @@ class GameplayManager(
     // Central source of truth for eliminated players (death -> respawn -> spectator/lobby transition)
     private val eliminatedPlayerSessions = ConcurrentHashMap<UUID, EliminatedPlayerSession>()
 
+    // Auto-queue: tracks dead players waiting to rejoin — playerId -> gameTypeName
+    private val pendingAutoQueue = ConcurrentHashMap<UUID, String>()
+
+    fun cancelAutoQueue(playerId: UUID): Boolean = pendingAutoQueue.remove(playerId) != null
+
+    /**
+     * Used when a player aborts the post-match countdown via /pillars leave. Cleans
+     * up spectator state and elimination tracking, then teleports them to lobby
+     * regardless of how the post-match phase had been pacing them.
+     */
+    fun exitPostMatchToLobby(player: Player) {
+        clearEliminatedState(player.uniqueId)
+        SpectatorUtils.removeSpectatorStatus(player, plugin)
+        SpectatorUtils.clearCache(player)
+        Bukkit.getOnlinePlayers().forEach { online ->
+            online.showPlayer(plugin, player)
+            player.showPlayer(plugin, online)
+        }
+        val lobbyRespawn = plugin.configManager.getLobbySpawnLocation()
+            ?: plugin.server.worlds.first().spawnLocation
+        player.teleport(lobbyRespawn)
+    }
+
     private fun debugLog(message: String) {
         if (configManager.debugMode) plugin.logger.info("[GameplayManager] $message")
     }
+
+    /**
+     * Effective auto-queue check: server master switch AND player toggle must both be on.
+     */
+    fun isAutoQueueEnabled(player: Player): Boolean {
+        if (!plugin.configManager.autoQueueEnabled) return false
+        return plugin.playerPreferences.isAutoQueueEnabled(player.uniqueId)
+    }
+
+    /**
+     * 5-second post-game countdown while the player watches as a spectator,
+     * ending with an auto-queue join into a fresh instance. Falls back to a
+     * lobby teleport if no compatible game is available. The player is tracked
+     * in [pendingAutoQueue] so /pillars leave can cancel before it fires.
+     */
+    private fun scheduleAutoQueue(player: Player, gameTypeName: String, lobbyRespawn: Location) {
+        val displayName = plugin.configs.firstOrNull { it.name == gameTypeName }?.getDisplayName() ?: gameTypeName
+        player.sendMessage(MSG.lang("pillars.autoqueue.start", "type" to displayName))
+        for (seconds in 5 downTo 1) {
+            val delay = (6 - seconds) * 20L
+            object : BukkitRunnable() {
+                override fun run() {
+                    if (!pendingAutoQueue.containsKey(player.uniqueId) || !player.isOnline) return
+                    player.sendTitle("§a§l$seconds", "§7Rejoining $displayName...", 0, 22, 3)
+                }
+            }.runTaskLater(plugin, delay)
+        }
+        object : BukkitRunnable() {
+            override fun run() {
+                if (!pendingAutoQueue.remove(player.uniqueId, gameTypeName)) return
+                if (!player.isOnline) return
+                if (plugin.gameManager.getPlayerInstance(player) != null) return
+                debugLog("Auto-queue firing for ${player.name} -> $gameTypeName")
+                // Drop spectator status + any lingering elimination session so the join
+                // flow can take over the player's gamemode / hotbar from a clean baseline.
+                clearEliminatedState(player.uniqueId)
+                SpectatorUtils.removeSpectatorStatus(player, plugin)
+                SpectatorUtils.clearCache(player)
+                Bukkit.getOnlinePlayers().forEach { online ->
+                    online.showPlayer(plugin, player)
+                    player.showPlayer(plugin, online)
+                }
+                val joined = plugin.gameManager.joinGame(player, gameTypeName)
+                if (joined == null) {
+                    // No game available right now — return to lobby so the player
+                    // isn't left stranded in the (now-resetting) arena world.
+                    player.sendMessage(MSG.lang("pillars.autoqueue.no_game", "type" to displayName))
+                    player.teleport(lobbyRespawn)
+                }
+            }
+        }.runTaskLater(plugin, 100L) // 5s
+    }
+
+    /**
+     * 10-second post-game countdown for players with auto-queue OFF. They watch
+     * the arena as a spectator for longer, then get returned to the main lobby.
+     */
+    private fun scheduleLobbyReturn(player: Player, lobbyRespawn: Location) {
+        for (seconds in 10 downTo 1) {
+            val delay = (11 - seconds) * 20L
+            object : BukkitRunnable() {
+                override fun run() {
+                    if (!player.isOnline) return
+                    player.sendTitle("§e§l$seconds", "§7Returning to lobby...", 0, 22, 3)
+                }
+            }.runTaskLater(plugin, delay)
+        }
+        object : BukkitRunnable() {
+            override fun run() {
+                if (!player.isOnline) return
+                if (plugin.gameManager.getPlayerInstance(player) != null) return
+                clearEliminatedState(player.uniqueId)
+                SpectatorUtils.removeSpectatorStatus(player, plugin)
+                SpectatorUtils.clearCache(player)
+                Bukkit.getOnlinePlayers().forEach { online ->
+                    online.showPlayer(plugin, player)
+                    player.showPlayer(plugin, online)
+                }
+                player.teleport(lobbyRespawn)
+            }
+        }.runTaskLater(plugin, 200L) // 10s
+    }
+
 
     // =================== ACHIEVEMENT & STATS WRAPPERS ===================
 
@@ -200,6 +307,13 @@ class GameplayManager(
     fun startGame(instance: GameInstance) {
         debugLog("Starting game for instance ${instance.id}")
         instance.state = GameState.ACTIVE
+        instance.cagesOpen = false // reset in case of back-to-back games on same instance
+        // Voting window closes the moment the start-timer fires. Force-close any open
+        // voting GUIs so players can't vote from a stale menu during the cage countdown.
+        if (plugin.isVotingReady) {
+            plugin.votingGui.closeAllForInstance(instance)
+            plugin.votingManager.deactivateEffect(instance) // clean up any leftover from prior game
+        }
         broadcastToGame(instance, MSG.lang("game.start.started"))
 
         plugin.spectatorInventoryManager.updateVisibilityForGameInstance(instance)
@@ -267,6 +381,9 @@ class GameplayManager(
                     }
                     0 -> {
                         broadcastToGame(instance, MSG.lang("game.cage.opened"))
+                        // Mark cages as open BEFORE calling setupPlayerHotbar so
+                        // determineHotbarType returns "game" and players receive game items.
+                        instance.cagesOpen = true
                         playersInGame(instance).forEach { player ->
                             player.sendTitle(MSG.lang("game.cage.go_title"), "", 0, 20, 10)
                             player.removePotionEffect(PotionEffectType.SLOWNESS)
@@ -275,10 +392,15 @@ class GameplayManager(
                             // moment cages open regardless of any prior hotbar-state residue.
                             player.isInvulnerable = false
                             plugin.gameListener.setCageProtection(player.uniqueId, false)
+                            // Switch hotbar from game_lobby to game items now that cages are open.
+                            HotbarUtils.setupPlayerHotbar(player, plugin)
                         }
                         removeCagesForInstance(instance)
                         val itemTimer = instance.arenaInstance.config.getItemTimer()
                         timerEvent.startItemTimer(instance, itemTimer)
+                        if (plugin.isVotingReady) {
+                            plugin.votingManager.activateWinner(instance)
+                        }
                         cancel()
                         return
                     }
@@ -357,15 +479,12 @@ class GameplayManager(
     }
 
     private fun placeCageAtSpawnLocation(playerUUID: UUID, spawnLocation: org.bukkit.Location) {
-        // Use player's selected cage cosmetic if available, else fall back to Standard-Cage.schem
         val cageFile: File? = if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
             val player = Bukkit.getPlayer(playerUUID)
             if (player != null) plugin.cosmeticManager.getCageSchemForPlayer(player)
-            else null
+            else File(plugin.dataFolder, "modules/cosmetics/cages/standard/Cage.schem").takeIf { it.exists() }
         } else {
-            val cagesFolder = File(plugin.dataFolder, "Cages")
-            if (!cagesFolder.exists()) cagesFolder.mkdirs()
-            File(cagesFolder, "Standard-Cage.schem").takeIf { it.exists() }
+            File(plugin.dataFolder, "modules/cosmetics/cages/standard/Cage.schem").takeIf { it.exists() }
         }
 
         if (cageFile == null) {
@@ -578,6 +697,10 @@ class GameplayManager(
 
         val durationSeconds = getGameDuration(instance)
         instance.state = GameState.ENDED
+        if (plugin.isVotingReady) {
+            plugin.votingGui.closeAllForInstance(instance)
+            plugin.votingManager.deactivateEffect(instance)
+        }
         timerEvent.stopAllTimers(instance.id)
         gameTimers[instance.id]?.cancel()
         gameTimers.remove(instance.id)
@@ -597,130 +720,133 @@ class GameplayManager(
         broadcastToGame(instance, reason)
 
         val winners = getWinningPlayers(instance)
-        if (winners.isNotEmpty()) {
-            winners.forEach { winner ->
-                onGameWon(winner, durationSeconds)
-                winner.fallDistance = 0f
-                // Do NOT set isInvulnerable here — restorePlayerState() handles full cleanup below
-                // Fire WIN cosmetic
-                if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
-                    plugin.cosmeticManager.fireWin(winner, instance)
-                }
+        val survivingLosers = instance.players.mapNotNull { Bukkit.getPlayer(it) }.filter { it !in winners }
+        val deadSpectators = instance.spectators.mapNotNull { Bukkit.getPlayer(it) }.filter { it.isOnline }
+
+        // Stats, achievements, cosmetics for winners
+        winners.forEach { winner ->
+            onGameWon(winner, durationSeconds)
+            winner.fallDistance = 0f
+            if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
+                plugin.cosmeticManager.fireWin(winner, instance)
             }
-            winners.forEach { winner ->
-                onFastestWin(winner, durationSeconds)
-                onLongestGame(winner, durationSeconds)
-                onWinStreak(winner)
-            }
+            onFastestWin(winner, durationSeconds)
+            onLongestGame(winner, durationSeconds)
+            onWinStreak(winner)
         }
 
-        val losers = instance.players.mapNotNull { Bukkit.getPlayer(it) }.filter { !winners.contains(it) }
-        losers.forEach { loser ->
+        // Stats for losers still alive (eliminated players already had their death stats recorded)
+        survivingLosers.forEach { loser ->
             onGameLost(loser, durationSeconds)
             onLossStreak(loser)
-            // Do NOT call setPlayerAsSpectator here: the player is still in playerToInstance so the
-            // guard would block it. State is restored via restorePlayerState() below.
-            val gameLobbySpawn = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
-            loser.teleport(gameLobbySpawn)
         }
 
         updateGameEndStats(instance)
 
-        instance.players.forEach { playerId ->
-            val player = Bukkit.getPlayer(playerId)
-            if (player != null && player.isOnline) {
-                val playerManager = PlayerManager(plugin)
-                playerManager.restorePlayerState(player)
-                val spectateListener = plugin.spectateListener
-                spectateListener?.refreshPlayer(player)
-            }
-        }
-
         val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
             .getConfigurationSection("Rewards")
-        val spectators = instance.players.mapNotNull { Bukkit.getPlayer(it) }.filter { it !in winners }
-        RewardProcessor.processEndRewards(plugin, winners, spectators, rewardsSection)
+        RewardProcessor.processEndRewards(plugin, winners, survivingLosers, rewardsSection)
 
+        // Drop alive players from the active-instance index so /pillars status etc. report
+        // them as out-of-game during the post-match countdown.
         val spectateListener = plugin.spectateListener
-        instance.players.forEach { uuid ->
-            // Remove from instance map BEFORE notifying tab systems, so they see the player as "in lobby"
+        instance.players.toList().forEach { uuid ->
             playerToInstance.remove(uuid)
             val p = Bukkit.getPlayer(uuid)
             if (p != null) {
                 spectateListener?.refreshPlayer(p)
-                // Notify tab/visibility systems that all players are returning to lobby
                 plugin.teamsListener.onPlayerLeaveGame(p)
-                plugin.spectateListener.onPlayerGameStatusChange(p)
+                spectateListener?.onPlayerGameStatusChange(p)
             }
         }
         instance.players.clear()
 
-        // Finalize eliminated players back to normal lobby state.
-        // Spectators get a 5-second (100 tick) grace period to fly around before being sent to lobby.
+        // Move alive players (winners + still-alive losers) into spectator mode so they
+        // float above the arena during the post-match window instead of being teleported
+        // straight to lobby or — worse — getting "ghosted" into the next game without ever
+        // seeing the result of this one.
+        (winners + survivingLosers).forEach { player ->
+            if (player.isOnline) {
+                playerManager.restorePlayerState(player)
+                SpectatorUtils.setPlayerAsSpectator(player, plugin)
+                player.fallDistance = 0f
+            }
+        }
+
+        // Dead spectators stay in their existing spectator state. We intentionally do NOT
+        // clear [eliminatedPlayerSessions] here — the player who triggered endGame by
+        // dying is still on the death screen, and [handleEliminatedPlayerRespawn] needs
+        // that session entry to put them into spectator mode on respawn. The session
+        // entry is cleaned up later by [scheduleAutoQueue] / [scheduleLobbyReturn] when
+        // the post-match countdown completes.
+        deadSpectators.forEach { spectator ->
+            spectator.fallDistance = 0f
+        }
+        instance.spectators.clear()
+
+        // Unified post-match flow for ALL participants (winners + alive losers + dead
+        // spectators). Each player is auto-queued OR returned to lobby based on the
+        // server master switch + their personal /pillars autoqueue preference.
+        //
+        // Pacing:
+        //   • Auto-queue ON  → spectate the arena for 5s, then join a fresh instance.
+        //   • Auto-queue OFF → spectate the arena for 10s, then teleport to lobby.
+        val autoQueueGameType = instance.arenaInstance.template.name
         val lobbyRespawn = plugin.configManager.getLobbySpawnLocation() ?: plugin.server.worlds.first().spawnLocation
-        val spectatorSnapshot = instance.spectators.toList()
+        val allParticipants = winners + survivingLosers + deadSpectators
 
-        // Prepare their sessions now (sets respawn destination) but don't teleport yet
-        spectatorSnapshot.forEach { spectatorId ->
-            val existing = eliminatedPlayerSessions[spectatorId]
-            if (existing != null) {
-                existing.keepAsSpectator = false
-                existing.respawnLocation = lobbyRespawn.clone()
+        allParticipants.forEach { player ->
+            if (!player.isOnline) return@forEach
+            player.sendTitle("§c§lGAME OVER", "§7Match complete", 5, 30, 10)
+            if (isAutoQueueEnabled(player)) {
+                pendingAutoQueue[player.uniqueId] = autoQueueGameType
+                scheduleAutoQueue(player, autoQueueGameType, lobbyRespawn)
             } else {
-                eliminatedPlayerSessions[spectatorId] = EliminatedPlayerSession(
-                    instance = instance,
-                    respawnLocation = lobbyRespawn.clone(),
-                    keepAsSpectator = false
-                )
+                scheduleLobbyReturn(player, lobbyRespawn)
             }
         }
 
-        // Notify spectators and show countdown
-        spectatorSnapshot.forEach { spectatorId ->
-            val spectator = Bukkit.getPlayer(spectatorId)
-            if (spectator != null && spectator.isOnline) {
-                spectator.sendTitle("§c§lGAME OVER", "§7Returning to lobby in §e5 §7seconds...", 5, 30, 10)
-                spectator.sendMessage("§7You have §e5 seconds §7to fly around before being sent to the lobby.")
-            }
-        }
-
-        // Countdown: 4, 3, 2, 1
-        for (countdown in 4 downTo 1) {
-            val tickDelay = (5 - countdown) * 20L
-            object : BukkitRunnable() {
-                override fun run() {
-                    spectatorSnapshot.forEach { spectatorId ->
-                        val spectator = Bukkit.getPlayer(spectatorId)
-                        if (spectator != null && spectator.isOnline) {
-                            spectator.sendTitle("§e§l$countdown", "§7Returning to lobby...", 0, 25, 5)
-                        }
-                    }
-                }
-            }.runTaskLater(plugin, tickDelay)
-        }
-
-        // After 5 seconds (100 ticks): teleport spectators to lobby
-        object : BukkitRunnable() {
-            override fun run() {
-                spectatorSnapshot.forEach { spectatorId ->
-                    val spectator = Bukkit.getPlayer(spectatorId)
-                    if (spectator != null && spectator.isOnline) {
-                        spectator.sendTitle("§a§lSEE YOU!", "§7Heading back to lobby...", 5, 30, 15)
-                        handleEliminatedPlayerRespawn(spectator)
-                        plugin.teamsListener.onPlayerLeaveGame(spectator)
-                        plugin.spectateListener.onPlayerGameStatusChange(spectator)
-                    } else {
-                        eliminatedPlayerSessions.remove(spectatorId)
-                    }
-                }
-                instance.spectators.clear()
-            }
-        }.runTaskLater(plugin, 100L)
-
-        // Reset arena 2 seconds after spectators have left (140 ticks total)
+        // Reset arena after the longest possible countdown (10s lobby return) + 1s buffer.
+        // This way the arena stays viewable during the entire spectator phase.
         object : BukkitRunnable() {
             override fun run() { resetInstance(instance) }
-        }.runTaskLater(plugin, 140L)
+        }.runTaskLater(plugin, 220L)
+    }
+
+    /**
+     * Tears down a half-started game without declaring a winner. Used when the cage
+     * countdown is running but the player count drops below the minimum — there is
+     * nothing to "win", so we just unwind the start side-effects and return the
+     * instance to WAITING so the remaining player(s) can wait for more joiners.
+     *
+     * This is the no-lobby-mode analogue to [GameLeaveManager]'s STARTING-state cancel.
+     */
+    fun abortPreCageStart(instance: GameInstance, playerToInstance: MutableMap<UUID, GameInstance>) {
+        timerEvent.stopAllTimers(instance.id)
+        gameTimers[instance.id]?.cancel()
+        gameTimers.remove(instance.id)
+        removeGameStart(instance)
+        instanceItemDistribution.remove(instance.id)
+        if (plugin.isVotingReady) {
+            plugin.votingManager.deactivateEffect(instance)
+        }
+
+        val gameListener = plugin.gameListener
+        instance.players.toList().forEach { playerUUID ->
+            gameListener.setCageProtection(playerUUID, false)
+            if (SchematicCageHelper.hasCageSessions(playerUUID)) {
+                SchematicCageHelper.forceRemoveCageForPlayer(plugin, configManager, playerUUID)
+            }
+            val player = Bukkit.getPlayer(playerUUID)
+            if (player != null && player.isOnline) {
+                player.removePotionEffect(PotionEffectType.SLOWNESS)
+                player.removePotionEffect(PotionEffectType.JUMP_BOOST)
+                player.isInvulnerable = false
+            }
+        }
+        instance.cagesOpen = false
+        instance.state = GameState.WAITING
+        debugLog("Pre-cage start aborted for instance ${instance.id} — back to WAITING")
     }
 
     private fun getWinningPlayers(instance: GameInstance): List<Player> {
@@ -807,6 +933,17 @@ class GameplayManager(
             return true
         }
 
+        // Game ended: set up as flying spectator so the player can watch the end sequence.
+        // The 5-second endGame countdown will perform the actual lobby teleport.
+        if (instance.state == GameState.ENDED || instance.state == GameState.RESETTING) {
+            playerManager.restorePlayerState(player)
+            SpectatorUtils.setPlayerAsSpectator(player, plugin)
+            enforceInGameSpectatorVisibility(instance, player)
+            plugin.spectateListener?.refreshPlayer(player)
+            return true
+        }
+
+        // Normal mid-game elimination: teleport to lobby immediately.
         playerManager.restorePlayerState(player)
         SpectatorUtils.removeSpectatorStatus(player, plugin)
         SpectatorUtils.clearCache(player)

@@ -433,19 +433,17 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             return
         }
 
-        // Check game boundaries during active game
+        // Enforce XZ arena boundaries during active game.
+        // Y height is a build limit only — flying above the map is allowed,
+        // only the void (below deathHeight, checked above) kills.
         if (instance.state == GameState.ACTIVE) {
             val origin = instance.arenaInstance.origin
             val buildRange = instance.arenaInstance.config.getBuildRange()
-            val buildHeight = instance.arenaInstance.config.getBuildHeight()
 
             val deltaX = kotlin.math.abs(player.location.x - origin.x)
             val deltaZ = kotlin.math.abs(player.location.z - origin.z)
-            val maxY = origin.y + buildHeight
-            val currentY = player.location.y
 
-            if (deltaX > buildRange || deltaZ > buildRange || currentY > maxY) {
-                // Teleport player back to safe location
+            if (deltaX > buildRange || deltaZ > buildRange) {
                 val safeLocation = origin.clone()
                 safeLocation.y = origin.y + 10
                 player.teleport(safeLocation)

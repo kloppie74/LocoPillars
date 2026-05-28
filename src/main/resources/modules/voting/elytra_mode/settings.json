@@ -1,0 +1,14 @@
+{
+  "id": "elytra_mode",
+  "display_name": "Elytra Mode",
+  "description": "Everyone gets an elytra! No chestplate allowed this round.",
+  "icon": { "material": "ELYTRA", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§b§lElytra Mode!",
+    "subtitle": "§7Glide your way to victory!",
+    "chat": "§b[Event] §eElytra Mode active! Everyone has an elytra — no chestplate allowed!"
+  }
+}

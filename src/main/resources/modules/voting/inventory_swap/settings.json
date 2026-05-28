@@ -1,0 +1,14 @@
+{
+  "id": "inventory_swap",
+  "display_name": "Inventory Swap",
+  "description": "Every 30 seconds all player inventories get shuffled around!",
+  "icon": { "material": "CHEST", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§d§lInventory Swap!",
+    "subtitle": "§7Inventories shuffle every 30s!",
+    "chat": "§d[Event] §eInventory Swap! Everyone's items will be shuffled every 30 seconds!"
+  }
+}

@@ -99,6 +99,12 @@ class ConfigManager(private val plugin: JavaPlugin) {
     var cosmeticsCoinsProvider: String = "SELF"
         private set
 
+    // === Auto-queue settings ===
+    // Server-wide master switch. When false, players are never auto-queued
+    // regardless of their personal toggle.
+    var autoQueueEnabled: Boolean = true
+        private set
+
     // === LuckyBlock settings ===
     var luckyBlocksEnabled: Boolean = true
         private set
@@ -209,6 +215,9 @@ class ConfigManager(private val plugin: JavaPlugin) {
         val cosmeticsSection = config.getConfigurationSection("Cosmetics")
         cosmeticsEnabled      = cosmeticsSection?.getBoolean("enabled", true) ?: true
         cosmeticsCoinsProvider = cosmeticsSection?.getString("coins-provider", "SELF")?.uppercase() ?: "SELF"
+
+        // === Load Auto-queue ===
+        autoQueueEnabled = config.getBoolean("auto-queue.enabled", true)
 
         // === Load LuckyBlocks ===
         val luckySection = config.getConfigurationSection("Luckyblocks")
@@ -385,6 +394,10 @@ class ConfigManager(private val plugin: JavaPlugin) {
         val cosmeticsSection = config.createSection("Cosmetics")
         cosmeticsSection.set("enabled", true)
         cosmeticsSection.set("coins-provider", "SELF")
+
+        // Auto-queue section
+        config.createSection("auto-queue")
+        config.set("auto-queue.enabled", true)
 
         // Luckyblocks section
         val luckySection = config.createSection("Luckyblocks")

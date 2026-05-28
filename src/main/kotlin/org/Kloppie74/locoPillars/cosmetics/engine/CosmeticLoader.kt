@@ -10,10 +10,10 @@ import java.io.File
  * Loads all cosmetics from the plugin's Cosmetics folder.
  *
  * Directory layout:
- *   Cosmetics/kill/<id>/Settings.json + Cosmetic.kts
- *   Cosmetics/win/<id>/Settings.json + Cosmetic.kts
- *   Cosmetics/death/<id>/Settings.json + Cosmetic.kts
- *   Cosmetics/cages/<id>/Settings.json + <id>.schem
+ *   modules/cosmetics/kill/<id>/Settings.json + Cosmetic.kts
+ *   modules/cosmetics/win/<id>/Settings.json + Cosmetic.kts
+ *   modules/cosmetics/death/<id>/Settings.json + Cosmetic.kts
+ *   modules/cosmetics/cages/<id>/Settings.json + <id>.schem
  */
 class CosmeticLoader(private val plugin: LocoPillars) {
 
@@ -52,7 +52,7 @@ class CosmeticLoader(private val plugin: LocoPillars) {
         CosmeticType.values().forEach { cosmetics[it]!!.clear() }
         scriptEngine.clearCache()
 
-        val root = File(plugin.dataFolder, "Cosmetics")
+        val root = File(plugin.dataFolder, "modules/cosmetics")
         extractDefaults(root)
 
         var total = 0
@@ -76,9 +76,9 @@ class CosmeticLoader(private val plugin: LocoPillars) {
                 val dir = File(root, "${type.folderName}/$id")
                 if (!dir.exists()) {
                     dir.mkdirs()
-                    copyResource("Cosmetics/${type.folderName}/$id/Settings.json", File(dir, "Settings.json"))
+                    copyResource("modules/cosmetics/${type.folderName}/$id/Settings.json", File(dir, "Settings.json"))
                     if (type != CosmeticType.CAGE) {
-                        copyResource("Cosmetics/${type.folderName}/$id/Cosmetic.kts", File(dir, "Cosmetic.kts"))
+                        copyResource("modules/cosmetics/${type.folderName}/$id/Cosmetic.kts", File(dir, "Cosmetic.kts"))
                     }
                     // Cages: schem file is copied by the user — we just create the JSON
                 }
@@ -170,18 +170,12 @@ class CosmeticLoader(private val plugin: LocoPillars) {
         iconMaterial: Material, iconObj: JSONObject?,
         lore: List<String>
     ): Boolean {
-        // Schem may be <id>.schem or <anything>.schem inside the folder.
-        // Special case: the "standard" cage may point at Cages/Standard-Cage.schem.
-        val schemFile = File(dir, "$id.schem").takeIf { it.exists() }
+        // Cage.schem is the canonical name; any other .schem in the folder is also accepted.
+        val schemFile = File(dir, "Cage.schem").takeIf { it.exists() }
             ?: dir.listFiles { f -> f.extension == "schem" }?.firstOrNull()
-            ?: if (id == "standard") {
-                val legacy = File(plugin.dataFolder, "Cages/Standard-Cage.schem")
-                if (legacy.exists()) legacy else null
-            } else null
 
         if (schemFile == null) {
-            // Register the cage definition without a schem — CosmeticManager will fall back gracefully
-            plugin.logger.info("[Cosmetics] Cage '${id}' has no .schem yet — registered as placeholder (add ${id}.schem to the folder)")
+            plugin.logger.info("[Cosmetics] Cage '$id' has no Cage.schem yet — registered as placeholder (add Cage.schem to the folder)")
         }
         val def = CosmeticDefinition(
             id = id,

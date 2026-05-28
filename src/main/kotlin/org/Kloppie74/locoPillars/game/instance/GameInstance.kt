@@ -14,6 +14,8 @@ class GameInstance(
     var players: MutableList<UUID> = mutableListOf(),
     val spectators: MutableList<UUID> = mutableListOf()
 ) {
+    /** True once the cage countdown has finished and cages have been removed. */
+    var cagesOpen: Boolean = false
 
     // Enhanced team tracking system
     private val originalTeamAssignments = mutableMapOf<UUID, Team>()

@@ -1,0 +1,14 @@
+{
+  "id": "player_swap",
+  "display_name": "Player Swap",
+  "description": "Every 20 seconds everyone's position gets teleported around!",
+  "icon": { "material": "ENDER_PEARL", "custom_model_data": 0 },
+  "active": true,
+  "vote_weight": 1,
+  "duration": -1,
+  "announce": {
+    "title": "§5§lPlayer Swap!",
+    "subtitle": "§7Positions shuffle every 20s!",
+    "chat": "§5[Event] §ePlayer Swap! Everyone will be teleported to a random position every 20 seconds!"
+  }
+}

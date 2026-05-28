@@ -3,14 +3,13 @@ main: org.Kloppie74.locoPillars.LocoPillars
 version: ${version}
 api-version: 1.21
 authors: [kloppie74]
-description: "Pillars of the Fortune - memory-friendly multi-instance minigame!"
+description: "Pillars of the Fortune - The Best plugin to play pillars of the fortune!"
 depend: [WorldEdit, PlaceholderAPI]
-softdepend: [WorldGuard]
 
 commands:
   pillars:
     description: "Main command for Pillars of Fortune"
-    usage: "/pillars <join|leave|list|status|stats|help> [args]"
+    usage: "/pillars <join|leave|list|status|stats|vote|autoqueue|help> [args]"
     aliases: [pillar, pof, pillarsoffortune, games]
   memory:
     description: "Memory management commands"
@@ -130,6 +129,12 @@ permissions:
     default: true
   locopillars.pillars.help:
     description: "Use /pillars help"
+    default: true
+  locopillars.pillars.vote:
+    description: "Use /pillars vote to open the event voting GUI"
+    default: true
+  locopillars.pillars.autoqueue:
+    description: "Use /pillars autoqueue to toggle the personal auto-queue setting"
     default: true
 
   locopillars.memory.use:
