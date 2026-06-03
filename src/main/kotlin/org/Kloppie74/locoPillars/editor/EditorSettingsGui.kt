@@ -97,7 +97,20 @@ class EditorSettingsGui(
             meta.lore = (meta.lore ?: emptyList()) + extra
             item.itemMeta = meta
         })
-        for (slot in 24..26) inv.setItem(slot, filler())
+        inv.setItem(24, toggle(Material.TNT, "&cCan Blow Up Map Blocks", session.canBlowUpMapBlocks()).also { item ->
+            val meta = item.itemMeta!!
+            meta.lore = (meta.lore ?: emptyList()) +
+                MSG.chatColors("&8Allow explosions to destroy original map blocks")
+            item.itemMeta = meta
+        })
+        inv.setItem(25, makeButton(Material.BLAZE_ROD, "&6Breakable Blocks", listOf(
+            MSG.chatColors("&7Whitelisted: &f${session.getBreakableBlockCount()} &7block(s)"),
+            MSG.chatColors("&7Mark blocks with the &6Breakable Selector"),
+            MSG.chatColors("&7(hotbar slot 7) out in the world."),
+            MSG.chatColors("&8They stay breakable even when Can-Break is OFF."),
+            MSG.chatColors("&cClick to clear the whole whitelist.")
+        )))
+        inv.setItem(26, filler())
 
         // ── Row 3: Timers ─────────────────────────────────────────────────────
         inv.setItem(27, section("&d&lTIMERS"))
@@ -189,6 +202,11 @@ class EditorSettingsGui(
             21 -> session.setDeathHeight(session.getDeathHeight()  + step(left, shift, 5, 5))
             22 -> session.toggleBreakMapBlocks()
             23 -> session.toggleLobbyEnabled()
+            24 -> session.toggleBlowUpMapBlocks()
+            25 -> {
+                val removed = session.clearBreakableBlocks()
+                player.sendMessage(MSG.chatColors("&cCleared breakable whitelist &7(&f$removed&7 block(s))."))
+            }
 
             // ── Row 3: Timers ──────────────────────────────────────────────────
             28 -> session.setLobbyTimer(session.getLobbyTimer()    + step(left, shift, 5, 5))

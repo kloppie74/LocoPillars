@@ -136,6 +136,10 @@ Settings:
   GameTimer: 900
   ItemTimer: 5
   Can-Break-Map-Blocks: false
+  Can-BlowUp-Map-Blocks: false
+  # Origin-relative "x,y,z" map blocks that stay breakable even when Can-Break-Map-Blocks is false.
+  # Manage these in-game with the Breakable Selector (editor hotbar slot 7).
+  Breakable-Blocks: []
   LobbyEnabled: true
   SpawnPoint:
     X: 0

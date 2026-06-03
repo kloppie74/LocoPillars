@@ -17,7 +17,7 @@ import org.Kloppie74.locoPillars.utils.MSG
  * [4] Save & Close      (emerald)        – save schematic + end session
  * [5] Cancel Session    (redstone)       – cancel session without saving
  * [6] Refresh Holograms (end crystal)    – toggle/refresh spawn-point holograms
- * [7] Session Info      (filled map)     – print current session info to chat
+ * [7] Breakable Selector(blaze rod)      – mark map blocks as player-breakable
  * [8] Switch Hotbar     (nether star)    – swap back to original hotbar
  * ```
  */
@@ -32,7 +32,7 @@ class EditorHotbarManager {
         const val ITEM_SAVE_CLOSE      = "§2Save & Close"
         const val ITEM_CANCEL_SESSION  = "§cCancel Session"
         const val ITEM_HOLO_REFRESH    = "§dRefresh Holograms"
-        const val ITEM_SESSION_INFO    = "§7Session Info"
+        const val ITEM_BREAK_SELECTOR  = "§6Breakable Selector"
         const val ITEM_SWITCH_HOTBAR   = "§6Switch Hotbar"
     }
 
@@ -91,11 +91,15 @@ class EditorHotbarManager {
             "&8Shows team + slot labels above each spawn."
         )))
 
-        // [7] Session Info
-        inv.setItem(7, makeTool(Material.FILLED_MAP, ITEM_SESSION_INFO, listOf(
-            "&7&oSlot 7  —  Session Info",
-            "&7Right-click: &7print session info to chat",
-            "&8Map, save radius, border, timers, spawns."
+        // [7] Breakable-Block Selector
+        inv.setItem(7, makeTool(Material.BLAZE_ROD, ITEM_BREAK_SELECTOR, listOf(
+            "&7&oSlot 7  —  Breakable Selector",
+            "&7Right-click block:       &etoggle block breakable",
+            "&7Right-click air:         &eshow whitelist count",
+            "&7Shift + left-click air:  &cclear whitelist",
+            "&8Whitelisted map blocks can be broken even when",
+            "&8Can-Break-Map-Blocks is OFF — all other map",
+            "&8blocks stay protected."
         )))
 
         // [8] Switch Hotbar
@@ -157,7 +161,7 @@ class EditorHotbarManager {
             ITEM_SAVE_CLOSE,
             ITEM_CANCEL_SESSION,
             ITEM_HOLO_REFRESH,
-            ITEM_SESSION_INFO,
+            ITEM_BREAK_SELECTOR,
             ITEM_SWITCH_HOTBAR -> true
             else -> false
         }

@@ -62,6 +62,7 @@ class MapRepository(
         config.set("Settings.GameTimer", 600)
         config.set("Settings.ItemTimer", 10)
         config.set("Settings.Can-Break-Map-Blocks", false)
+        config.set("Settings.Can-BlowUp-Map-Blocks", false)
         config.set("Settings.SpawnPoint.X", 0.0)
         config.set("Settings.SpawnPoint.Y", 1.0)
         config.set("Settings.SpawnPoint.Z", 0.0)

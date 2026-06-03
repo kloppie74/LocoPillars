@@ -878,6 +878,16 @@ class GameplayManager(
 
     private fun resetInstance(instance: GameInstance) {
         instance.state = GameState.RESETTING
+        // Recycle point: an instance keeps the same id when reused, and votes are keyed
+        // by instance id. Wipe ALL voting state here so the finished game's votes/effect
+        // can never bleed into the next game on this instance — otherwise, if nobody
+        // votes next round, getWinner() would keep replaying the previous game's choice.
+        // (deactivateEffect only resets votes when an effect was active, so we also call
+        // resetVotes unconditionally to cover games where no effect ever activated.)
+        if (plugin.isVotingReady) {
+            plugin.votingManager.deactivateEffect(instance)
+            plugin.votingManager.resetVotes(instance)
+        }
         plugin.arenaManager.releaseInstance(instance.arenaInstance)
         instance.reset()
     }

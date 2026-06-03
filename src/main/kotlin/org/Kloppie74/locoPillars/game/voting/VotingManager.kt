@@ -40,7 +40,8 @@ class VotingManager(private val plugin: LocoPillars, val loader: VotingLoader) {
 
     fun getWinner(instance: GameInstance): VotingSettings? {
         val counts = getVoteCounts(instance)
-        if (counts.isEmpty()) return loader.getAll().takeIf { it.isNotEmpty() }?.random()
+        // No votes cast → no event is chosen (previously this picked a random module).
+        if (counts.isEmpty()) return null
         val winnerId = counts.maxByOrNull { it.value }?.key ?: return null
         return loader.get(winnerId)
     }
@@ -48,7 +49,7 @@ class VotingManager(private val plugin: LocoPillars, val loader: VotingLoader) {
     fun activateWinner(instance: GameInstance) {
         if (activeEffects.containsKey(instance.id)) return
         val winner = getWinner(instance) ?: run {
-            plugin.logger.info("[Voting] No voting modules available for instance ${instance.id}")
+            plugin.logger.info("[Voting] No event activated for instance ${instance.id} (nobody voted)")
             return
         }
         val context = VotingGameContext(plugin, instance)

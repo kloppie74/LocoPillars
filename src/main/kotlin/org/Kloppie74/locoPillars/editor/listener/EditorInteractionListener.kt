@@ -2,6 +2,8 @@ package org.Kloppie74.locoPillars.editor.listener
 
 import org.bukkit.GameMode
 import org.bukkit.Location
+import org.bukkit.Particle
+import org.bukkit.Sound
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
@@ -86,7 +88,7 @@ class EditorInteractionListener(
             EditorHotbarManager.ITEM_SAVE_CLOSE     -> handleSaveClose(event, player)
             EditorHotbarManager.ITEM_CANCEL_SESSION -> handleCancelSession(event, player)
             EditorHotbarManager.ITEM_HOLO_REFRESH   -> handleHolograms(event, player)
-            EditorHotbarManager.ITEM_SESSION_INFO   -> handleSessionInfo(event, player)
+            EditorHotbarManager.ITEM_BREAK_SELECTOR -> handleBreakSelector(event, player)
             EditorHotbarManager.ITEM_SWITCH_HOTBAR  -> handleSwitchHotbar(event, player)
         }
     }
@@ -346,19 +348,54 @@ class EditorInteractionListener(
     }
 
     // -------------------------------------------------------------------------
-    // Slot 7 — Session Info
+    // Slot 7 — Breakable-Block Selector
     // -------------------------------------------------------------------------
+    //
+    // Right-click block      → toggle that block in/out of the breakable whitelist
+    // Right-click air        → show the current whitelist count + hint
+    // Shift + left-click air  → clear the whole whitelist (air = no creative block break)
+    //
+    // The clicked block's editor-world coordinates are stored verbatim; in-game they are
+    // matched as origin-relative offsets (same convention the spawn-point setter uses), so
+    // a whitelisted block resolves correctly in every parallel arena instance.
 
-    private fun handleSessionInfo(event: PlayerInteractEvent, player: Player) {
-        if (!isRightClick(event)) return
+    private fun handleBreakSelector(event: PlayerInteractEvent, player: Player) {
         event.isCancelled = true
 
-        val session = editorSessionManager.getSession(player)
-        if (session == null) {
-            player.sendMessage(MSG.lang("editor.session.no_session_info"))
+        val session = editorSessionManager.getSession(player) ?: run {
+            player.sendMessage(MSG.chatColors("&cNo active editor session."))
             return
         }
-        session.showInfo()
+        val block = event.clickedBlock
+
+        when {
+            player.isSneaking && event.action == Action.LEFT_CLICK_AIR -> {
+                val removed = session.clearBreakableBlocks()
+                player.sendMessage(MSG.chatColors("&c✖ Cleared breakable whitelist &7(&f$removed&7 block(s))."))
+                player.playSound(player.location, Sound.BLOCK_FIRE_EXTINGUISH, 1.0f, 1.0f)
+            }
+
+            event.action == Action.RIGHT_CLICK_BLOCK && block != null -> {
+                val added  = session.toggleBreakableBlock(block.x, block.y, block.z)
+                val center = block.location.clone().add(0.5, 1.0, 0.5)
+                if (added) {
+                    player.sendMessage(MSG.chatColors("&a✔ &f(${block.x}, ${block.y}, ${block.z}) &ais now BREAKABLE."))
+                    block.world.spawnParticle(Particle.HAPPY_VILLAGER, center, 14, 0.3, 0.4, 0.3, 0.0)
+                    player.playSound(center, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.6f)
+                } else {
+                    player.sendMessage(MSG.chatColors("&c✖ &f(${block.x}, ${block.y}, ${block.z}) &cis no longer breakable."))
+                    block.world.spawnParticle(Particle.SMOKE, center, 14, 0.3, 0.4, 0.3, 0.0)
+                    player.playSound(center, Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.7f)
+                }
+                player.sendActionBar(MSG.chatColors("&7Breakable whitelist: &f${session.getBreakableBlockCount()} &7block(s)"))
+            }
+
+            event.action == Action.RIGHT_CLICK_AIR -> {
+                val count = session.getBreakableBlockCount()
+                player.sendMessage(MSG.chatColors("&6▶ Breakable whitelist: &f$count &7block(s) marked breakable."))
+                player.sendMessage(MSG.chatColors("&7Right-click a block to toggle it &8| &7shift + left-click air to clear all."))
+            }
+        }
     }
 
     // -------------------------------------------------------------------------

@@ -65,6 +65,13 @@ class EditorSession(
     private var canBreakMapBlocks: Boolean = mapRepository.loadMapSettings(mapName)
         ?.getBoolean("Settings.Can-Break-Map-Blocks", false)
         ?: false
+    private var canBlowUpMapBlocks: Boolean = mapRepository.loadMapSettings(mapName)
+        ?.getBoolean("Settings.Can-BlowUp-Map-Blocks", false)
+        ?: false
+    // Whitelist of breakable map-block offsets, stored as "x,y,z" strings (editor coords).
+    private var breakableBlocks: MutableList<String> = mapRepository.loadMapSettings(mapName)
+        ?.getStringList("Settings.Breakable-Blocks")?.toMutableList()
+        ?: mutableListOf()
     private var lobbyEnabled: Boolean = mapRepository.loadMapSettings(mapName)
         ?.getBoolean("Settings.LobbyEnabled", true)
         ?: true
@@ -304,6 +311,9 @@ class EditorSession(
     fun getGameTimer(): Int = gameTimer
     fun getItemTimer(): Int = itemTimer
     fun canBreakMapBlocks(): Boolean = canBreakMapBlocks
+    fun canBlowUpMapBlocks(): Boolean = canBlowUpMapBlocks
+    fun getBreakableBlockCount(): Int = breakableBlocks.size
+    fun isBreakableBlock(x: Int, y: Int, z: Int): Boolean = breakableBlocks.contains("$x,$y,$z")
     fun isLobbyEnabled(): Boolean = lobbyEnabled
     fun isHologramsEnabled(): Boolean = hologramsEnabled
 
@@ -416,6 +426,36 @@ class EditorSession(
         canBreakMapBlocks = !canBreakMapBlocks
         persist("Settings.Can-Break-Map-Blocks", canBreakMapBlocks)
         player.sendActionBar(MSG.chatColors("&aCan-Break-Map-Blocks: &f${if (canBreakMapBlocks) "enabled" else "disabled"}"))
+    }
+
+    fun toggleBlowUpMapBlocks() {
+        canBlowUpMapBlocks = !canBlowUpMapBlocks
+        persist("Settings.Can-BlowUp-Map-Blocks", canBlowUpMapBlocks)
+        player.sendActionBar(MSG.chatColors("&aCan-BlowUp-Map-Blocks: &f${if (canBlowUpMapBlocks) "enabled" else "disabled"}"))
+    }
+
+    /**
+     * Toggles a block's membership in the breakable-block whitelist.
+     * Coordinates are the raw editor-world block coordinates (= origin-relative offsets).
+     * @return true if the block was ADDED (now breakable), false if it was REMOVED.
+     */
+    fun toggleBreakableBlock(x: Int, y: Int, z: Int): Boolean {
+        val key = "$x,$y,$z"
+        val added = if (breakableBlocks.contains(key)) {
+            breakableBlocks.remove(key); false
+        } else {
+            breakableBlocks.add(key); true
+        }
+        persist("Settings.Breakable-Blocks", breakableBlocks)
+        return added
+    }
+
+    /** Clears the entire breakable-block whitelist. @return the number of blocks removed. */
+    fun clearBreakableBlocks(): Int {
+        val removed = breakableBlocks.size
+        breakableBlocks.clear()
+        persist("Settings.Breakable-Blocks", breakableBlocks)
+        return removed
     }
 
     fun toggleLobbyEnabled() {

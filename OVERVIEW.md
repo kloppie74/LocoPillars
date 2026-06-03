@@ -112,6 +112,8 @@ Each arena has a config file in `Data/Games/<name>.yml`.
 | `BuildRange` | int | `40` | Horizontal radius players can build within |
 | `DeathHeight` | int | `-5` | Y level at which a player is considered dead |
 | `Can-Break-Map-Blocks` | boolean | `false` | Allow breaking blocks that were in the original map |
+| `Can-BlowUp-Map-Blocks` | boolean | `false` | Allow explosions (TNT, creepers, …) to destroy original map blocks |
+| `Breakable-Blocks` | list | `[]` | Origin-relative `x,y,z` map blocks players may break even when Can-Break is off (set via the Breakable Selector, editor hotbar slot 7) |
 | `SpawnPoint` | X/Y/Z | — | Center point of the arena (also used as lobby spawn) |
 | `Spawn-Area` | Loc1/Loc2 | — | Bounding box for the shared lobby waiting area |
 | `DisplayName` | string | file name | Friendly name shown in chat |

@@ -77,6 +77,39 @@ class GameConfig(
         return (settings["Can-Break-Map-Blocks"] as? Boolean) ?: false
     }
 
+    /** Whether explosions (TNT, creepers, beds, …) may destroy original map blocks. */
+    fun canBlowUpMapBlocks(): Boolean {
+        val settings = configMap["Settings"] as? Map<String, Any> ?: return false
+        return (settings["Can-BlowUp-Map-Blocks"] as? Boolean) ?: false
+    }
+
+    /**
+     * Whitelist of original map-block offsets (relative to the arena origin) that players
+     * are allowed to break even when [canBreakMapBlocks] is false. Stored in YAML as
+     * `Settings.Breakable-Blocks`: a list of `"x,y,z"` strings (editor-world coordinates,
+     * which equal the offset from origin because the editor pastes its map at 0,0,0).
+     * Parsed once and cached — [configMap] is immutable for the lifetime of this config.
+     */
+    private val breakableBlockOffsets: Set<Triple<Int, Int, Int>> by lazy {
+        val settings = configMap["Settings"] as? Map<*, *> ?: return@lazy emptySet()
+        val raw = settings["Breakable-Blocks"] as? List<*> ?: return@lazy emptySet()
+        raw.mapNotNull { entry ->
+            val parts = (entry as? String)?.split(",") ?: return@mapNotNull null
+            if (parts.size != 3) return@mapNotNull null
+            val x = parts[0].trim().toIntOrNull() ?: return@mapNotNull null
+            val y = parts[1].trim().toIntOrNull() ?: return@mapNotNull null
+            val z = parts[2].trim().toIntOrNull() ?: return@mapNotNull null
+            Triple(x, y, z)
+        }.toSet()
+    }
+
+    /** True if a breakable-block whitelist is configured (non-empty). */
+    fun hasBreakableWhitelist(): Boolean = breakableBlockOffsets.isNotEmpty()
+
+    /** True if the given origin-relative block offset is in the breakable whitelist. */
+    fun isBreakableWhitelisted(offsetX: Int, offsetY: Int, offsetZ: Int): Boolean =
+        breakableBlockOffsets.isNotEmpty() && Triple(offsetX, offsetY, offsetZ) in breakableBlockOffsets
+
     fun isLobbyEnabled(): Boolean {
         val settings = configMap["Settings"] as? Map<String, Any> ?: return true
         return (settings["LobbyEnabled"] as? Boolean) ?: true

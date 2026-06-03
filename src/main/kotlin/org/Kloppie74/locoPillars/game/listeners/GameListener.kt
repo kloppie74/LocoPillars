@@ -5,8 +5,11 @@ import org.bukkit.Location
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.block.Block
 import org.bukkit.event.block.BlockBreakEvent
+import org.bukkit.event.block.BlockExplodeEvent
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.FoodLevelChangeEvent
@@ -341,22 +344,26 @@ class GameListener(private val plugin: LocoPillars) : Listener {
                 return
             }
 
-            // Check if player can break map blocks
-            if (!instance.arenaInstance.config.canBreakMapBlocks()) {
-                val playerPlacedBlocksForInstance = playerPlacedBlocks[instance.id]
-                val isPlayerPlaced = playerPlacedBlocksForInstance?.contains(blockLoc) == true
-
-                if (!isPlayerPlaced) {
+            // Check if player can break this block.
+            // Player-placed blocks are always breakable. Original map blocks are breakable
+            // only when Can-Break-Map-Blocks is on, OR when this exact block was whitelisted
+            // with the editor's Breakable-Block selector (stored as an origin-relative offset).
+            val placed = playerPlacedBlocks[instance.id]
+            val isPlayerPlaced = placed?.contains(blockLoc) == true
+            if (isPlayerPlaced) {
+                placed?.remove(blockLoc)
+            } else {
+                val config = instance.arenaInstance.config
+                val whitelisted = config.hasBreakableWhitelist() && config.isBreakableWhitelisted(
+                    blockLoc.blockX - origin.blockX,
+                    blockLoc.blockY - origin.blockY,
+                    blockLoc.blockZ - origin.blockZ
+                )
+                if (!config.canBreakMapBlocks() && !whitelisted) {
                     event.isCancelled = true
                     player.sendMessage(MSG.lang("gameplay.block_break_player_placed_only"))
                     return
                 }
-
-                // Remove from placed blocks
-                playerPlacedBlocksForInstance?.remove(blockLoc)
-            } else {
-                // Remove from placed blocks if exists
-                playerPlacedBlocks[instance.id]?.remove(blockLoc)
             }
 
             // === DATABASE: Track block broken ===
@@ -413,6 +420,61 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             } catch (ex: Exception) {
                 plugin.logger.warning("[GameListener] Error tracking block place: ${ex.message}")
             }
+        }
+    }
+
+    // =================== EXPLOSIONS ===================
+
+    /** TNT, creepers, end crystals, etc. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onEntityExplode(event: EntityExplodeEvent) {
+        filterExplosionBlocks(event.location, event.blockList())
+    }
+
+    /** Beds / respawn anchors detonating in the wrong dimension, etc. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onBlockExplode(event: BlockExplodeEvent) {
+        filterExplosionBlocks(event.block.location, event.blockList())
+    }
+
+    /**
+     * Protects original map blocks from explosions when Can-BlowUp-Map-Blocks is off.
+     * Player-placed blocks are always allowed to blow up (and are untracked when they do).
+     * If the explosion is not inside any arena instance, nothing is changed.
+     */
+    private fun filterExplosionBlocks(center: Location, blocks: MutableList<Block>) {
+        val instance = getInstanceAt(center) ?: return
+        val placed = playerPlacedBlocks[instance.id]
+
+        if (instance.arenaInstance.config.canBlowUpMapBlocks()) {
+            // Explosions may level the map; just stop tracking any player-placed blocks destroyed.
+            if (placed != null) blocks.forEach { placed.remove(it.location) }
+            return
+        }
+
+        // Keep only player-placed blocks in the blast; every original map block is protected.
+        // placed.remove() returns true for player-placed blocks (and untracks them as they detonate).
+        val iterator = blocks.iterator()
+        while (iterator.hasNext()) {
+            val block = iterator.next()
+            if (placed == null || !placed.remove(block.location)) {
+                iterator.remove() // map block → protected
+            }
+        }
+    }
+
+    /**
+     * Finds the game instance whose arena region contains [loc]. Parallel instances share
+     * one world at different origins, so we match by world + horizontal distance to origin
+     * (bounded by the schematic save radius).
+     */
+    private fun getInstanceAt(loc: Location): GameInstance? {
+        return plugin.gameManager.getAllInstances().firstOrNull { inst ->
+            val origin = inst.arenaInstance.origin
+            val radius = inst.arenaInstance.config.getSaveRadius().toDouble()
+            loc.world == origin.world &&
+                kotlin.math.abs(loc.x - origin.x) <= radius &&
+                kotlin.math.abs(loc.z - origin.z) <= radius
         }
     }
 
