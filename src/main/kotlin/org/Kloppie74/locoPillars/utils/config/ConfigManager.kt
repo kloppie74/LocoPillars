@@ -497,6 +497,15 @@ class ConfigManager(private val plugin: JavaPlugin) {
         if (needsSave) {
             saveConfig()
         }
+
+        // Only warn at extreme values — schematics are now cached so the clipboard
+        // memory cost is fixed at (unique .schem files), not (instances × maps).
+        // The remaining cost per instance is the arena world chunk data in RAM.
+        if (instancesPerGameType > 20) {
+            plugin.logger.warning("[ConfigManager] ⚠ game.instances-per-type is set to $instancesPerGameType.")
+            plugin.logger.warning("[ConfigManager]   This creates ${instancesPerGameType} arena slots per map type.")
+            plugin.logger.warning("[ConfigManager]   Each slot keeps a chunk region in RAM. Consider lowering if RAM is tight.")
+        }
     }
 
     fun reloadConfig() {

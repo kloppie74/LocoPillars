@@ -27,7 +27,12 @@ class GameJoinManager(
 
     private val achievementListener get() = plugin.achievementListener
 
-    fun joinGame(player: Player, gameTypeName: String, gameplayManager: GameplayManager): GameInstance? {
+    fun joinGame(
+        player: Player,
+        gameTypeName: String,
+        gameplayManager: GameplayManager,
+        targetInstance: GameInstance? = null   // if set, skip instance selection and use this one
+    ): GameInstance? {
         debugLog("Player ${player.name} attempting to join game type: $gameTypeName")
 
         if (playerToInstance.containsKey(player.uniqueId)) {
@@ -42,11 +47,11 @@ class GameJoinManager(
         }
 
         val instanceManager = GameInstanceManager(plugin, instances, plugin.configManager)
-        val instance = instanceManager.getAvailableInstance(gameTypeName) ?: run {
+        val instance = targetInstance ?: (instanceManager.getAvailableInstance(gameTypeName) ?: run {
             plugin.logger.warning("[GameJoinManager] No available games found for ${player.name} requesting $gameTypeName")
             player.sendMessage(MSG.lang("game.join.error_no_game", "type" to gameTypeName))
             return null
-        }
+        })
 
         if (instance.players.size >= instance.getMaxPlayers()) {
             debugLog("Game instance ${instance.id} is full (${instance.players.size}/${instance.getMaxPlayers()})")
@@ -280,6 +285,83 @@ class GameJoinManager(
         return instance.players.mapNotNull { playerId ->
             plugin.server.getPlayer(playerId)?.takeIf { it.isOnline }
         }
+    }
+
+    // =========================================================================
+    // Party join
+    // =========================================================================
+
+    /**
+     * Joins all online [partyMemberUUIDs] (including the [leader]) to the same
+     * game instance.  Finds the first instance that has enough free slots for
+     * the entire party; if none is found the leader gets an error message.
+     *
+     * Returns the joined [GameInstance] or null on failure.
+     */
+    fun joinPartyToGame(
+        leader: Player,
+        partyMemberUUIDs: List<UUID>,
+        gameTypeName: String,
+        gameplayManager: GameplayManager
+    ): GameInstance? {
+        val onlineMembers = partyMemberUUIDs
+            .mapNotNull { plugin.server.getPlayer(it) }
+            .filter { it.isOnline }
+
+        if (onlineMembers.isEmpty()) {
+            leader.sendMessage(MSG.lang("party.game.no_online_members"))
+            return null
+        }
+
+        // Fail fast if any member is already in a game
+        val alreadyPlaying = onlineMembers.filter { playerToInstance.containsKey(it.uniqueId) }
+        if (alreadyPlaying.isNotEmpty()) {
+            leader.sendMessage(MSG.lang("party.game.member_already_in_game",
+                "player" to alreadyPlaying.first().name))
+            return null
+        }
+
+        val config = plugin.configs.firstOrNull { it.name.equals(gameTypeName, ignoreCase = true) }
+        if (config == null) {
+            leader.sendMessage(MSG.lang("pillars.join.type_not_found", "type" to gameTypeName))
+            return null
+        }
+
+        // Find an instance with room for the whole party
+        val instanceManager = GameInstanceManager(plugin, instances, plugin.configManager)
+        val instance = instanceManager.getAvailableInstanceWithSlots(gameTypeName, onlineMembers.size)
+        if (instance == null) {
+            leader.sendMessage(MSG.lang("party.game.no_space",
+                "size" to onlineMembers.size.toString(),
+                "type" to config.getDisplayName()))
+            return null
+        }
+
+        debugLog("Party join: ${onlineMembers.size} members → instance ${instance.id}")
+
+        // Join every member to the selected instance
+        var joinedCount = 0
+        for (member in onlineMembers) {
+            val result = joinGame(member, gameTypeName, gameplayManager, targetInstance = instance)
+            if (result != null) {
+                joinedCount++
+                // Non-leaders get a "you joined with your party" message
+                if (member.uniqueId != leader.uniqueId) {
+                    member.sendMessage(MSG.lang("party.game.member_joined_with_party",
+                        "leader" to leader.name,
+                        "game"   to config.getDisplayName()))
+                }
+            } else {
+                member.sendMessage(MSG.lang("party.game.member_join_failed"))
+            }
+        }
+
+        if (joinedCount == 0) return null
+
+        leader.sendMessage(MSG.lang("party.game.leader_joined_with_party",
+            "count" to joinedCount.toString(),
+            "game"  to config.getDisplayName()))
+        return instance
     }
 
     private fun debugLog(message: String) {

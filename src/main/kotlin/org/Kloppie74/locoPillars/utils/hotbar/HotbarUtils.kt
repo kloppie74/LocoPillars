@@ -43,6 +43,8 @@ object HotbarUtils {
      */
     @JvmStatic
     fun determineHotbarType(player: Player, plugin: LocoPillars): String {
+        // Editor players manage their own hotbar — never classify them as lobby/spectate
+        if (plugin.adminEditorManager.isActive(player)) return "editor"
         val worldName = player.world.name
         val instance = plugin.gameManager.getPlayerInstance(player)
 
@@ -100,6 +102,7 @@ object HotbarUtils {
     @JvmStatic
     fun applyPlayerStateForHotbarType(player: Player, hotbarType: String, plugin: LocoPillars) {
         if (plugin.adminEditorManager.isActive(player)) return
+        if (hotbarType.lowercase() == "editor") return
 
         when (hotbarType.lowercase()) {
             "spectate" -> {

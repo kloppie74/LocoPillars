@@ -54,6 +54,13 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     private val playerKillStreaks = mutableMapOf<UUID, Int>()
     private val playerLastKillTimes = mutableMapOf<UUID, Long>()
 
+    /**
+     * Players whose death was caused by another player in this tick.
+     * Used to skip not_killed_by_player rewards for player kills (which are
+     * already handled in handlePlayerKill via processKillRewards).
+     */
+    private val killedByPlayerSet: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+
     // =================== DEATH HANDLING ===================
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -74,6 +81,15 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             // Fire DEATH cosmetic before processing the death
             if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
                 plugin.cosmeticManager.fireDeath(player, instance)
+            }
+
+            // If this death was NOT caused by a player, fire not_killed_by_player rewards.
+            // killedByPlayerSet.remove() returns true only when handlePlayerKill registered the victim.
+            if (instance.state == GameState.ACTIVE && !killedByPlayerSet.remove(player.uniqueId)) {
+                val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
+                    .getConfigurationSection("Rewards")
+                val remainingPlayers = instance.players.mapNotNull { plugin.server.getPlayer(it) }
+                RewardProcessor.processNotKilledByPlayerRewards(plugin, player, remainingPlayers, rewardsSection)
             }
 
             // Handle death through game manager (also records stats and sets spectator mode)
@@ -229,6 +245,10 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             }
         }
 
+        // Mark victim as killed-by-player BEFORE the death event fires so
+        // onPlayerDeath knows NOT to trigger not_killed_by_player rewards.
+        killedByPlayerSet.add(victim.uniqueId)
+
         val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
             .getConfigurationSection("Rewards")
         val remainingPlayers = instance.players.mapNotNull { plugin.server.getPlayer(it) }
@@ -308,6 +328,8 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onBlockBreak(event: BlockBreakEvent) {
         val player = event.player
+        // Editor players can freely break any block in their edit world
+        if (plugin.adminEditorManager.isActive(player)) return
         val instance = plugin.gameManager.getPlayerInstance(player)
 
         if (instance != null) {
@@ -381,6 +403,8 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onBlockPlace(event: BlockPlaceEvent) {
         val player = event.player
+        // Editor players can freely place any block in their edit world
+        if (plugin.adminEditorManager.isActive(player)) return
         val instance = plugin.gameManager.getPlayerInstance(player)
 
         if (instance != null) {

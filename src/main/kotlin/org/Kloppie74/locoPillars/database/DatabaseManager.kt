@@ -138,6 +138,20 @@ object DatabaseManager {
                 plugin.logger.warning("[LocoPillars] ✗ Leaderboard metadata initialization failed: ${e.message}")
             }
 
+            // Vul de leaderboard-cache bij startup en ververs periodiek (elke 5 min),
+            // zodat db_rank_* placeholders meteen werken — niet pas nadat een game eindigt.
+            try {
+                plugin.server.scheduler.runTaskTimerAsynchronously(plugin, Runnable {
+                    try {
+                        LeaderboardCacheDAO.updateCache()
+                    } catch (e: Exception) {
+                        plugin.logger.warning("[LocoPillars] ✗ Leaderboard cache refresh failed: ${e.message}")
+                    }
+                }, 100L, 20L * 60 * 5) // eerste run na 5s, daarna elke 5 minuten
+            } catch (e: Exception) {
+                plugin.logger.warning("[LocoPillars] ✗ Could not schedule leaderboard cache refresh: ${e.message}")
+            }
+
             // Run migrations
             try {
                 if (migrations.runMigrations()) {

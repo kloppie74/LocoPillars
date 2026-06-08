@@ -11,6 +11,7 @@ import org.bukkit.entity.Player
 import org.bukkit.generator.ChunkGenerator
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.MSG
+import org.Kloppie74.locoPillars.utils.deleteRecursivelyJava
 import org.Kloppie74.locoPillars.utils.SchematicHelper
 import java.io.File
 import java.util.UUID
@@ -296,11 +297,14 @@ class EditorSessionManager(
             world.players.forEach { p ->
                 if (mainWorld != null) p.teleport(mainWorld.spawnLocation)
             }
+            // Resolve folder BEFORE unloading — world.worldFolder is unavailable afterwards.
+            val folder = resolveWorldFolder(worldName, world)
             if (Bukkit.unloadWorld(world, false)) {
-                val folder = File(Bukkit.getWorldContainer(), worldName)
-                if (folder.exists()) {
-                    folder.deleteRecursively()
-                    debugLog("Temporary world deleted: $worldName")
+                if (folder != null && folder.exists()) {
+                    folder.deleteRecursivelyJava()
+                    debugLog("Temporary world deleted: $worldName (${folder.absolutePath})")
+                } else {
+                    debugLog("World folder for $worldName not found — skipping delete")
                 }
             }
         }, 20L)
@@ -364,20 +368,75 @@ class EditorSessionManager(
         val world     = Bukkit.getWorld(worldName) ?: return
         val mainWorld = Bukkit.getWorlds().firstOrNull { it.environment == World.Environment.NORMAL }
         if (mainWorld != null) world.players.forEach { it.teleport(mainWorld.spawnLocation) }
+        val folder = resolveWorldFolder(worldName, world)
         if (Bukkit.unloadWorld(world, false)) {
-            val folder = File(Bukkit.getWorldContainer(), worldName)
-            if (folder.exists()) folder.deleteRecursively()
+            folder?.takeIf { it.exists() }?.deleteRecursivelyJava()
         }
+    }
+
+    /**
+     * Resolves the on-disk folder for a world, supporting both storage layouts:
+     *
+     * - **Classic** (< Paper 1.21.2): `<worldContainer>/<worldName>/`
+     * - **Dimension** (≥ Paper 1.21.2): `<worldContainer>/world/dimensions/minecraft/<worldName>/`
+     *
+     * Always pass [loadedWorld] when the world is still loaded — `world.worldFolder`
+     * is the most reliable source and works regardless of layout. Falls back to
+     * path-based probing when the world object is no longer available.
+     */
+    private fun resolveWorldFolder(worldName: String, loadedWorld: World? = null): File? {
+        // 1. Most reliable: ask the loaded world object directly.
+        loadedWorld?.worldFolder?.takeIf { it.exists() }?.let { return it }
+
+        val container = Bukkit.getWorldContainer()
+
+        // 2. Classic layout: <container>/<worldName>/
+        File(container, worldName).takeIf { it.exists() }?.let { return it }
+
+        // 3. New dimension layout (Paper ≥ 1.21.2):
+        //    <container>/world/dimensions/minecraft/<worldName>/
+        File(container, "world/dimensions/minecraft/$worldName").takeIf { it.exists() }?.let { return it }
+
+        return null
     }
 
     private fun createVoidWorld(worldName: String): World? = try {
         WorldCreator(worldName)
             .generator(VoidChunkGenerator())
+            .biomeProvider(VoidBiomeProvider)
             .generateStructures(false)
             .createWorld()
+            ?.also { configureEditorWorld(it) }
     } catch (e: Exception) {
         plugin.logger.severe("Failed to create void world: ${e.message}")
         null
+    }
+
+    /**
+     * Lock down an editor world: no mobs, no growth/spread, no weather. Combined
+     * with the void generator this keeps the edit world completely empty so
+     * neither vanilla nor custom-content plugins (CraftEngine, ItemsAdder, …) can
+     * spawn mobs, crops or flowers in it.
+     */
+    private fun configureEditorWorld(world: World) {
+        // No mobs of any kind
+        world.difficulty = org.bukkit.Difficulty.PEACEFUL
+        world.setSpawnFlags(false, false)            // (allowMonsters, allowAnimals)
+        runCatching { world.setGameRule(org.bukkit.GameRule.DO_MOB_SPAWNING, false) }
+        runCatching { world.setGameRule(org.bukkit.GameRule.DO_PATROL_SPAWNING, false) }
+        runCatching { world.setGameRule(org.bukkit.GameRule.DO_TRADER_SPAWNING, false) }
+        runCatching { world.setGameRule(org.bukkit.GameRule.DISABLE_RAIDS, true) }
+
+        // No block growth / spreading (stops crops & flowers from growing/spreading)
+        runCatching { world.setGameRule(org.bukkit.GameRule.RANDOM_TICK_SPEED, 0) }
+        runCatching { world.setGameRule(org.bukkit.GameRule.DO_FIRE_TICK, false) }
+
+        // Static, clear environment
+        runCatching { world.setGameRule(org.bukkit.GameRule.DO_WEATHER_CYCLE, false) }
+        runCatching { world.setGameRule(org.bukkit.GameRule.DO_DAYLIGHT_CYCLE, false) }
+        world.setStorm(false)
+        world.isThundering = false
+        world.time = 6000L
     }
 
     private fun <T> scheduleTask(async: Boolean, task: () -> T): CompletableFuture<T> {
@@ -423,5 +482,29 @@ class EditorSessionManager(
         override fun canSpawn(world: World, x: Int, z: Int): Boolean = true
         override fun getDefaultPopulators(world: World): List<org.bukkit.generator.BlockPopulator> =
             emptyList()
+
+        // Skip EVERY generation step. This stops not only vanilla decoration but
+        // also custom-content plugins (CraftEngine, ItemsAdder, Oraxen, …) that
+        // inject their crops/flowers/features into the decoration & mob steps —
+        // which is why they were appearing mid-air in the void editor world.
+        override fun shouldGenerateNoise(): Boolean = false
+        override fun shouldGenerateSurface(): Boolean = false
+        override fun shouldGenerateCaves(): Boolean = false
+        override fun shouldGenerateDecorations(): Boolean = false
+        override fun shouldGenerateMobs(): Boolean = false
+        override fun shouldGenerateStructures(): Boolean = false
+
+        // Force the barren THE_VOID biome everywhere so nothing is biome-driven
+        // into spawning (vegetation/mobs are tied to biome decoration).
+        override fun getDefaultBiomeProvider(worldInfo: org.bukkit.generator.WorldInfo): org.bukkit.generator.BiomeProvider =
+            VoidBiomeProvider
+    }
+
+    private object VoidBiomeProvider : org.bukkit.generator.BiomeProvider() {
+        override fun getBiome(worldInfo: org.bukkit.generator.WorldInfo, x: Int, y: Int, z: Int): org.bukkit.block.Biome =
+            org.bukkit.block.Biome.THE_VOID
+
+        override fun getBiomes(worldInfo: org.bukkit.generator.WorldInfo): List<org.bukkit.block.Biome> =
+            listOf(org.bukkit.block.Biome.THE_VOID)
     }
 }

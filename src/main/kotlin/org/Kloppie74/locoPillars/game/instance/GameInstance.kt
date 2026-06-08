@@ -51,9 +51,33 @@ class GameInstance(
         return getPlayersInTeam(team).filter { it !in players }
     }
 
+    /**
+     * All teams defined in the map config (max possible, regardless of whether
+     * players were assigned).  Use this for internal game logic that needs the
+     * full team list (spawn assignment, cage placement, etc.).
+     */
     fun getAllTeams(): List<Team> {
         return arenaInstance.config.teams
     }
+
+    /**
+     * Teams that actually started with at least one player.
+     *
+     * When a 3-team map runs with only 2 players, only 2 teams receive assignments
+     * via [trackTeamAssignment].  This method returns those 2 teams in config order,
+     * leaving the empty third team out.
+     *
+     * Falls back to [getAllTeams] if called before team assignment (WAITING/STARTING),
+     * so pre-game scoreboards still show the correct max team count.
+     */
+    fun getActiveTeams(): List<Team> {
+        if (teamPlayerCounts.isEmpty()) return arenaInstance.config.teams
+        // Preserve config order; include only teams that received at least one player.
+        return arenaInstance.config.teams.filter { it in teamPlayerCounts }
+    }
+
+    /** Convenience count — use this wherever TEAM_AMOUNT is needed. */
+    fun getActiveTeamCount(): Int = getActiveTeams().size
 
     fun getTeamStatistics(team: Team): TeamStatistics {
         val totalPlayers = getPlayersInTeam(team).size

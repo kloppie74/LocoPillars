@@ -372,7 +372,10 @@ object LeaderboardCacheDAO {
     }
 
     private fun upsertLeaderboardFromSelect(selectSql: String, leaderboardType: String, vararg params: Any): Boolean {
-        val upsertSql = when (DatabaseManager.getDatabaseType()) {
+        // BELANGRIJK: getDatabaseType() geeft de RAUWE config-waarde terug (bijv. "H2" of
+        // "MySQL"), dus hier .lowercase() — anders viel dit in de else-tak → exception →
+        // updateCache() faalde → cache leeg → alle ranks "Unranked".
+        val upsertSql = when (DatabaseManager.getDatabaseType().lowercase()) {
             "mysql", "mariadb" -> """
                 REPLACE INTO lp_leaderboard_cache (
                     player_id, player_name, leaderboard_type, rank_position, rank_value, rank_display_value,
@@ -382,7 +385,19 @@ object LeaderboardCacheDAO {
                 )
                 $selectSql
             """
-            "sqlite", "h2" -> """
+            // H2 draait in MODE=MySQL maar kent GEEN "INSERT OR REPLACE" (dat is SQLite).
+            // H2 ondersteunt MERGE INTO ... KEY(...) met een SELECT-bron.
+            "h2" -> """
+                MERGE INTO lp_leaderboard_cache (
+                    player_id, player_name, leaderboard_type, rank_position, rank_value, rank_display_value,
+                    secondary_value, secondary_display, tertiary_value, tertiary_display,
+                    percentile, score_normalized, previous_rank, rank_change, rank_change_direction,
+                    qualifying_games, eligible, last_updated, cache_version
+                )
+                KEY(player_id, leaderboard_type)
+                $selectSql
+            """
+            "sqlite" -> """
                 INSERT OR REPLACE INTO lp_leaderboard_cache (
                     player_id, player_name, leaderboard_type, rank_position, rank_value, rank_display_value,
                     secondary_value, secondary_display, tertiary_value, tertiary_display,
@@ -418,7 +433,7 @@ object LeaderboardCacheDAO {
                     last_updated = EXCLUDED.last_updated,
                     cache_version = EXCLUDED.cache_version
             """
-            else -> throw IllegalArgumentException("Unsupported database type")
+            else -> throw IllegalArgumentException("Unsupported database type: ${DatabaseManager.getDatabaseType()}")
         }
 
         DatabaseManager.getConnection().use { conn ->
@@ -433,10 +448,17 @@ object LeaderboardCacheDAO {
                 }
                 ps.executeUpdate()
                 conn.commit()
-                updatePercentiles(leaderboardType)
-                return true
             }
         }
+
+        // Percentielen zijn optioneel (en niet elk SQL-dialect ondersteunt UPDATE..FROM).
+        // Mag NOOIT de cache-vulling laten falen — de rank_position is al gecommit.
+        try {
+            updatePercentiles(leaderboardType)
+        } catch (_: Exception) {
+            // negeren — ranks werken ook zonder percentielen
+        }
+        return true
     }
 
     private fun updatePercentiles(type: String): Boolean {
@@ -519,6 +541,24 @@ object LeaderboardCacheDAO {
             }
         }
         return list
+    }
+
+    /**
+     * Haal de cache-entry op die op een specifieke positie (rank) staat voor een type.
+     * Gebruikt voor placeholders als db_rank_1_wins (= speler op plek 1 in wins).
+     * Returnt null als er niemand op die positie staat.
+     */
+    fun getEntryAtPosition(leaderboardType: String, position: Int): LeaderboardEntry? {
+        val sql = "SELECT * FROM lp_leaderboard_cache WHERE leaderboard_type = ? AND rank_position = ?"
+        DatabaseManager.getConnection().use { conn ->
+            conn.prepareStatement(sql).use { ps ->
+                ps.setString(1, leaderboardType)
+                ps.setInt(2, position)
+                ps.executeQuery().use { rs ->
+                    return if (rs.next()) rowToLeaderboardEntry(rs) else null
+                }
+            }
+        }
     }
 
     fun getPlayerRank(playerId: String, leaderboardType: String): Int {

@@ -45,6 +45,27 @@ object RewardProcessor {
         }
     }
 
+    /**
+     * Called when a player dies NOT caused by another player (void, fall, suffocation, etc.).
+     * Reads from Rewards.OnKillRewards.not_killed_by_player in the map config.
+     */
+    fun processNotKilledByPlayerRewards(plugin: LocoPillars, victim: Player, remainingPlayers: List<Player>, configSection: ConfigurationSection?) {
+        val killSection = configSection?.getConfigurationSection("OnKillRewards") ?: return
+        if (!killSection.getBoolean("enabled", true)) return
+
+        val notByPlayer = killSection.getConfigurationSection("not_killed_by_player") ?: return
+        val basePlaceholders = mapOf("death" to victim.name, "player" to victim.name)
+
+        notByPlayer.getConfigurationSection("killed_player")?.let { s ->
+            dispatchSection(plugin, s, victim, basePlaceholders)
+        }
+        notByPlayer.getConfigurationSection("remaining_players")?.let { s ->
+            remainingPlayers.filter { it != victim }.forEach { p ->
+                dispatchSection(plugin, s, p, basePlaceholders + ("player" to p.name))
+            }
+        }
+    }
+
     fun processLeaveRewards(plugin: LocoPillars, leftPlayer: Player, remainingPlayers: List<Player>, configSection: ConfigurationSection?) {
         val leaveSection = configSection?.getConfigurationSection("OnLeaveRewards") ?: return
         if (!leaveSection.getBoolean("enabled", true)) return

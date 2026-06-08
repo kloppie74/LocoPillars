@@ -48,7 +48,7 @@
 #    plugin.yml references this class by full name — must never be renamed.
 # ─────────────────────────────────────────────────────────────────────────────
 -keep public class org.Kloppie74.locoPillars.LocoPillars {
-    public *;
+    *;
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

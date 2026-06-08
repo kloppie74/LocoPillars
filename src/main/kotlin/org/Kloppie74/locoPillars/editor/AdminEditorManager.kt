@@ -164,6 +164,10 @@ class AdminEditorManager(
         player.gameMode    = state.originalGameMode
         player.allowFlight = state.originalAllowFlight
 
+        // Clear any stale spectator marking so the player isn't stuck as a
+        // spectator after leaving the editor.
+        org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils.clearCache(player)
+
         player.sendMessage(MSG.lang("editor.mode.deactivated"))
         player.sendMessage(MSG.lang("editor.mode.hotbar_restored"))
 

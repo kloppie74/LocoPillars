@@ -6,9 +6,10 @@ import org.bukkit.OfflinePlayer
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.game.data.Team
+import org.Kloppie74.locoPillars.database.dao.AchievementDAO
+import org.Kloppie74.locoPillars.database.dao.LeaderboardCacheDAO
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
-import org.Kloppie74.locoPillars.database.dao.AchievementDAO
 import org.bukkit.entity.Player
 
 /**
@@ -31,6 +32,18 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
     override fun getAuthor(): String = "Kloppie74"
     override fun getVersion(): String = "5.0.0"
     override fun persist(): Boolean = true
+
+    /** Mapt placeholder-token → leaderboard-type voor positie-placeholders (db_rank_N_<type>). */
+    private val LEADERBOARD_TYPE_TOKENS = mapOf(
+        "wins" to LeaderboardCacheDAO.TYPE_WINS,
+        "winrate" to LeaderboardCacheDAO.TYPE_WINRATE,
+        "kills" to LeaderboardCacheDAO.TYPE_KILLS,
+        "kd" to LeaderboardCacheDAO.TYPE_KD_RATIO,
+        "level" to LeaderboardCacheDAO.TYPE_LEVEL,
+        "playtime" to LeaderboardCacheDAO.TYPE_PLAYTIME,
+        "streak" to LeaderboardCacheDAO.TYPE_STREAK,
+        "pillars" to LeaderboardCacheDAO.TYPE_PILLARS
+    )
 
     override fun onRequest(p: OfflinePlayer?, params: String): String? {
         val player = p?.player
@@ -55,7 +68,7 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
                     "players_dead" -> teamStats.deadPlayers.toString()
                     "status" -> teamStats.status
                     "status_symbol" -> teamStats.statusSymbol
-                    "displayname" -> team?.let { "[${it.name}]" } ?: ""
+                    "displayname" -> team?.let { "${it.color.toChatColor()}${it.name}" } ?: ""
                     else -> ""
                 }
             }
@@ -230,6 +243,21 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
             }
         }
 
+        // === POSITIONAL LEADERBOARD PLACEHOLDERS ===
+        // db_rank_<positie>_<type>            → naam van de speler op die positie
+        // db_rank_<positie>_<type>_name       → idem (expliciet)
+        // db_rank_<positie>_<type>_value      → nette weergavewaarde (bijv. "42", "3.5 K/D")
+        // db_rank_<positie>_<type>_raw        → ruwe numerieke waarde
+        // type = wins, winrate, kills, kd, level, playtime, streak, pillars
+        val posRankRegex = Regex("""db_rank_(\d+)_(.+?)(?:_(name|value|raw))?""")
+        posRankRegex.matchEntire(pLower)?.let { m ->
+            val position = m.groupValues[1].toIntOrNull() ?: return ""
+            val typeToken = m.groupValues[2]
+            val field = m.groupValues[3] // "", "name", "value", "raw"
+            val type = LEADERBOARD_TYPE_TOKENS[typeToken] ?: return ""
+            return getLeaderboardPositionSafe(type, position, field)
+        }
+
         // === DATABASE PLACEHOLDERS (db_) - UPDATED WITH DAO ===
         when (pLower) {
             "db_player_name" -> return player?.name ?: ""
@@ -318,6 +346,14 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
             "db_perfect_games" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "perfect_games").toString() }
             "db_comeback_wins" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "comeback_wins").toString() }
             "db_global_rank" -> return getStatSafe(player) { StatsDAO.getIntStat(it, "global_rank").toString() }
+            "db_rank_wins" -> return getLeaderboardRankSafe(player, LeaderboardCacheDAO.TYPE_WINS)
+            "db_rank_kd" -> return getLeaderboardRankSafe(player, LeaderboardCacheDAO.TYPE_KD_RATIO)
+            "db_rank_winrate" -> return getLeaderboardRankSafe(player, LeaderboardCacheDAO.TYPE_WINRATE)
+            "db_rank_kills" -> return getLeaderboardRankSafe(player, LeaderboardCacheDAO.TYPE_KILLS)
+            "db_rank_level" -> return getLeaderboardRankSafe(player, LeaderboardCacheDAO.TYPE_LEVEL)
+            "db_rank_playtime" -> return getLeaderboardRankSafe(player, LeaderboardCacheDAO.TYPE_PLAYTIME)
+            "db_rank_streak" -> return getLeaderboardRankSafe(player, LeaderboardCacheDAO.TYPE_STREAK)
+            "db_rank_pillars" -> return getLeaderboardRankSafe(player, LeaderboardCacheDAO.TYPE_PILLARS)
         }
 
         // === ACHIEVEMENT PLACEHOLDERS - UPDATED WITH DAO ===
@@ -531,6 +567,45 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
     }
 
     // =================== HELPER METHODS ===================
+
+    /**
+     * Geeft een veld terug van de speler op een specifieke leaderboard-positie.
+     * field: "" / "name" → spelernaam, "value" → nette weergavewaarde, "raw" → ruwe waarde.
+     * Lege string als er niemand op die positie staat.
+     */
+    private fun getLeaderboardPositionSafe(type: String, position: Int, field: String): String {
+        return try {
+            val entry = LeaderboardCacheDAO.getEntryAtPosition(type, position) ?: return ""
+            when (field) {
+                "value" -> entry.rankDisplayValue.ifBlank { formatRawValue(entry.rankValue) }
+                "raw" -> formatRawValue(entry.rankValue)
+                else -> entry.playerName // "" of "name"
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    /** Toont een hele waarde als integer, anders met 2 decimalen. */
+    private fun formatRawValue(value: Double): String {
+        return if (value == Math.floor(value) && !value.isInfinite()) {
+            value.toLong().toString()
+        } else {
+            "%.2f".format(value)
+        }
+    }
+
+    private fun getLeaderboardRankSafe(player: Player?, type: String): String {
+        return player?.let {
+            try {
+                val playerId = PlayerDAO.getPlayerId(it.name) ?: return@let "Unranked"
+                val rank = LeaderboardCacheDAO.getPlayerRank(playerId, type)
+                if (rank == 999) "Unranked" else rank.toString()
+            } catch (e: Exception) {
+                "Unranked"
+            }
+        } ?: "Unranked"
+    }
 
     /**
      * Safe wrapper for getting stats with error handling

@@ -104,6 +104,29 @@ commands:
     usage: "/cosmetics [shop|select|give|coins|reload] [args]"
     aliases: [ cosm, cosmetic ]
 
+  # === PILLARS ADMIN ===
+  pillarsadmin:
+    description: "Administrative commands for managing player coins, XP and levels"
+    usage: "/pillarsadmin <addcoins|removecoins|setcoins|addxp|setxp|setlevel|stats|help> [player] [amount]"
+    permission: locopillars.admin
+    permission-message: "§cYou don't have permission to use PillarsAdmin commands!"
+    aliases: [ padmin, pa ]
+
+  # === PARTY SYSTEM ===
+  party:
+    description: "Party system – invite friends and join games together"
+    usage: "/party <invite|accept|deny|leave|kick|disband|transfer|info|chat|warp|help> [args]"
+    permission: locopillars.party.use
+    permission-message: "§cYou don't have permission to use party commands!"
+    aliases: [ p ]
+
+  # === CHAT TOGGLE ===
+  chat:
+    description: "Switch or toggle your active chat channel"
+    usage: "/chat [party|global|team]"
+    permission: locopillars.chat.use
+    aliases: [ ch ]
+
 
 permissions:
   locopillars.luckyblocks.menu:
@@ -280,6 +303,69 @@ permissions:
   locopillars.achievements.admin:
     description: "Administer achievements"
     default: op
+
+  # === PARTY PERMISSIONS ===
+  locopillars.party.*:
+    description: "All party permissions"
+    default: op
+    children:
+      locopillars.party.use: true
+      locopillars.party.limit.16: true
+
+  locopillars.party.use:
+    description: "Use the /party command"
+    default: true
+
+  # Party size limits — higher numbers override lower ones.
+  # Every player should have at least locopillars.party.limit.8.
+  locopillars.party.limit.1:
+    description: "Max party size: 1 (effectively no party)"
+    default: false
+  locopillars.party.limit.2:
+    description: "Max party size: 2"
+    default: false
+  locopillars.party.limit.3:
+    description: "Max party size: 3"
+    default: false
+  locopillars.party.limit.4:
+    description: "Max party size: 4"
+    default: false
+  locopillars.party.limit.5:
+    description: "Max party size: 5"
+    default: false
+  locopillars.party.limit.6:
+    description: "Max party size: 6"
+    default: false
+  locopillars.party.limit.7:
+    description: "Max party size: 7"
+    default: false
+  locopillars.party.limit.8:
+    description: "Max party size: 8 (default for all players)"
+    default: true
+  locopillars.party.limit.9:
+    description: "Max party size: 9"
+    default: false
+  locopillars.party.limit.10:
+    description: "Max party size: 10"
+    default: false
+  locopillars.party.limit.11:
+    description: "Max party size: 11"
+    default: false
+  locopillars.party.limit.12:
+    description: "Max party size: 12"
+    default: false
+  locopillars.party.limit.13:
+    description: "Max party size: 13"
+    default: false
+  locopillars.party.limit.14:
+    description: "Max party size: 14"
+    default: false
+  locopillars.party.limit.15:
+    description: "Max party size: 15"
+    default: false
+  locopillars.party.limit.16:
+    description: "Max party size: 16 (hard cap)"
+    default: false
 
   # === UPDATE CHECKER PERMISSIONS ===
   locopillars.notify.update:

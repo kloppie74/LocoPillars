@@ -1,17 +1,47 @@
 package org.Kloppie74.locoPillars.utils.teams.scoreboard
 
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.scheduler.BukkitRunnable
+import org.bukkit.scoreboard.Criteria
+import org.bukkit.scoreboard.DisplaySlot
+import org.bukkit.scoreboard.Objective
+import org.bukkit.scoreboard.Scoreboard
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import me.clip.placeholderapi.PlaceholderAPI
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.*
 
+/**
+ * ScoreboardManager — volledig herschreven met Paper 1.21 Score.customName() API.
+ *
+ * VORIGE aanpak (team-gebaseerd):
+ *   - Sidebar-tekst via §1–§f entries + sb_-teams (prefix/suffix).
+ *   - Race-condition: score-packet arriveerde VOOR het team-packet → client zag
+ *     de raw entry string (bijv. "§1" = letterlijk "§1") tijdelijk als regel-tekst.
+ *   - Gevolg: speler zag korte flitsen van nummers/codes in de sidebar.
+ *
+ * NIEUWE aanpak (customName):
+ *   - Tekst direct in Score.customName(Component) — zit in hetzelfde Set-Score-packet
+ *     als de score-waarde → client ontvangt tekst en positie tegelijk.
+ *   - Geen sidebar-teams meer nodig. TeamManager beheert alleen nog tab-teams.
+ *   - Stabiele objective-naam per speler (UUID-hash, nooit milliseconden-conflict).
+ */
 class ScoreboardManager(private val plugin: LocoPillars) {
+
+    companion object {
+        // Pre-compiled regexes for if-condition LINE= parsing (reused every scoreboard tick)
+        private val REGEX_IF_BRACKET = Regex("""(.+?)\s+LINE=\[([^\]]*)]""")  // LINE=[text] or LINE=[]
+        private val REGEX_IF_QUOTE   = Regex("""(.+?)\s+LINE="(.+)"""")       // LINE="text"
+        private val REGEX_IF_BARE    = Regex("""(.+?)\s+LINE=(.+)""")         // LINE=text (bare)
+
+        /** Entry-key prefix voor sidebar-scores. Nooit een naam van een speler. */
+        private const val ENTRY_PREFIX = "_sb_"
+    }
 
     data class BoardSection(
         val enabled: Boolean,
@@ -19,10 +49,17 @@ class ScoreboardManager(private val plugin: LocoPillars) {
         val lines: LinkedHashMap<String, String>
     )
 
+    // Per-player scoreboard state
+    private data class PlayerBoard(
+        val scoreboard: Scoreboard,
+        val objective: Objective
+    )
+
     private var globalEnabled: Boolean = true
     private val boardSections = HashMap<String, BoardSection>()
-    private val playerScoreboardState = ConcurrentHashMap<UUID, String>()
-    private val playerScoreboards = ConcurrentHashMap<UUID, ScoreHelper>()
+    private val playerSectionType  = ConcurrentHashMap<UUID, String>()        // last rendered section
+    private val playerBoards       = ConcurrentHashMap<UUID, PlayerBoard>()    // scoreboard + objective
+    private val playerActiveEntries = ConcurrentHashMap<UUID, Set<String>>()   // currently live entries
     private val playerToggledScoreboards = ConcurrentHashMap<UUID, Boolean>()
     private var updateTask: BukkitRunnable? = null
 
@@ -31,10 +68,13 @@ class ScoreboardManager(private val plugin: LocoPillars) {
         if (globalEnabled) startAutoUpdate()
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Config & lifecycle
+    // ──────────────────────────────────────────────────────────────────────
+
     fun loadConfig() {
         val config = plugin.configManager.getConfig()
         globalEnabled = config.getBoolean("Scoreboards.GlobalEnabled", true)
-        debugLog("Global enabled loaded: $globalEnabled")
 
         val scoreboardsSection = config.getConfigurationSection("Scoreboards") ?: run {
             plugin.logger.warning("[ScoreboardManager] No 'Scoreboards' section found in config!")
@@ -46,19 +86,16 @@ class ScoreboardManager(private val plugin: LocoPillars) {
             if (sectionName == "GlobalEnabled") continue
             val section = scoreboardsSection.getConfigurationSection(sectionName) ?: continue
             val enabled = section.getBoolean("Enabled", true)
-            val title = section.getString("Title") ?: ""
+            val title   = section.getString("Title") ?: ""
             val linesSection = section.getConfigurationSection("Lines")
             val lines = LinkedHashMap<String, String>()
-            // LET OP: YAML keys zijn in insertion order!
-            if (linesSection != null) {
-                for (key in linesSection.getKeys(false)) {
-                    lines[key] = linesSection.getString(key) ?: ""
-                }
+            linesSection?.getKeys(false)?.forEach { key ->
+                lines[key] = linesSection.getString(key) ?: ""
             }
             boardSections[sectionName] = BoardSection(enabled, title, lines)
-            debugLog("Loaded board section '$sectionName' - enabled: $enabled, lines: ${lines.size}")
+            debugLog("Loaded section '$sectionName' — enabled=$enabled, lines=${lines.size}")
         }
-        debugLog("Config loaded - globalEnabled: $globalEnabled, sections: ${boardSections.keys}")
+        debugLog("Config loaded — globalEnabled=$globalEnabled, sections=${boardSections.keys}")
     }
 
     fun enable() {
@@ -71,43 +108,37 @@ class ScoreboardManager(private val plugin: LocoPillars) {
     fun disable() {
         globalEnabled = false
         stopAutoUpdate()
-        Bukkit.getOnlinePlayers().forEach { player ->
-            clearPlayerScoreboard(player)
-        }
+        Bukkit.getOnlinePlayers().forEach { clearPlayerScoreboard(it) }
         debugLog("Scoreboard system disabled")
     }
 
     fun reload() {
-        debugLog("Reloading scoreboard configuration...")
         loadConfig()
         forceUpdateAllPlayers()
-        if (globalEnabled) {
-            startAutoUpdate()
-        }
-        debugLog("Scoreboard configuration reloaded")
+        if (globalEnabled) startAutoUpdate()
     }
 
     fun isEnabled(): Boolean = globalEnabled
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Player toggle
+    // ──────────────────────────────────────────────────────────────────────
+
     fun togglePlayerScoreboard(player: Player): Boolean {
         val newState = !isPlayerScoreboardEnabled(player)
         playerToggledScoreboards[player.uniqueId] = !newState
-
-        if (newState) {
-            updatePlayerScoreboard(player)
-            debugLog("Enabled scoreboard for ${player.name}")
-        } else {
-            clearPlayerScoreboard(player)
-            debugLog("Disabled scoreboard for ${player.name}")
-        }
+        if (newState) updatePlayerScoreboard(player) else clearPlayerScoreboard(player)
         return newState
     }
 
     fun isPlayerScoreboardEnabled(player: Player): Boolean {
         if (!globalEnabled) return false
-        val playerToggled = playerToggledScoreboards[player.uniqueId] ?: false
-        return !playerToggled
+        return !(playerToggledScoreboards[player.uniqueId] ?: false)
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Core update
+    // ──────────────────────────────────────────────────────────────────────
 
     fun updatePlayerScoreboard(player: Player, sectionType: String? = null) {
         if (!globalEnabled || !isPlayerScoreboardEnabled(player)) {
@@ -116,66 +147,197 @@ class ScoreboardManager(private val plugin: LocoPillars) {
         }
 
         try {
-            val type = sectionType ?: getDefaultTypeForPlayer(player)
+            val type    = sectionType ?: getDefaultTypeForPlayer(player)
             val section = boardSections[type]
 
-            debugLog("Updating scoreboard for ${player.name} with type '$type' - section found: ${section != null}")
-
             if (section == null || !section.enabled) {
-                debugLog("Section '$type' is null or disabled for ${player.name}")
                 clearPlayerScoreboard(player)
                 return
             }
 
-            val prevType = playerScoreboardState[player.uniqueId]
-            var scoreHelper = playerScoreboards[player.uniqueId]
+            // If type changed, destroy the old board so the objective is recreated cleanly.
+            if (playerSectionType[player.uniqueId] != type) {
+                destroyBoard(player)
+            }
 
-            if (scoreHelper == null || prevType != type) {
-                clearPlayerScoreboard(player)
-                scoreHelper = ScoreHelper.createScore(player)
-                if (scoreHelper != null) {
-                    playerScoreboards[player.uniqueId] = scoreHelper
-                    debugLog("Created new ScoreHelper for ${player.name}")
+            val board = getOrCreateBoard(player)
+
+            // --- Title ---
+            val title = try {
+                MSG.chatColors(PlaceholderAPI.setPlaceholders(player, section.title))
+            } catch (e: Exception) {
+                debugLog("PlaceholderAPI error in title for ${player.name}: ${e.message}")
+                MSG.chatColors(section.title)
+            }
+            board.objective.displayName(
+                LegacyComponentSerializer.legacySection().deserialize(title)
+            )
+
+            // --- Lines ---
+            val processedLines = try {
+                parseConfigLines(section.lines, player)
+            } catch (e: Exception) {
+                plugin.logger.warning("[ScoreboardManager] Error parsing lines for ${player.name}: ${e.message}")
+                emptyMap()
+            }
+
+            // Build new entry set
+            val newEntries = mutableSetOf<String>()
+            processedLines.forEach { (score, text) ->
+                val entryKey = "$ENTRY_PREFIX$score"
+                newEntries.add(entryKey)
+
+                val s = board.objective.getScore(entryKey)
+                s.score = score
+
+                // Paper 1.21: Score.customName(Component) — sets display text directly on the
+                // score. The text travels in the same Set-Score packet as the score value,
+                // so the client always receives them together. No sidebar teams needed.
+                try {
+                    s.customName(LegacyComponentSerializer.legacySection().deserialize(text))
+                } catch (e: Exception) {
+                    // Fallback: if the server somehow doesn't support customName yet
+                    debugLog("customName not supported for ${player.name} slot $score: ${e.message}")
                 }
             }
 
-            if (scoreHelper != null) {
-                val titleWithPlaceholders = MSG.chatColors(PlaceholderAPI.setPlaceholders(player, section.title))
-                scoreHelper.setTitle(titleWithPlaceholders)
-
-                val processedLines = parseConfigLines(section.lines, player)
-                scoreHelper.setSlotsFromMap(processedLines)
-
-                // FIXED: Use UNIQUE sidebar teams that don't conflict with tab teams!
-                updateSidebarTeams(player, processedLines)
-
-                playerScoreboardState[player.uniqueId] = type
-                player.scoreboard = scoreHelper.scoreboard
-                debugLog("Successfully updated scoreboard for ${player.name} with ${processedLines.size} lines")
-            } else {
-                debugLog("Failed to create ScoreHelper for ${player.name}")
+            // Remove stale entries (from previous frame or section type)
+            val prevEntries = playerActiveEntries[player.uniqueId] ?: emptySet()
+            (prevEntries - newEntries).forEach { stale ->
+                try { board.scoreboard.resetScores(stale) } catch (_: Exception) {}
             }
+            playerActiveEntries[player.uniqueId] = newEntries
+
+            playerSectionType[player.uniqueId] = type
+
+            // Assign scoreboard exactly once per update. Paper can reset player.scoreboard
+            // during respawn/teleport/world-change — always re-check reference equality.
+            if (player.scoreboard !== board.scoreboard) {
+                player.scoreboard = board.scoreboard
+            }
+
+            debugLog("Updated scoreboard for ${player.name} — type=$type, lines=${processedLines.size}")
+
         } catch (e: Exception) {
             plugin.logger.warning("[ScoreboardManager] Error updating scoreboard for ${player.name}: ${e.message}")
-            e.printStackTrace()
+            // Safety net: if something threw AFTER the board was created, still ensure the
+            // scoreboard is assigned so the player doesn't lose their sidebar entirely.
+            try {
+                val existingBoard = playerBoards[player.uniqueId]
+                if (existingBoard != null && player.isOnline) {
+                    player.scoreboard = existingBoard.scoreboard
+                }
+            } catch (_: Exception) {}
         }
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Board management
+    // ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * Get or create the player's dedicated scoreboard + sidebar objective.
+     * The scoreboard is shared with the tab-team system (TeamManager also uses it).
+     */
+    private fun getOrCreateBoard(player: Player): PlayerBoard {
+        return playerBoards.getOrPut(player.uniqueId) {
+            val scoreboard = plugin.teamManager.getPlayerScoreboard(player)
+
+            // Remove any lingering sidebar objectives (avoid duplicate display)
+            scoreboard.objectives
+                .filter { it.displaySlot == DisplaySlot.SIDEBAR }
+                .forEach { try { it.unregister() } catch (_: Exception) {} }
+
+            // Stable objective name: "lpsb" + first 10 hex chars of UUID = 14 chars (≤ 16 limit)
+            val objName = "lpsb" + player.uniqueId.toString().replace("-", "").take(10)
+            val obj = try {
+                scoreboard.registerNewObjective(
+                    objName,
+                    Criteria.DUMMY,
+                    LegacyComponentSerializer.legacySection().deserialize("§f")
+                )
+            } catch (e: Exception) {
+                // Name already registered (rare — reuse it)
+                scoreboard.getObjective(objName)
+                    ?: throw RuntimeException("Cannot create sidebar objective for ${player.name}: ${e.message}")
+            }
+            obj.displaySlot = DisplaySlot.SIDEBAR
+
+            player.scoreboard = scoreboard
+            debugLog("Created board for ${player.name} — objective='$objName'")
+            PlayerBoard(scoreboard, obj)
+        }
+    }
+
+    /** Destroy a player's board (unregister objective, clear caches). */
+    private fun destroyBoard(player: Player) {
+        val board = playerBoards.remove(player.uniqueId) ?: return
+        try { board.objective.unregister() } catch (_: Exception) {}
+        playerActiveEntries.remove(player.uniqueId)
+        debugLog("Destroyed board for ${player.name}")
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Clear
+    // ──────────────────────────────────────────────────────────────────────
+
+    fun clearPlayerScoreboard(player: Player) {
+        try {
+            destroyBoard(player)
+            playerSectionType.remove(player.uniqueId)
+            debugLog("Cleared scoreboard for ${player.name}")
+        } catch (e: Exception) {
+            plugin.logger.warning("[ScoreboardManager] Error clearing scoreboard for ${player.name}: ${e.message}")
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Bulk updates
+    // ──────────────────────────────────────────────────────────────────────
+
+    fun updateAllScoreboards() {
+        if (!globalEnabled) return
+        Bukkit.getOnlinePlayers().forEach { updatePlayerScoreboard(it) }
+    }
+
+    fun forceUpdateAllPlayers() {
+        playerSectionType.clear()
+        updateAllScoreboards()
+        debugLog("Force update completed for all players")
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Section type resolution
+    // ──────────────────────────────────────────────────────────────────────
+
+    private fun getDefaultTypeForPlayer(player: Player): String {
+        if (plugin.adminEditorManager.isActive(player)) return "Editor"
+
+        if (SpectatorUtils.isSpectator(player, plugin)) return "Spectate"
+
+        val instance = plugin.gameManager.getPlayerInstance(player)
+        return when {
+            instance == null -> "Lobby"
+            instance.state == GameState.WAITING  -> "GameLobby"
+            instance.state == GameState.STARTING -> "Cage"
+            instance.state == GameState.ACTIVE   -> "Game"
+            instance.state == GameState.ENDED || instance.state == GameState.RESETTING -> "Spectate"
+            else -> "Lobby"
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Config line parsing (unchanged logic)
+    // ──────────────────────────────────────────────────────────────────────
+
     /**
      * Parse config lines into a score→text map.
-     *
-     * Numeric keys (e.g. "6", "3") become their Minecraft sidebar score directly.
-     * This means key 6 always sits at position 6 on the scoreboard (higher = higher on screen),
-     * regardless of YAML insertion order — no more position swapping bugs.
-     *
-     * if-condition keys (e.g. "if1", "if2") are evaluated in YAML order; those that evaluate
-     * to true receive scores above the highest numeric key, so they always appear above the
-     * numeric section (maxNumericKey + 1, + 2, …).
+     * Numeric keys become their Minecraft sidebar score directly (higher = higher on screen).
+     * if-condition keys are evaluated in YAML order and placed above the highest numeric key.
      */
     private fun parseConfigLines(lines: LinkedHashMap<String, String>, player: Player): Map<Int, String> {
         val result = mutableMapOf<Int, String>()
 
-        // First pass: find the highest numeric key for if-condition score offset
         var maxNumericKey = 0
         for (key in lines.keys) {
             val n = key.toIntOrNull()
@@ -187,33 +349,43 @@ class ScoreboardManager(private val plugin: LocoPillars) {
             val numKey = key.toIntOrNull()
             when {
                 numKey != null -> {
-                    // Use the YAML key value directly as the Minecraft score
                     result[numKey] = MSG.chatColors(PlaceholderAPI.setPlaceholders(player, value))
                 }
                 key.startsWith("if") -> {
-                    val regexBracket = Regex("""(.+?)\s+LINE=\[(.+)]""")
-                    val regexQuote  = Regex("""(.+?)\s+LINE="(.+)"""")
-                    val matchBracket = regexBracket.find(value)
-                    val matchQuote   = regexQuote.find(value)
+                    val matchBracket = REGEX_IF_BRACKET.find(value)
+                    val matchQuote   = REGEX_IF_QUOTE.find(value)
+                    val matchBare    = REGEX_IF_BARE.find(value)
 
                     var condition = ""
                     var lineText  = ""
+                    var isSpacer  = false
 
-                    if (matchBracket != null) {
-                        condition = matchBracket.groups[1]?.value?.trim() ?: ""
-                        lineText  = matchBracket.groups[2]?.value ?: ""
-                    } else if (matchQuote != null) {
-                        condition = matchQuote.groups[1]?.value?.trim() ?: ""
-                        lineText  = matchQuote.groups[2]?.value ?: ""
+                    when {
+                        matchBracket != null -> {
+                            condition = matchBracket.groups[1]?.value?.trim() ?: ""
+                            lineText  = matchBracket.groups[2]?.value ?: ""
+                            isSpacer  = lineText.isEmpty()
+                        }
+                        matchQuote != null -> {
+                            condition = matchQuote.groups[1]?.value?.trim() ?: ""
+                            lineText  = matchQuote.groups[2]?.value ?: ""
+                        }
+                        matchBare != null -> {
+                            condition = matchBare.groups[1]?.value?.trim() ?: ""
+                            lineText  = matchBare.groups[2]?.value ?: ""
+                        }
                     }
 
-                    if (condition.isNotEmpty() && lineText.isNotEmpty() && evaluateCondition(condition, player)) {
+                    if (condition.isNotEmpty() && evaluateCondition(condition, player)) {
                         ifCounter++
                         val score = maxNumericKey + ifCounter
-                        result[score] = MSG.chatColors(PlaceholderAPI.setPlaceholders(player, lineText))
+                        result[score] = when {
+                            isSpacer              -> " "
+                            lineText.isNotEmpty() -> MSG.chatColors(PlaceholderAPI.setPlaceholders(player, lineText))
+                            else                  -> " "
+                        }
                     }
                 }
-                // Other keys are ignored
             }
         }
 
@@ -223,9 +395,9 @@ class ScoreboardManager(private val plugin: LocoPillars) {
     private fun evaluateCondition(condition: String, player: Player): Boolean {
         val match = Regex("""TEAM_AMOUNT\s*(>=|<=|==|!=|>|<)\s*(\d+)""").find(condition)
         if (match != null) {
-            val op = match.groups[1]?.value ?: "=="
+            val op       = match.groups[1]?.value ?: "=="
             val reqValue = match.groups[2]?.value?.toIntOrNull() ?: 0
-            val actual = getTeamAmount(player)
+            val actual   = getTeamAmount(player)
             return when (op) {
                 ">=" -> actual >= reqValue
                 "<=" -> actual <= reqValue
@@ -240,258 +412,91 @@ class ScoreboardManager(private val plugin: LocoPillars) {
     }
 
     private fun getTeamAmount(player: Player): Int {
-        // getPlayerInstance() returns null for eliminated spectators; fall back to spectatorInstance
         val instance = plugin.gameManager.getPlayerInstance(player)
             ?: plugin.gameManager.getSpectatorInstance(player)
-        return instance?.arenaInstance?.config?.teams?.size ?: 0
+        return instance?.getActiveTeamCount() ?: 0
     }
 
-    /**
-     * FIXED: Create UNIQUE sidebar teams that don't conflict with tab teams!
-     * Accepts a score→text map from parseConfigLines; entries are sorted by score ascending
-     * so that entry index 1 = lowest score, entry index N = highest score.
-     * Teams beyond the current map size are cleaned up to avoid stale display lines.
-     */
-    private fun updateSidebarTeams(player: Player, scoreToText: Map<Int, String>) {
-        val sorted = scoreToText.entries.sortedBy { it.key }
-        val size = sorted.size.coerceAtMost(15)
-
-        for (i in 0 until size) {
-            val entryIndex = i + 1
-            val entry = ScoreHelper.ENTRIES[entryIndex]
-            val line = sorted[i].value
-            if (line.isNotEmpty()) {
-                val (prefix, suffix) = extractPrefixSuffix(line)
-                plugin.teamManager.createSidebarTeam(player, entryIndex, entry, prefix, suffix)
-            } else {
-                plugin.teamManager.removeSidebarTeam(player, entryIndex, entry)
-            }
-        }
-
-        // Clean up sidebar teams that are no longer in use
-        for (i in (size + 1)..15) {
-            val entry = ScoreHelper.ENTRIES[i]
-            plugin.teamManager.removeSidebarTeam(player, i, entry)
-        }
-    }
-
-    private fun extractPrefixSuffix(line: String): Pair<String, String> {
-        val maxPrefixLength = 64
-        val maxSuffixLength = 64
-
-        return if (line.length <= maxPrefixLength) {
-            Pair(line, "")
-        } else {
-            var splitPos = maxPrefixLength
-            if (splitPos < line.length) {
-                if (line[splitPos - 1] == '§') splitPos--
-                else if (splitPos >= 2 && line[splitPos - 2] == '§') splitPos -= 2
-            }
-            val prefix = line.substring(0, splitPos)
-            val lastColors = getLastColors(prefix)
-            val remainingLength = (line.length - splitPos).coerceAtMost(maxSuffixLength - lastColors.length)
-            val suffix = if (remainingLength > 0) {
-                lastColors + line.substring(splitPos, splitPos + remainingLength)
-            } else {
-                lastColors
-            }
-            Pair(prefix, suffix)
-        }
-    }
-
-    private fun getLastColors(text: String): String {
-        if (text.isEmpty()) return ""
-        val result = StringBuilder()
-        var lastColor = ""
-        var lastFormat = ""
-        var hasColor = false
-        var i = 0
-        while (i < text.length - 1) {
-            if (text[i] == '§') {
-                val colorChar = text[i + 1]
-                if (colorChar == 'x' && i + 13 < text.length) {
-                    var validHex = true
-                    for (j in 0..5) {
-                        val pos = i + 2 + (j * 2)
-                        if (pos + 1 >= text.length || text[pos] != '§') {
-                            validHex = false
-                            break
-                        }
-                    }
-                    if (validHex) {
-                        lastColor = text.substring(i, i + 14)
-                        hasColor = true
-                        i += 13
-                    }
-                } else if (isColorChar(colorChar)) {
-                    lastColor = text.substring(i, i + 2)
-                    hasColor = true
-                    i++
-                } else if (isFormatChar(colorChar)) {
-                    lastFormat += text.substring(i, i + 2)
-                    i++
-                }
-            }
-            i++
-        }
-        if (hasColor) result.append(lastColor)
-        result.append(lastFormat)
-        return result.toString()
-    }
-
-    private fun isColorChar(c: Char) =
-        c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F' || c == 'r'
-
-    private fun isFormatChar(c: Char) =
-        c == 'k' || c == 'l' || c == 'm' || c == 'n' || c == 'o'
-
-    fun clearPlayerScoreboard(player: Player) {
-        try {
-            val scoreHelper = playerScoreboards.remove(player.uniqueId)
-            scoreHelper?.let { ScoreHelper.removeScore(player) }
-            playerScoreboardState.remove(player.uniqueId)
-
-            // FIXED: Clean up sidebar teams
-            for (i in 1..15) {
-                val entry = ScoreHelper.ENTRIES[i]
-                plugin.teamManager.removeSidebarTeam(player, i, entry)
-            }
-
-            debugLog("Cleared scoreboard for ${player.name}")
-        } catch (e: Exception) {
-            plugin.logger.warning("[ScoreboardManager] Error clearing scoreboard for ${player.name}: ${e.message}")
-        }
-    }
-
-    fun updateAllScoreboards() {
-        if (!globalEnabled) return
-        try {
-            Bukkit.getOnlinePlayers().forEach { player ->
-                updatePlayerScoreboard(player)
-            }
-        } catch (e: Exception) {
-            plugin.logger.warning("[ScoreboardManager] Error updating all scoreboards: ${e.message}")
-        }
-    }
-
-    fun forceUpdateAllPlayers() {
-        playerScoreboardState.clear()
-        updateAllScoreboards()
-        debugLog("Forced update completed for all players")
-    }
-
-    private fun getDefaultTypeForPlayer(player: Player): String {
-        // Spectator check FIRST — eliminated players have null in playerToInstance.
-        // The plugin uses SURVIVAL gamemode for spectators, so gameMode == SPECTATOR never matches.
-        if (SpectatorUtils.isSpectator(player, plugin)) {
-            debugLog("Determined type 'Spectate' for spectating player ${player.name}")
-            return "Spectate"
-        }
-
-        val instance = plugin.gameManager.getPlayerInstance(player)
-        val type = when {
-            instance == null -> "Lobby"
-            instance.state == GameState.WAITING -> "GameLobby"
-            instance.state == GameState.STARTING -> "Cage"
-            instance.state == GameState.ACTIVE -> "Game"
-            instance.state == GameState.ENDED || instance.state == GameState.RESETTING -> "Spectate"
-            else -> "Lobby"
-        }
-        debugLog("Determined type '$type' for player ${player.name}")
-        return type
-    }
+    // ──────────────────────────────────────────────────────────────────────
+    // Auto-update timer
+    // ──────────────────────────────────────────────────────────────────────
 
     private fun startAutoUpdate() {
         if (!globalEnabled) return
         stopAutoUpdate()
         updateTask = object : BukkitRunnable() {
             override fun run() {
-                try {
-                    updateAllScoreboards()
-                } catch (e: Exception) {
+                try { updateAllScoreboards() } catch (e: Exception) {
                     plugin.logger.warning("[ScoreboardManager] Error in auto-update: ${e.message}")
                 }
             }
         }
         updateTask?.runTaskTimer(plugin, 20L, 20L)
-        debugLog("Auto-update started")
+        debugLog("Auto-update started (every 20 ticks)")
     }
 
     private fun stopAutoUpdate() {
         updateTask?.cancel()
         updateTask = null
-        debugLog("Auto-update stopped")
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Lifecycle hooks
+    // ──────────────────────────────────────────────────────────────────────
+
     fun onPlayerJoin(player: Player) {
-        try {
-            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-                updatePlayerScoreboard(player)
-            }, 10L)
-        } catch (e: Exception) {
-            plugin.logger.warning("[ScoreboardManager] Error handling player join for ${player.name}: ${e.message}")
-        }
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            updatePlayerScoreboard(player)
+        }, 10L)
     }
 
     fun onPlayerQuit(player: Player) {
-        try {
-            clearPlayerScoreboard(player)
-            playerToggledScoreboards.remove(player.uniqueId)
-        } catch (e: Exception) {
-            plugin.logger.warning("[ScoreboardManager] Error handling player quit for ${player.name}: ${e.message}")
-        }
+        clearPlayerScoreboard(player)
+        playerToggledScoreboards.remove(player.uniqueId)
     }
 
     fun onPlayerJoinGame(player: Player) {
-        try {
-            playerScoreboardState.remove(player.uniqueId)
-            updatePlayerScoreboard(player)
-        } catch (e: Exception) {
-            plugin.logger.warning("[ScoreboardManager] Error handling player join game for ${player.name}: ${e.message}")
-        }
+        playerSectionType.remove(player.uniqueId)
+        updatePlayerScoreboard(player)
     }
 
     fun onPlayerLeaveGame(player: Player) {
-        try {
-            playerScoreboardState.remove(player.uniqueId)
-            updatePlayerScoreboard(player)
-        } catch (e: Exception) {
-            plugin.logger.warning("[ScoreboardManager] Error handling player leave game for ${player.name}: ${e.message}")
-        }
+        playerSectionType.remove(player.uniqueId)
+        updatePlayerScoreboard(player)
     }
 
-    fun getStats(): Map<String, Any> {
-        return mapOf(
-            "globalEnabled" to globalEnabled,
-            "activeScoreboards" to playerScoreboards.size,
-            "boardSections" to boardSections.size,
-            "playerStates" to playerScoreboardState.size,
-            "updateTaskActive" to (updateTask != null && !updateTask!!.isCancelled),
-            "playersWithToggledScoreboards" to playerToggledScoreboards.size,
-            "onlinePlayers" to Bukkit.getOnlinePlayers().size
-        )
-    }
+    // ──────────────────────────────────────────────────────────────────────
+    // Stats & cleanup
+    // ──────────────────────────────────────────────────────────────────────
+
+    fun getStats(): Map<String, Any> = mapOf(
+        "globalEnabled"              to globalEnabled,
+        "activeBoards"               to playerBoards.size,
+        "boardSections"              to boardSections.size,
+        "playerStates"               to playerSectionType.size,
+        "updateTaskActive"           to (updateTask != null && !updateTask!!.isCancelled),
+        "playersWithToggledBoards"   to playerToggledScoreboards.size,
+        "onlinePlayers"              to Bukkit.getOnlinePlayers().size,
+        "sidebarApproach"            to "Score.customName() — no sidebar teams"
+    )
 
     fun cleanup() {
-        try {
-            stopAutoUpdate()
-            Bukkit.getOnlinePlayers().forEach { player ->
-                clearPlayerScoreboard(player)
-            }
-            playerScoreboards.clear()
-            playerScoreboardState.clear()
-            playerToggledScoreboards.clear()
-            debugLog("Cleanup completed")
-        } catch (e: Exception) {
-            plugin.logger.warning("[ScoreboardManager] Error during cleanup: ${e.message}")
-        }
+        stopAutoUpdate()
+        Bukkit.getOnlinePlayers().forEach { clearPlayerScoreboard(it) }
+        playerBoards.clear()
+        playerSectionType.clear()
+        playerActiveEntries.clear()
+        playerToggledScoreboards.clear()
+        debugLog("Cleanup completed")
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Debug
+    // ──────────────────────────────────────────────────────────────────────
 
     private fun debugLog(message: String) {
         try {
-            if (plugin.configManager.debugMode) {
-                plugin.logger.info("[ScoreboardManager] $message")
-            }
+            if (plugin.configManager.debugMode) plugin.logger.info("[ScoreboardManager] $message")
         } catch (_: Exception) {}
     }
 }

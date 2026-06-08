@@ -1,5 +1,6 @@
 package org.Kloppie74.locoPillars.cosmetics.engine
 
+import org.Kloppie74.locoPillars.utils.scripting.SharedScriptEngine
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
@@ -7,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.script.Compilable
 import javax.script.CompiledScript
 import javax.script.ScriptEngine
-import javax.script.ScriptEngineManager
 import javax.script.ScriptException
 
 /**
@@ -18,30 +18,14 @@ import javax.script.ScriptException
  *   KILL  → player (killer), victim (killed player), game (CosmeticContext)
  *   WIN   → player (winner),                         game (CosmeticContext)
  *   DEATH → player (dying player),                   game (CosmeticContext)
+ *
+ * Uses [SharedScriptEngine] — the Kotlin compiler is loaded only ONCE for the
+ * entire plugin instead of once per scripting subsystem.
  */
 class CosmeticScriptEngine(private val plugin: JavaPlugin) {
 
-    private val engine: ScriptEngine? by lazy { initEngine() }
+    private val engine get() = SharedScriptEngine.get(plugin)
     private val cache = ConcurrentHashMap<String, Pair<CompiledScript, Long>>()
-
-    private fun initEngine(): ScriptEngine? {
-        val prev = Thread.currentThread().contextClassLoader
-        return try {
-            Thread.currentThread().contextClassLoader = plugin.javaClass.classLoader
-            val mgr = ScriptEngineManager(plugin.javaClass.classLoader)
-            mgr.getEngineByExtension("kts")
-                ?: mgr.getEngineByName("kotlin")
-                ?: run {
-                    plugin.logger.severe("[Cosmetics] Kotlin script engine not found — is kotlin-scripting-jsr223 on the classpath?")
-                    null
-                }
-        } catch (e: Exception) {
-            plugin.logger.severe("[Cosmetics] Failed to init script engine: ${e.message}")
-            null
-        } finally {
-            Thread.currentThread().contextClassLoader = prev
-        }
-    }
 
     fun isAvailable(): Boolean = engine != null
 

@@ -7,6 +7,8 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.player.PlayerChangedWorldEvent
+import org.bukkit.event.player.PlayerRespawnEvent
+import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.scheduler.BukkitRunnable
 import org.Kloppie74.locoPillars.LocoPillars
 
@@ -33,10 +35,11 @@ class TeamsListener(
                     // Initialize scoreboard first
                     plugin.teamManager.getPlayerScoreboard(player)
 
-                    // Update tab team for all players
+                    // Update tab team for all players (with sort index for correct rank ordering)
                     plugin.teamManager.createTabTeam(player,
                         plugin.tabManager.getPrefix(player),
-                        plugin.tabManager.getSuffix(player)
+                        plugin.tabManager.getSuffix(player),
+                        plugin.tabManager.getSortIndex(player)
                     )
 
                     // Update sidebar teams for this player
@@ -123,10 +126,11 @@ class TeamsListener(
                         return
                     }
 
-                    // Update tab team for all players
+                    // Update tab team for all players (with sort index for correct rank ordering)
                     plugin.teamManager.createTabTeam(player,
                         plugin.tabManager.getPrefix(player),
-                        plugin.tabManager.getSuffix(player)
+                        plugin.tabManager.getSuffix(player),
+                        plugin.tabManager.getSortIndex(player)
                     )
 
                     // Update sidebar teams for this player
@@ -153,14 +157,57 @@ class TeamsListener(
         }
     }
 
+    /**
+     * Paper reset player.scoreboard intern bij respawn — reapply na 1 tick.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onPlayerRespawn(event: PlayerRespawnEvent) {
+        val player = event.player
+        try {
+            plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                if (!player.isOnline) return@Runnable
+                if (plugin.scoreboardManager.isEnabled()) {
+                    plugin.scoreboardManager.updatePlayerScoreboard(player)
+                }
+                debugLog("Reapplied scoreboard after respawn for ${player.name}")
+            }, 2L)
+        } catch (e: Exception) {
+            plugin.logger.warning("[TeamsListener] Error handling respawn for ${player.name}: ${e.message}")
+        }
+    }
+
+    /**
+     * Cross-world teleport kan scoreboard resetten — herstel na 2 ticks.
+     * Alleen bij world-change teleports (binnen dezelfde world is geen reset).
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun onPlayerTeleport(event: PlayerTeleportEvent) {
+        val player = event.player
+        val from = event.from
+        val to = event.to ?: return
+        if (from.world == to.world) return   // zelfde world = geen reset nodig
+        try {
+            plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                if (!player.isOnline) return@Runnable
+                if (plugin.scoreboardManager.isEnabled()) {
+                    plugin.scoreboardManager.updatePlayerScoreboard(player)
+                }
+                debugLog("Reapplied scoreboard after cross-world teleport for ${player.name}")
+            }, 2L)
+        } catch (e: Exception) {
+            plugin.logger.warning("[TeamsListener] Error handling teleport for ${player.name}: ${e.message}")
+        }
+    }
+
     fun onPlayerJoinGame(player: Player) {
         try {
             debugLog("${player.name} joined a game instance")
 
-            // Tab team for all players
+            // Tab team for all players (with sort index for correct rank ordering)
             plugin.teamManager.createTabTeam(player,
                 plugin.tabManager.getPrefix(player),
-                plugin.tabManager.getSuffix(player)
+                plugin.tabManager.getSuffix(player),
+                plugin.tabManager.getSortIndex(player)
             )
 
             // Sidebar teams for this player
@@ -198,10 +245,11 @@ class TeamsListener(
             debugLog("${player.name} left a game instance")
             val gameInstance = plugin.gameManager.getPlayerInstance(player)
 
-            // Tab team for all players
+            // Tab team for all players (with sort index for correct rank ordering)
             plugin.teamManager.createTabTeam(player,
                 plugin.tabManager.getPrefix(player),
-                plugin.tabManager.getSuffix(player)
+                plugin.tabManager.getSuffix(player),
+                plugin.tabManager.getSortIndex(player)
             )
 
             // Sidebar teams for this player

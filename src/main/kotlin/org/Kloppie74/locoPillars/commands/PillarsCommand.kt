@@ -82,6 +82,34 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
             return
         }
 
+        // Party leader path: find an instance big enough for the whole party
+        val pm    = plugin.partyManager
+        val party = pm.getParty(player)
+        if (party != null && party.leader == player.uniqueId && party.size > 1) {
+            val onlineUUIDs = pm.getOnlineMemberUUIDs(party)
+            val partySize   = onlineUUIDs.size
+
+            // Find the best random instance that fits the whole party
+            val chosen = plugin.gameManager.getAllInstances()
+                .filter { inst ->
+                    inst.canJoin() && (inst.getMaxPlayers() - inst.players.size) >= partySize
+                }
+                .sortedWith(compareByDescending<GameInstance> { it.players.size }
+                    .thenBy { it.getMinPlayers() })
+                .firstOrNull()
+
+            if (chosen == null) {
+                player.sendMessage(MSG.lang("party.game.no_space",
+                    "size" to partySize.toString(),
+                    "type" to "random"))
+                return
+            }
+
+            plugin.gameManager.joinPartyToGame(player, onlineUUIDs, chosen.arenaInstance.template.name)
+            return   // joinPartyToGame sends its own messages
+        }
+
+        // Solo random join
         val joinable: List<GameInstance> = plugin.gameManager.getAllInstances().filter { it.canJoin() }
         if (joinable.isEmpty()) {
             player.sendMessage(MSG.lang("pillars.join.no_games_available"))
@@ -127,6 +155,16 @@ class PillarsCommand(private val plugin: LocoPillars) : CommandExecutor, TabComp
             return
         }
 
+        // If the player is the party leader, join the whole party together.
+        val pm    = plugin.partyManager
+        val party = pm.getParty(player)
+        if (party != null && party.leader == player.uniqueId && party.size > 1) {
+            val onlineUUIDs = pm.getOnlineMemberUUIDs(party)
+            plugin.gameManager.joinPartyToGame(player, onlineUUIDs, config.name)
+            return   // joinPartyToGame sends its own messages
+        }
+
+        // Solo join (no party, or player is a non-leader party member)
         val instance = plugin.gameManager.joinGame(player, config.name)
         if (instance == null) {
             player.sendMessage(MSG.lang("pillars.join.failed_no_instance"))

@@ -29,8 +29,10 @@ debug: false
 
 # Game instance configuration
 game:
-  # Number of game instances to create per game type
-  # Higher values = more concurrent games possible but more memory usage
+  # Number of arena instances to pre-create per map type.
+  # All schematic variants are pre-loaded into a shared clipboard cache at startup,
+  # so the clipboard memory cost is fixed at (unique .schem files) regardless of this number.
+  # The main cost per instance is the arena world chunk data kept in RAM.
   instances-per-type: 10
   # Distance between arena instances in blocks
   # Should be larger than your biggest arena
@@ -193,6 +195,11 @@ Tab:
 
   Sorting-Groups:
     Order: Owner,Admin,Mod,Helper,Vip,Default
+    # Koppel elke groep aan de EXACTE permissie die de plugin moet checken.
+    # De speler met de permissie van een hogere groep (eerder in Order) komt hoger.
+    # Je mag hier ELKE permissie-node zetten — precies die node wordt gecheckt.
+    # Voorbeeld: zet je "Owner: kindjes.group.50", dan moet de speler exact
+    # "kindjes.group.50" hebben om als Owner gesorteerd te worden.
     Permissions:
       Owner: tab.order.owner
       Admin: tab.order.admin
@@ -278,14 +285,14 @@ Scoreboards:
     Enabled: true
     Title: "&#FF7300&lLocoMc"
     Lines:
-      if8: "TEAM_AMOUNT >= 8 LINE=[&f%locopillars_game_team_team8_displayname%: %locopillars_game_team_team8_status_symbol% &7(&a%locopillars_game_team_team8_players_alive%&7/&f%locopillars_game_team_team8_players_total%&7)]"
-      if7: "TEAM_AMOUNT >= 7 LINE=[&f%locopillars_game_team_team7_displayname%: %locopillars_game_team_team7_status_symbol% &7(&a%locopillars_game_team_team7_players_alive%&7/&f%locopillars_game_team_team7_players_total%&7)]"
-      if6: "TEAM_AMOUNT >= 6 LINE=[&f%locopillars_game_team_team6_displayname%: %locopillars_game_team_team6_status_symbol% &7(&a%locopillars_game_team_team6_players_alive%&7/&f%locopillars_game_team_team6_players_total%&7)]"
-      if5: "TEAM_AMOUNT >= 5 LINE=[&f%locopillars_game_team_team5_displayname%: %locopillars_game_team_team5_status_symbol% &7(&a%locopillars_game_team_team5_players_alive%&7/&f%locopillars_game_team_team5_players_total%&7)]"
-      if4: "TEAM_AMOUNT >= 4 LINE=[&f%locopillars_game_team_team4_displayname%: %locopillars_game_team_team4_status_symbol% &7(&a%locopillars_game_team_team4_players_alive%&7/&f%locopillars_game_team_team4_players_total%&7)]"
-      if3: "TEAM_AMOUNT >= 3 LINE=[&f%locopillars_game_team_team3_displayname%: %locopillars_game_team_team3_status_symbol% &7(&a%locopillars_game_team_team3_players_alive%&7/&f%locopillars_game_team_team3_players_total%&7)]"
-      if2: "TEAM_AMOUNT >= 2 LINE=[&f%locopillars_game_team_team2_displayname%: %locopillars_game_team_team2_status_symbol% &7(&a%locopillars_game_team_team2_players_alive%&7/&f%locopillars_game_team_team2_players_total%&7)]"
-      if1: "TEAM_AMOUNT >= 2 LINE=[&f%locopillars_game_team_team1_displayname%: %locopillars_game_team_team1_status_symbol% &7(&a%locopillars_game_team_team1_players_alive%&7/&f%locopillars_game_team_team1_players_total%&7)]"
+      if8: "TEAM_AMOUNT >= 8 LINE=%locopillars_game_team_team8_displayname%: %locopillars_game_team_team8_status_symbol% &7(&a%locopillars_game_team_team8_players_alive%&7/&f%locopillars_game_team_team8_players_total%&7)"
+      if7: "TEAM_AMOUNT >= 7 LINE=%locopillars_game_team_team7_displayname%: %locopillars_game_team_team7_status_symbol% &7(&a%locopillars_game_team_team7_players_alive%&7/&f%locopillars_game_team_team7_players_total%&7)"
+      if6: "TEAM_AMOUNT >= 6 LINE=%locopillars_game_team_team6_displayname%: %locopillars_game_team_team6_status_symbol% &7(&a%locopillars_game_team_team6_players_alive%&7/&f%locopillars_game_team_team6_players_total%&7)"
+      if5: "TEAM_AMOUNT >= 5 LINE=%locopillars_game_team_team5_displayname%: %locopillars_game_team_team5_status_symbol% &7(&a%locopillars_game_team_team5_players_alive%&7/&f%locopillars_game_team_team5_players_total%&7)"
+      if4: "TEAM_AMOUNT >= 4 LINE=%locopillars_game_team_team4_displayname%: %locopillars_game_team_team4_status_symbol% &7(&a%locopillars_game_team_team4_players_alive%&7/&f%locopillars_game_team_team4_players_total%&7)"
+      if3: "TEAM_AMOUNT >= 3 LINE=%locopillars_game_team_team3_displayname%: %locopillars_game_team_team3_status_symbol% &7(&a%locopillars_game_team_team3_players_alive%&7/&f%locopillars_game_team_team3_players_total%&7)"
+      if2: "TEAM_AMOUNT >= 2 LINE=%locopillars_game_team_team2_displayname%: %locopillars_game_team_team2_status_symbol% &7(&a%locopillars_game_team_team2_players_alive%&7/&f%locopillars_game_team_team2_players_total%&7)"
+      if1: "TEAM_AMOUNT >= 2 LINE=%locopillars_game_team_team1_displayname%: %locopillars_game_team_team1_status_symbol% &7(&a%locopillars_game_team_team1_players_alive%&7/&f%locopillars_game_team_team1_players_total%&7)"
       6: "霅  &c&lGAME ACTIVE!"
       5: "&f"
       4: "&fTimer: &e%locopillars_game_timer%"
@@ -297,14 +304,14 @@ Scoreboards:
     Enabled: true
     Title: "&#FF7300&lLocoMc"
     Lines:
-      if8: "TEAM_AMOUNT >= 8 LINE=[&f%locopillars_game_team_team8_displayname%: %locopillars_game_team_team8_status_symbol% &7(&a%locopillars_game_team_team8_players_alive%&7/&f%locopillars_game_team_team8_players_total%&7)]"
-      if7: "TEAM_AMOUNT >= 7 LINE=[&f%locopillars_game_team_team7_displayname%: %locopillars_game_team_team7_status_symbol% &7(&a%locopillars_game_team_team7_players_alive%&7/&f%locopillars_game_team_team7_players_total%&7)]"
-      if6: "TEAM_AMOUNT >= 6 LINE=[&f%locopillars_game_team_team6_displayname%: %locopillars_game_team_team6_status_symbol% &7(&a%locopillars_game_team_team6_players_alive%&7/&f%locopillars_game_team_team6_players_total%&7)]"
-      if5: "TEAM_AMOUNT >= 5 LINE=[&f%locopillars_game_team_team5_displayname%: %locopillars_game_team_team5_status_symbol% &7(&a%locopillars_game_team_team5_players_alive%&7/&f%locopillars_game_team_team5_players_total%&7)]"
-      if4: "TEAM_AMOUNT >= 4 LINE=[&f%locopillars_game_team_team4_displayname%: %locopillars_game_team_team4_status_symbol% &7(&a%locopillars_game_team_team4_players_alive%&7/&f%locopillars_game_team_team4_players_total%&7)]"
-      if3: "TEAM_AMOUNT >= 3 LINE=[&f%locopillars_game_team_team3_displayname%: %locopillars_game_team_team3_status_symbol% &7(&a%locopillars_game_team_team3_players_alive%&7/&f%locopillars_game_team_team3_players_total%&7)]"
-      if2: "TEAM_AMOUNT >= 2 LINE=[&f%locopillars_game_team_team2_displayname%: %locopillars_game_team_team2_status_symbol% &7(&a%locopillars_game_team_team2_players_alive%&7/&f%locopillars_game_team_team2_players_total%&7)]"
-      if1: "TEAM_AMOUNT >= 2 LINE=[&f%locopillars_game_team_team1_displayname%: %locopillars_game_team_team1_status_symbol% &7(&a%locopillars_game_team_team1_players_alive%&7/&f%locopillars_game_team_team1_players_total%&7)]"
+      if8: "TEAM_AMOUNT >= 8 LINE=%locopillars_game_team_team8_displayname%: %locopillars_game_team_team8_status_symbol% &7(&a%locopillars_game_team_team8_players_alive%&7/&f%locopillars_game_team_team8_players_total%&7)"
+      if7: "TEAM_AMOUNT >= 7 LINE=%locopillars_game_team_team7_displayname%: %locopillars_game_team_team7_status_symbol% &7(&a%locopillars_game_team_team7_players_alive%&7/&f%locopillars_game_team_team7_players_total%&7)"
+      if6: "TEAM_AMOUNT >= 6 LINE=%locopillars_game_team_team6_displayname%: %locopillars_game_team_team6_status_symbol% &7(&a%locopillars_game_team_team6_players_alive%&7/&f%locopillars_game_team_team6_players_total%&7)"
+      if5: "TEAM_AMOUNT >= 5 LINE=%locopillars_game_team_team5_displayname%: %locopillars_game_team_team5_status_symbol% &7(&a%locopillars_game_team_team5_players_alive%&7/&f%locopillars_game_team_team5_players_total%&7)"
+      if4: "TEAM_AMOUNT >= 4 LINE=%locopillars_game_team_team4_displayname%: %locopillars_game_team_team4_status_symbol% &7(&a%locopillars_game_team_team4_players_alive%&7/&f%locopillars_game_team_team4_players_total%&7)"
+      if3: "TEAM_AMOUNT >= 3 LINE=%locopillars_game_team_team3_displayname%: %locopillars_game_team_team3_status_symbol% &7(&a%locopillars_game_team_team3_players_alive%&7/&f%locopillars_game_team_team3_players_total%&7)"
+      if2: "TEAM_AMOUNT >= 2 LINE=%locopillars_game_team_team2_displayname%: %locopillars_game_team_team2_status_symbol% &7(&a%locopillars_game_team_team2_players_alive%&7/&f%locopillars_game_team_team2_players_total%&7)"
+      if1: "TEAM_AMOUNT >= 2 LINE=%locopillars_game_team_team1_displayname%: %locopillars_game_team_team1_status_symbol% &7(&a%locopillars_game_team_team1_players_alive%&7/&f%locopillars_game_team_team1_players_total%&7)"
       5: "觷 &7You are now spectating."
       4: "&f"
       3: "&fTimer: &e%locopillars_game_timer%"

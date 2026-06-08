@@ -201,6 +201,13 @@ class ChatManager(private val plugin: LocoPillars) {
     }
 
     /**
+     * Toggle team chat for the given player (delegates to ChatUtils).
+     */
+    fun toggleTeamChat(player: Player) {
+        chatUtils.toggleTeamChat(player)
+    }
+
+    /**
      * Force send a chat message (bypass cooldowns and filters)
      */
     fun forceSendMessage(sender: Player, message: String) {

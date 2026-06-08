@@ -16,6 +16,8 @@ object SpectatorUtils {
      */
     @JvmStatic
     fun setPlayerAsSpectator(player: Player, plugin: LocoPillars) {
+        // Editor players are NEVER spectators — they build freely in their edit world.
+        if (plugin.adminEditorManager.isActive(player)) return
         val inGame = plugin.gameManager.getPlayerInstance(player) != null
         if (inGame) return
 
@@ -65,9 +67,27 @@ object SpectatorUtils {
     @JvmStatic
     fun isSpectator(player: Player?, plugin: LocoPillars): Boolean {
         if (player == null) return false
+        // Editor players are never spectators, no matter what world they are in.
+        if (plugin.adminEditorManager.isActive(player)) return false
         val inSpectatorMap = SPECTATOR_MAP[player.uniqueId] == true
         val inGame = plugin.gameManager.getPlayerInstance(player) != null
         return inSpectatorMap && !inGame
+    }
+
+    /**
+     * Is a player flagged as spectating, REGARDLESS of whether they are still in a
+     * game instance? Returns true for eliminated/dead-in-game spectators too.
+     *
+     * isSpectator() vereist !inGame, maar een speler die mid-game wordt uitgeschakeld
+     * blijft tot het einde van de game in instance.players staan. Voor zichtbaarheid
+     * (spectators verbergen voor levende spelers) moeten we ze tóch als spectator
+     * herkennen — daarvoor is deze methode.
+     */
+    @JvmStatic
+    fun isSpectating(player: Player?, plugin: LocoPillars): Boolean {
+        if (player == null) return false
+        if (plugin.adminEditorManager.isActive(player)) return false
+        return SPECTATOR_MAP[player.uniqueId] == true
     }
 
     /**
@@ -75,6 +95,8 @@ object SpectatorUtils {
      */
     @JvmStatic
     fun handleWorldChange(player: Player, fromWorld: String, toWorld: String, plugin: LocoPillars) {
+        // Editor players manage their own state — don't run any spectator transitions for them.
+        if (plugin.adminEditorManager.isActive(player)) return
         val wasSpectator = isSpectator(player, plugin)
 
         if (!fromWorld.startsWith("pillars_") && toWorld.startsWith("pillars_")) {

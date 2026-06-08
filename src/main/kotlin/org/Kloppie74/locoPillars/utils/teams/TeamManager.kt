@@ -6,26 +6,34 @@ import org.bukkit.entity.Player
 import org.bukkit.scoreboard.Scoreboard
 import org.bukkit.scoreboard.Team
 import org.Kloppie74.locoPillars.LocoPillars
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * TeamManager die zorgt dat alle spelers elkaars teams/prefix/suffix zien.
- * FIXED: Tab en sidebar gebruiken VERSCHILLENDE prefixes om conflicten te voorkomen!
+ * TeamManager — beheert scoreboard-teams uitsluitend voor de TAB-lijst.
+ *
+ * Sidebar-teams zijn verwijderd. ScoreboardManager gebruikt nu Paper 1.21's
+ * Score.customName(Component) API, waardoor sidebar-teams volledig overbodig zijn.
+ * TeamManager beheert alleen nog "tab_"-teams voor de tab-lijst prefix/suffix en
+ * de sorteervolgorde.
  */
 class TeamManager(private val plugin: LocoPillars) {
 
     private val playerScoreboards = ConcurrentHashMap<UUID, Scoreboard>()
-    private val playerTeams = ConcurrentHashMap<UUID, MutableSet<String>>()
+    private val playerTeams       = ConcurrentHashMap<UUID, MutableSet<String>>()
 
     companion object {
-        const val TAB_TEAM_PREFIX = "tab_"
-        const val SIDEBAR_TEAM_PREFIX = "sb_"  // FIXED: Different prefix to avoid conflicts!
+        const val TAB_TEAM_PREFIX     = "tab_"
         const val MAX_TEAM_NAME_LENGTH = 16
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Scoreboard management
+    // ──────────────────────────────────────────────────────────────────────
+
     /**
-     * Haal of maak de scoreboard van een speler.
+     * Haal de scoreboard van een speler op (of maak een nieuwe).
+     * Wordt door zowel TeamManager (tab-teams) als ScoreboardManager (sidebar objective) gebruikt.
      */
     fun getPlayerScoreboard(player: Player): Scoreboard {
         return playerScoreboards.getOrPut(player.uniqueId) {
@@ -36,82 +44,65 @@ class TeamManager(private val plugin: LocoPillars) {
         }
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Tab-team management
+    // ──────────────────────────────────────────────────────────────────────
+
     /**
-     * Maak 1 team per speler voor TAB (prefix/suffix altijd goed zichtbaar in tab).
+     * Maak of update het tab-team voor [targetPlayer] op elk online-speler scoreboard.
+     *
+     * @param sortIndex  Positie in de sorteer-volgorde (0 = hoogste rang, 99 = laagste).
+     *   De team-naam wordt "tab_<00-99>_<naam>". Minecraft sorteert de tab-lijst
+     *   alfabetisch op team-naam, dus een lager cijfer = hoger in de lijst.
      */
-    fun createTabTeam(targetPlayer: Player, prefix: String, suffix: String) {
+    fun createTabTeam(targetPlayer: Player, prefix: String, suffix: String, sortIndex: Int = 99) {
+        val sortPrefix = sortIndex.coerceIn(0, 99).toString().padStart(2, '0')
         Bukkit.getOnlinePlayers().forEach { viewer ->
             if (!viewer.isOnline) return@forEach
             try {
                 val scoreboard = getPlayerScoreboard(viewer)
-                val teamName = generateTeamName(TAB_TEAM_PREFIX, targetPlayer.name)
-                val team = getOrCreateTeam(scoreboard, teamName)
+
+                // Verwijder speler uit eventuele bestaande tab-teams (rang-wijziging)
+                scoreboard.teams
+                    .filter { it.name.startsWith(TAB_TEAM_PREFIX) && it.hasEntry(targetPlayer.name) }
+                    .forEach { it.removeEntry(targetPlayer.name) }
+
+                val teamName = generateTeamName(TAB_TEAM_PREFIX, "${sortPrefix}_${targetPlayer.name}")
+                val team     = getOrCreateTeam(scoreboard, teamName)
                 team.prefix(LegacyComponentSerializer.legacySection().deserialize(prefix))
                 team.suffix(LegacyComponentSerializer.legacySection().deserialize(suffix))
                 if (!team.hasEntry(targetPlayer.name)) team.addEntry(targetPlayer.name)
                 trackTeam(viewer.uniqueId, teamName)
-                debugLog("Applied tab team for ${targetPlayer.name} to ${viewer.name}'s scoreboard")
+                debugLog("Tab team for ${targetPlayer.name} (sort=$sortPrefix) on ${viewer.name}'s scoreboard")
             } catch (e: Exception) {
-                plugin.logger.warning("[TeamManager] Error creating tab team for ${targetPlayer.name} on ${viewer.name}'s scoreboard: ${e.message}")
+                plugin.logger.warning("[TeamManager] Error creating tab team for ${targetPlayer.name} on ${viewer.name}: ${e.message}")
             }
         }
     }
 
     /**
-     * FIXED: Sidebar team met UNIEKE prefix die niet conflicteert met tab teams!
+     * Ruim de tab-teams voor [targetPlayer] op van elk ander speler-scoreboard.
+     * Zoekt op entry (niet op naam) zodat elk sort-prefix formaat werkt.
      */
-    fun createSidebarTeam(player: Player, slotId: Int, entry: String, prefix: String, suffix: String) {
-        val scoreboard = getPlayerScoreboard(player)
-        // FIXED: Use UNIQUE team name that doesn't conflict with tab teams!
-        val teamName = generateTeamName(SIDEBAR_TEAM_PREFIX, "${player.name}_${slotId}")
-        val team = getOrCreateTeam(scoreboard, teamName)
-        team.prefix(LegacyComponentSerializer.legacySection().deserialize(prefix))
-        team.suffix(LegacyComponentSerializer.legacySection().deserialize(suffix))
-        if (!team.hasEntry(entry)) {
-            team.addEntry(entry)
-        }
-        trackTeam(player.uniqueId, teamName)
-        player.scoreboard = scoreboard
-        debugLog("Created UNIQUE sidebar team for ${player.name} slot $slotId entry=$entry with prefix='$prefix' suffix='$suffix'")
-    }
-
-    /**
-     * FIXED: Sidebar cleanup per entry.
-     */
-    fun removeSidebarTeam(player: Player, slotId: Int, entry: String) {
-        val scoreboard = getPlayerScoreboard(player)
-        // FIXED: Use same unique naming pattern!
-        val teamName = generateTeamName(SIDEBAR_TEAM_PREFIX, "${player.name}_${slotId}")
-        val team = scoreboard.getTeam(teamName)
-        if (team != null) {
-            if (team.hasEntry(entry)) {
-                team.removeEntry(entry)
-                debugLog("Removed entry '$entry' from sidebar team $teamName for ${player.name}")
-            }
-            if (team.entries.isEmpty()) {
-                team.unregister()
-                untrackTeam(player.uniqueId, teamName)
-                debugLog("Unregistered empty sidebar team $teamName for ${player.name}")
+    fun cleanupTabTeamForPlayer(targetPlayer: Player) {
+        Bukkit.getOnlinePlayers().forEach { viewer ->
+            if (!viewer.isOnline || viewer == targetPlayer) return@forEach
+            try {
+                val scoreboard = playerScoreboards[viewer.uniqueId] ?: return@forEach
+                scoreboard.teams
+                    .filter { it.name.startsWith(TAB_TEAM_PREFIX) && it.hasEntry(targetPlayer.name) }
+                    .forEach { team ->
+                        team.unregister()
+                        untrackTeam(viewer.uniqueId, team.name)
+                    }
+            } catch (e: Exception) {
+                debugLog("Error cleaning tab team for ${targetPlayer.name} from ${viewer.name}: ${e.message}")
             }
         }
     }
 
     /**
-     * FIXED: Create tab team and sidebar teams with DIFFERENT prefixes!
-     */
-    fun createTabAndSidebarTeam(player: Player, prefix: String, suffix: String, sidebarEntries: List<String>) {
-        // Tab: 1 team per spelernaam (voor tab list)
-        createTabTeam(player, prefix, suffix)
-        // Sidebar: UNIEKE teams per entry (voor scoreboard display)
-        sidebarEntries.forEachIndexed { idx, entry ->
-            val slotId = idx + 1
-            createSidebarTeam(player, slotId, entry, prefix, suffix)
-        }
-        debugLog("Created SEPARATED tab and sidebar teams for ${player.name} - sidebar entries: ${sidebarEntries.size}")
-    }
-
-    /**
-     * Cleanup alle teams van type prefix.
+     * Ruim alle teams van het opgegeven type (prefix) op voor één speler.
      */
     fun cleanupTeamsByType(player: Player, teamPrefix: String) {
         val scoreboard = playerScoreboards[player.uniqueId] ?: return
@@ -120,7 +111,7 @@ class TeamManager(private val plugin: LocoPillars) {
     }
 
     /**
-     * Cleanup alle teams voor een speler: tab + sidebar.
+     * Ruim ALLE teams en scoreboards voor een speler op (bij disconnect).
      */
     fun cleanupPlayer(player: Player) {
         val playerUUID = player.uniqueId
@@ -128,28 +119,26 @@ class TeamManager(private val plugin: LocoPillars) {
         if (scoreboard != null) {
             val teams = playerTeams[playerUUID]?.toList() ?: emptyList()
             teams.forEach { teamName ->
-                try {
-                    scoreboard.getTeam(teamName)?.unregister()
-                } catch (e: Exception) {
+                try { scoreboard.getTeam(teamName)?.unregister() } catch (e: Exception) {
                     debugLog("Error unregistering team $teamName: ${e.message}")
                 }
             }
-            debugLog("Cleaned up ${teams.size} teams for ${player.name}")
+            debugLog("Cleaned up ${teams.size} tab teams for ${player.name}")
         }
         cleanupTabTeamForPlayer(player)
         playerTeams.remove(playerUUID)
         playerScoreboards.remove(playerUUID)
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Bulk updates
+    // ──────────────────────────────────────────────────────────────────────
+
     fun forceRefreshAllTeams() {
         debugLog("Force refreshing all team assignments")
         playerTeams.clear()
         playerScoreboards.clear()
-        Bukkit.getOnlinePlayers().forEach { player ->
-            if (player.isOnline) {
-                getPlayerScoreboard(player)
-            }
-        }
+        Bukkit.getOnlinePlayers().forEach { if (it.isOnline) getPlayerScoreboard(it) }
         updateAllTabTeams()
         if (plugin.scoreboardManager.isEnabled()) {
             plugin.scoreboardManager.forceUpdateAllPlayers()
@@ -158,81 +147,37 @@ class TeamManager(private val plugin: LocoPillars) {
 
     fun updateAllTabTeams() {
         if (!plugin.tabManager.isEnabled()) return
-        debugLog("Updating all tab teams for cross-player visibility")
         Bukkit.getOnlinePlayers().forEach { player ->
-            if (player.isOnline) {
-                plugin.tabManager.updatePlayerTab(player)
-            }
+            if (player.isOnline) plugin.tabManager.updatePlayerTab(player)
         }
     }
 
-    fun cleanupTabTeamForPlayer(targetPlayer: Player) {
-        debugLog("Cleaning up tab teams for ${targetPlayer.name}")
-        Bukkit.getOnlinePlayers().forEach { viewer ->
-            if (!viewer.isOnline || viewer == targetPlayer) return@forEach
-            try {
-                val scoreboard = playerScoreboards[viewer.uniqueId] ?: return@forEach
-                val teamName = generateTeamName(TAB_TEAM_PREFIX, targetPlayer.name)
-                val team = scoreboard.getTeam(teamName)
-                if (team != null) {
-                    team.unregister()
-                    untrackTeam(viewer.uniqueId, teamName)
-                }
-            } catch (e: Exception) {
-                debugLog("Error cleaning up tab team for ${targetPlayer.name} from ${viewer.name}: ${e.message}")
-            }
-        }
-    }
+    // ──────────────────────────────────────────────────────────────────────
+    // Stats
+    // ──────────────────────────────────────────────────────────────────────
 
     fun getStats(): Map<String, Any> {
-        val totalPlayers = playerScoreboards.size
         val totalTeams = playerTeams.values.sumOf { it.size }
-        var tabTeams = 0
-        var sidebarTeams = 0
-
-        // Count teams by type
-        playerTeams.values.forEach { teamSet ->
-            teamSet.forEach { teamName ->
-                when {
-                    teamName.startsWith(TAB_TEAM_PREFIX) -> tabTeams++
-                    teamName.startsWith(SIDEBAR_TEAM_PREFIX) -> sidebarTeams++
-                }
-            }
-        }
-
-        val activeScoreboards = playerScoreboards.size
-        val playersWithTeams = playerTeams.keys.size
-
-        debugLog("FIXED Stats: totalPlayers=$totalPlayers, totalTeams=$totalTeams, tabTeams=$tabTeams, sidebarTeams=$sidebarTeams")
-        debugLog("Stats: activeScoreboards=$activeScoreboards, playersWithTeams=$playersWithTeams")
-
-        // Debug team details
-        playerTeams.forEach { (playerUUID, teams) ->
-            val playerName = Bukkit.getPlayer(playerUUID)?.name ?: "Unknown"
-            val tabCount = teams.count { it.startsWith(TAB_TEAM_PREFIX) }
-            val sideCount = teams.count { it.startsWith(SIDEBAR_TEAM_PREFIX) }
-            debugLog("Player $playerName: $tabCount tab teams, $sideCount SEPARATED sidebar teams")
-        }
-
+        val tabTeams   = playerTeams.values.sumOf { set -> set.count { it.startsWith(TAB_TEAM_PREFIX) } }
         return mapOf(
-            "totalPlayers" to totalPlayers,
-            "totalTeams" to totalTeams,
-            "tabTeams" to tabTeams,
-            "sidebarTeams" to sidebarTeams,
-            "onlinePlayers" to Bukkit.getOnlinePlayers().size,
-            "activeScoreboards" to activeScoreboards,
-            "playersWithTeams" to playersWithTeams,
-            "conflictsSeparated" to true // Indicates conflicts are fixed
+            "totalPlayers"       to playerScoreboards.size,
+            "totalTeams"         to totalTeams,
+            "tabTeams"           to tabTeams,
+            "sidebarTeams"       to 0,  // removed — ScoreboardManager uses Score.customName()
+            "onlinePlayers"      to Bukkit.getOnlinePlayers().size,
+            "activeScoreboards"  to playerScoreboards.size,
+            "playersWithTeams"   to playerTeams.keys.size
         )
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ──────────────────────────────────────────────────────────────────────
+
     private fun generateTeamName(prefix: String, identifier: String): String {
         val fullName = prefix + identifier.replace("-", "").lowercase()
-        return if (fullName.length > MAX_TEAM_NAME_LENGTH) {
-            fullName.substring(0, MAX_TEAM_NAME_LENGTH)
-        } else {
-            fullName
-        }
+        return if (fullName.length > MAX_TEAM_NAME_LENGTH) fullName.substring(0, MAX_TEAM_NAME_LENGTH)
+               else fullName
     }
 
     private fun getOrCreateTeam(scoreboard: Scoreboard, teamName: String): Team {
@@ -250,9 +195,7 @@ class TeamManager(private val plugin: LocoPillars) {
     private fun cleanupTeamsByPrefix(scoreboard: Scoreboard, playerUUID: UUID, prefix: String) {
         val teams = playerTeams[playerUUID]?.filter { it.startsWith(prefix) } ?: return
         teams.forEach { teamName ->
-            try {
-                scoreboard.getTeam(teamName)?.unregister()
-            } catch (e: Exception) {
+            try { scoreboard.getTeam(teamName)?.unregister() } catch (e: Exception) {
                 debugLog("Error removing team $teamName: ${e.message}")
             }
             untrackTeam(playerUUID, teamName)
@@ -260,8 +203,6 @@ class TeamManager(private val plugin: LocoPillars) {
     }
 
     private fun debugLog(message: String) {
-        if (plugin.configManager.debugMode) {
-            plugin.logger.info("[TeamManager] $message")
-        }
+        if (plugin.configManager.debugMode) plugin.logger.info("[TeamManager] $message")
     }
 }

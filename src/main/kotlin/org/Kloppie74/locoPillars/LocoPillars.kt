@@ -2,8 +2,13 @@ package org.Kloppie74.locoPillars
 
 import com.comphenix.protocol.ProtocolLibrary
 import com.comphenix.protocol.ProtocolManager
+import org.Kloppie74.locoPillars.commands.ChatToggleCommand
 import org.Kloppie74.locoPillars.commands.MemoryCommand
+import org.Kloppie74.locoPillars.commands.PillarsAdminCommand
+import org.Kloppie74.locoPillars.commands.PartyCommand
 import org.Kloppie74.locoPillars.commands.editor.AdminEditorCommand
+import org.Kloppie74.locoPillars.party.PartyManager
+import org.Kloppie74.locoPillars.party.listener.PartyPlayerListener
 import org.Kloppie74.locoPillars.editor.AdminEditorManager
 import org.Kloppie74.locoPillars.editor.BlacklistedItemsGui
 import org.Kloppie74.locoPillars.editor.EditorFileValidator
@@ -140,6 +145,8 @@ class LocoPillars : JavaPlugin() {
 
     lateinit var chatManager: ChatManager
         private set
+    lateinit var partyManager: PartyManager
+        private set
     lateinit var placeholders: Placeholders
         private set
     lateinit var playerPreferences: PlayerPreferences
@@ -243,6 +250,8 @@ class LocoPillars : JavaPlugin() {
             server.pluginManager.registerEvents(blacklistedItemsGui, this)
             server.pluginManager.registerEvents(
                 EditorModeListener(adminEditorManager, editorSessionManager), this)
+            server.pluginManager.registerEvents(
+                org.Kloppie74.locoPillars.editor.listener.EditorWorldListener(), this)
             server.pluginManager.registerEvents(
                 EditorInteractionListener(
                     this, adminEditorManager, editorHotbarManager,
@@ -383,12 +392,29 @@ class LocoPillars : JavaPlugin() {
 
             logger.info("[LocoPillars] ✓ Achievements system, /achievements and /stats command registered")
 
-            // 13. CHAT SYSTEM
+            // 13. PARTY SYSTEM
+            partyManager = PartyManager(this)
+            server.pluginManager.registerEvents(PartyPlayerListener(partyManager), this)
+            getCommand("party")?.let {
+                val partycmd = PartyCommand(this)
+                it.setExecutor(partycmd)
+                it.tabCompleter = partycmd
+                debugLog("✓ Command '/party' registered")
+            } ?: logger.warning("[LocoPillars] '/party' command not found in plugin.yml")
+            logger.info("[LocoPillars] ✓ Party system initialized")
+
+            // 14. CHAT SYSTEM
             chatManager = ChatManager(this)
             chatManager.initialize()
+            getCommand("chat")?.let {
+                val chatToggleCmd = ChatToggleCommand(this)
+                it.setExecutor(chatToggleCmd)
+                it.tabCompleter = chatToggleCmd
+                debugLog("✓ Command '/chat' registered")
+            } ?: logger.warning("[LocoPillars] '/chat' command not found in plugin.yml")
             debugLog("✓ Chat system initialized successfully")
 
-            // 14. COSMETICS SYSTEM
+            // 15. COSMETICS SYSTEM
             cosmeticManager = CosmeticManager(this)
             cosmeticManager.init()
             val cosmeticsCmd = CosmeticsCommand(this)
@@ -399,7 +425,7 @@ class LocoPillars : JavaPlugin() {
             } ?: logger.warning("[LocoPillars] '/cosmetics' command not found in plugin.yml")
             logger.info("[LocoPillars] ✓ Cosmetics system initialized")
 
-            // 15. VOTING SYSTEM
+            // 16. VOTING SYSTEM
             votingLoader = VotingLoader(this)
             votingLoader.loadAll()
             votingManager = VotingManager(this, votingLoader)
@@ -407,7 +433,7 @@ class LocoPillars : JavaPlugin() {
             server.pluginManager.registerEvents(votingGui, this)
             logger.info("[LocoPillars] ✓ Voting system initialized (${votingLoader.count()} modules)")
 
-            // 16. LUCKY BLOCKS SYSTEM
+            // 17. LUCKY BLOCKS SYSTEM
             val luckyblockLoader = LuckyblockLoader(this)
             luckyblockLoader.loadAll()
             LuckyBlocksUtil.setLuckyblockLoader(luckyblockLoader)
@@ -423,7 +449,7 @@ class LocoPillars : JavaPlugin() {
 
             Bukkit.getPluginManager().registerEvents(LuckyBlocksMenu, this)
 
-            // 17. PLACEHOLDERS
+            // 18. PLACEHOLDERS
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
                 placeholders.register()
                 logger.info("[LocoPillars] Placeholders registered with PlaceholderAPI!")
@@ -431,7 +457,7 @@ class LocoPillars : JavaPlugin() {
                 logger.warning("[LocoPillars] PlaceholderAPI not found, placeholders will not work.")
             }
 
-            // 18. STARTUP SUMMARY
+            // 19. STARTUP SUMMARY
             showStartupSummary()
         } catch (e: Exception) {
             logger.severe("[LocoPillars] ==========================================")
@@ -561,9 +587,18 @@ class LocoPillars : JavaPlugin() {
                 arenaManager.onDisable()
             }
 
+            // Release the shared Kotlin KTS engine so the classloader can be GC'd on reload.
+            org.Kloppie74.locoPillars.utils.scripting.SharedScriptEngine.reset()
+
             if (::worldRegionManager.isInitialized) {
                 worldRegionManager.clearAll()
                 logger.info("[LocoPillars] ✓ WorldRegionManager cleared")
+            }
+
+            // Cleanup party system
+            if (::partyManager.isInitialized) {
+                partyManager.cleanup()
+                logger.info("[LocoPillars] ✓ PartyManager cleanup completed")
             }
 
             // Cleanup editor sessions
@@ -665,6 +700,13 @@ class LocoPillars : JavaPlugin() {
         } else {
             logger.severe("[LocoPillars] ✗ Failed to register '/pillars' command")
         }
+
+        getCommand("pillarsadmin")?.let {
+            val cmd = PillarsAdminCommand(this)
+            it.setExecutor(cmd)
+            it.tabCompleter = cmd
+            debugLog("✓ Command '/pillarsadmin' registered")
+        } ?: logger.warning("[LocoPillars] '/pillarsadmin' command not found in plugin.yml")
 
         val memoryCommand = getCommand("memory")
         if (memoryCommand != null) {

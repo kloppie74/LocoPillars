@@ -387,13 +387,54 @@ object GlobalVisibilityTicker {
                 return spectatorResult
             }
 
-            // 3. DEFAULT: No special rules apply for WORLD visibility, should be visible
-            // Tab visibility is handled separately by ProtocolLibTabVisibilityManager
+            // 3. GAME-INSTANCE ISOLATION: lobby ziet lobby, game ziet eigen game.
+            // Dit stuurt zowel WORLD- als TAB-zichtbaarheid aan, want hidePlayer/showPlayer
+            // controleert beide tegelijk. (Voorheen deden losse ProtocolLib-packets dit,
+            // maar die maakten ook entities onzichtbaar.)
+            val gameResult = checkGameInstanceRules(viewer, target)
+            if (gameResult != null) {
+                return gameResult
+            }
+
+            // 4. DEFAULT: zichtbaar
             return true
 
         } catch (e: Exception) {
             plugin.logger.warning("[GlobalVisibilityTicker] Error determining visibility for ${viewer.name} -> ${target.name}: ${e.message}")
             return true // Default to visible if error
+        }
+    }
+
+    /**
+     * Game-instance isolatie (laagste prioriteit, na vanish & spectator).
+     *
+     * Regels:
+     *   - displayPerGameInstance uit  → geen isolatie (iedereen ziet iedereen)
+     *   - beide in de lobby (geen instance) → zichtbaar
+     *   - één in een game, ander in lobby   → verborgen
+     *   - beide in dezelfde game-instance   → zichtbaar
+     *   - verschillende game-instances      → verborgen
+     *
+     * Returns null als isolatie uit staat (laat default-zichtbaar gelden).
+     */
+    private fun checkGameInstanceRules(viewer: Player, target: Player): Boolean? {
+        try {
+            if (!plugin.tabManager.displayPerGameInstance) return null
+
+            val viewerInstance = plugin.gameManager.getPlayerInstance(viewer)
+            val targetInstance = plugin.gameManager.getPlayerInstance(target)
+
+            // Beide in de (main) lobby → altijd zichtbaar voor elkaar
+            if (viewerInstance == null && targetInstance == null) return true
+
+            // Eén in een game, de ander in de lobby → verborgen
+            if (viewerInstance == null || targetInstance == null) return false
+
+            // Beide in een game → alleen zichtbaar als het dezelfde instance is
+            return viewerInstance == targetInstance
+        } catch (e: Exception) {
+            plugin.logger.warning("[GlobalVisibilityTicker] Error in game-instance rules: ${e.message}")
+            return null
         }
     }
 
@@ -450,39 +491,40 @@ object GlobalVisibilityTicker {
      */
     private fun checkSpectatorRules(viewer: Player, target: Player): Boolean? {
         try {
-            val viewerIsSpectator = SpectatorUtils.isSpectator(viewer, plugin)
-            val targetIsSpectator = SpectatorUtils.isSpectator(target, plugin)
+            // BELANGRIJK: gebruik isSpectating() (rauwe map) i.p.v. isSpectator().
+            // Een mid-game geëlimineerde speler blijft tot het einde in instance.players
+            // staan (inGame == true), waardoor isSpectator() false geeft. isSpectating()
+            // herkent ze tóch als spectator, zodat ze verborgen blijven voor levende spelers.
+            val viewerIsSpectator = SpectatorUtils.isSpectating(viewer, plugin)
+            val targetIsSpectator = SpectatorUtils.isSpectating(target, plugin)
 
-            // If viewer is spectating and is hiding other spectators
-            if (viewerIsSpectator && targetIsSpectator && SpectatorVisibilityManager.isHidingSpectators(viewer)) {
-                return false
-            }
-
-            // If target is spectator and viewer is hiding spectators
+            // Handmatige "hide spectators"-toggle: verberg spectators voor wie dat aan heeft.
             if (targetIsSpectator && SpectatorVisibilityManager.isHidingSpectators(viewer)) {
                 return false
             }
 
-            // Special rules for spectators in pillars worlds
-            if (viewer.world.name.startsWith("pillars_") && target.world.name.startsWith("pillars_")) {
-                val viewerInstance = plugin.gameManager.getPlayerInstance(viewer)
-                val targetInstance = plugin.gameManager.getPlayerInstance(target)
-
-                // Always hide spectators from non-spectators inside pillars worlds.
-                // This covers both the normal in-game case (different instances) and the
-                // end-of-game edge case where both players have a null instance but the
-                // dead player is still in the arena world.
-                if (targetIsSpectator && !viewerIsSpectator) {
-                    return false
-                }
-
-                if (viewerInstance != targetInstance) {
-                    if (viewerIsSpectator && !targetIsSpectator) {
-                        return true
-                    }
-                }
+            // Spectators (geëlimineerd/dood) zijn verborgen voor levende spelers binnen
+            // game-context. Dit overschrijft de game-instance-regel (die zou ze anders
+            // zichtbaar maken omdat de spectator nog in dezelfde instance zit).
+            // Gegate op game-context (pillars-wereld of actieve instance) zodat een
+            // verouderde spectator-map-entry nooit een gewone lobby-speler verbergt.
+            if (targetIsSpectator && !viewerIsSpectator) {
+                val targetInGameContext = target.world.name.startsWith("pillars_") ||
+                        plugin.gameManager.getPlayerInstance(target) != null
+                if (targetInGameContext) return false
             }
 
+            // Een spectator ZIET iedereen in zijn eigen arena (zelfde pillars-wereld):
+            // zowel levende spelers als andere spectators. De game-instance-regel zou
+            // dit anders verbergen omdat een dode spectator soms geen instance meer heeft
+            // (getPlayerInstance == null) → daarom hier expliciet op WERELD matchen.
+            if (viewerIsSpectator &&
+                viewer.world.name.startsWith("pillars_") &&
+                viewer.world.name == target.world.name) {
+                return true
+            }
+
+            // Geen spectator-regel van toepassing → laat game-instance-regel beslissen.
             return null
         } catch (e: Exception) {
             plugin.logger.warning("[GlobalVisibilityTicker] Error in spectator rules check: ${e.message}")

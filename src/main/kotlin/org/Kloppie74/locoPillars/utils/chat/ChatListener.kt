@@ -19,8 +19,17 @@ class ChatListener(private val plugin: LocoPillars, private val chatUtils: ChatU
         // Cancel the default chat handling
         event.isCancelled = true
 
-        val player = event.player
+        val player  = event.player
         val message = event.message
+
+        // Party chat takes priority: if the player has party chat toggled on,
+        // route the message to party members only.
+        if (plugin.partyManager.isPartyChatActive(player)) {
+            // sendPartyChat is safe to call from the async chat thread because
+            // it only iterates over in-memory structures and calls sendMessage.
+            plugin.partyManager.sendPartyChat(player, message)
+            return
+        }
 
         // Handle the chat message through our custom system
         chatUtils.sendChatMessage(player, message)

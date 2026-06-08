@@ -1,46 +1,29 @@
 package org.Kloppie74.locoPillars.utils.luckyblocks.engine
 
+import org.Kloppie74.locoPillars.utils.scripting.SharedScriptEngine
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import javax.script.Compilable
 import javax.script.CompiledScript
-import javax.script.ScriptEngine
-import javax.script.ScriptEngineManager
 import javax.script.ScriptException
 
 /**
- * Wraps the Kotlin JSR 223 script engine.
+ * Wraps the shared Kotlin JSR 223 script engine for LuckyBlock scripts.
  * Scripts are compiled once at load time and cached for fast re-execution.
  * Each script receives `player` and `game` as injected variables.
+ *
+ * Uses [SharedScriptEngine] — the Kotlin compiler is loaded only ONCE for the
+ * entire plugin instead of once per scripting subsystem.
  */
 class LuckyblockScriptEngine(private val plugin: JavaPlugin) {
 
-    // Lazy so initialization only runs when first needed
-    private val engine: ScriptEngine? by lazy { initEngine() }
+    // Delegates to the plugin-wide singleton — no private engine instance here.
+    private val engine get() = SharedScriptEngine.get(plugin)
 
     // id → (compiled script, file last-modified timestamp)
     private val cache = ConcurrentHashMap<String, Pair<CompiledScript, Long>>()
-
-    private fun initEngine(): ScriptEngine? {
-        val prev = Thread.currentThread().contextClassLoader
-        return try {
-            Thread.currentThread().contextClassLoader = plugin.javaClass.classLoader
-            val mgr = ScriptEngineManager(plugin.javaClass.classLoader)
-            mgr.getEngineByExtension("kts")
-                ?: mgr.getEngineByName("kotlin")
-                ?: run {
-                    plugin.logger.severe("[LuckyBlocks] Kotlin script engine not found — is kotlin-scripting-jsr223 on the classpath?")
-                    null
-                }
-        } catch (e: Exception) {
-            plugin.logger.severe("[LuckyBlocks] Failed to init script engine: ${e.message}")
-            null
-        } finally {
-            Thread.currentThread().contextClassLoader = prev
-        }
-    }
 
     fun isAvailable(): Boolean = engine != null
 

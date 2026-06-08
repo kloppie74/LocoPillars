@@ -3,6 +3,7 @@ package org.Kloppie74.locoPillars.game.map
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.plugin.java.JavaPlugin
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.deleteRecursivelyJava
 import java.io.File
 
 /**
@@ -94,7 +95,7 @@ class MapRepository(
         }
         
         return try {
-            mapFolder.deleteRecursively()
+            mapFolder.deleteRecursivelyJava()
             plugin.logger.info("Successfully deleted map: $mapName")
             true
         } catch (e: Exception) {

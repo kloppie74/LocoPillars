@@ -54,15 +54,23 @@ object SchematicHelper {
             }
 
             val weWorld = BukkitAdapter.adapt(bWorld)
-            WorldEdit.getInstance().newEditSession(weWorld).use { editSession ->
-                val operation = ClipboardHolder(clipboard)
-                    .createPaste(editSession)
-                    .to(BlockVector3.at(location.blockX, location.blockY, location.blockZ))
-                    .ignoreAirBlocks(false)
-                    .build()
-
-                Operations.complete(operation)
-            }
+            // changeSetNull()   — disables FAWE history (no NullChangeSet heap usage)
+            // copyEntities(false) — skips entity NBT during paste; FAWE's recursive
+            //   hashCode() on EagerFaweCompoundTag causes OutOfMemoryError when many
+            //   arenas are pasted at startup.  Arena resets only need block structure.
+            WorldEdit.getInstance().newEditSessionBuilder()
+                .world(weWorld)
+                .changeSetNull()
+                .build()
+                .use { editSession ->
+                    val operation = ClipboardHolder(clipboard)
+                        .createPaste(editSession)
+                        .to(BlockVector3.at(location.blockX, location.blockY, location.blockZ))
+                        .ignoreAirBlocks(false)
+                        .copyEntities(false)
+                        .build()
+                    Operations.complete(operation)
+                }
 
             debugLog(plugin, configManager, "✓ Paste operation completed successfully!")
             return true
@@ -91,13 +99,17 @@ object SchematicHelper {
             val clipboard = BlockArrayClipboard(region)
             clipboard.origin = region.minimumPoint
 
-            WorldEdit.getInstance().newEditSession(weWorld).use { editSession ->
-                val copyOperation = ForwardExtentCopy(
-                    editSession, region, clipboard, region.minimumPoint
-                )
-                copyOperation.isCopyingEntities = true
-                Operations.complete(copyOperation)
-            }
+            WorldEdit.getInstance().newEditSessionBuilder()
+                .world(weWorld)
+                .changeSetNull()
+                .build()
+                .use { editSession ->
+                    val copyOperation = ForwardExtentCopy(
+                        editSession, region, clipboard, region.minimumPoint
+                    )
+                    copyOperation.isCopyingEntities = true
+                    Operations.complete(copyOperation)
+                }
 
             val format = ClipboardFormats.findByAlias("fast")
                 ?: ClipboardFormats.findByAlias("sponge")

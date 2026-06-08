@@ -13,6 +13,7 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.database.dao.AchievementDAO
+import org.Kloppie74.locoPillars.database.dao.LeaderboardCacheDAO
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.utils.MSG
@@ -609,19 +610,22 @@ class StatsCommand(
         gameStats: GameStatsData,
         combatStats: CombatStatsData
     ) {
-        // Calculate player's approximate rankings
-        val winsRank = calculateWinsRank(gameStats.gamesWon)
-        val kdrRank = calculateKDRRank(combatStats.kills, combatStats.deaths)
-        val gamesRank = calculateGamesRank(gameStats.gamesPlayed)
+        val winsRank = try { LeaderboardCacheDAO.getPlayerRank(playerId, LeaderboardCacheDAO.TYPE_WINS) } catch (e: Exception) { 999 }
+        val kdrRank = try { LeaderboardCacheDAO.getPlayerRank(playerId, LeaderboardCacheDAO.TYPE_KD_RATIO) } catch (e: Exception) { 999 }
+        val levelRank = try { LeaderboardCacheDAO.getPlayerRank(playerId, LeaderboardCacheDAO.TYPE_LEVEL) } catch (e: Exception) { 999 }
+        val streakRank = try { LeaderboardCacheDAO.getPlayerRank(playerId, LeaderboardCacheDAO.TYPE_STREAK) } catch (e: Exception) { 999 }
+
+        fun rankDisplay(rank: Int) = if (rank == 999) "&8Unranked" else "&6#$rank"
 
         val ranking = ItemStack(Material.GOLDEN_APPLE).apply {
             itemMeta = itemMeta?.apply {
                 setDisplayName(MSG.chatColors("&e🏆 Server Rankings"))
                 lore = listOf(
                     "",
-                    MSG.chatColors("&7Wins Rank: &6#${winsRank}"),
-                    MSG.chatColors("&7K/D Rank: &c#${kdrRank}"),
-                    MSG.chatColors("&7Games Rank: &f#${gamesRank}"),
+                    MSG.chatColors("&7Wins Rank: ${rankDisplay(winsRank)}"),
+                    MSG.chatColors("&7K/D Rank: ${rankDisplay(kdrRank)}"),
+                    MSG.chatColors("&7Level Rank: ${rankDisplay(levelRank)}"),
+                    MSG.chatColors("&7Streak Rank: ${rankDisplay(streakRank)}"),
                     "",
                     MSG.chatColors("&8Click for detailed leaderboards"),
                     ""
@@ -875,37 +879,6 @@ class StatsCommand(
     }
 
     // =================== CALCULATION METHODS ===================
-
-    private fun calculateWinsRank(wins: Int): Int {
-        try {
-            val totalPlayers = PlayerDAO.getTotalPlayersCount()
-            return max(1, totalPlayers / max(1, wins))
-        } catch (e: Exception) {
-            plugin.logger.warning("Error calculating wins rank: ${e.message}")
-            return 1
-        }
-    }
-
-    private fun calculateKDRRank(kills: Int, deaths: Int): Int {
-        try {
-            val totalPlayers = PlayerDAO.getTotalPlayersCount()
-            val kdr = if (deaths > 0) kills.toDouble() / deaths else kills.toDouble()
-            return max(1, (totalPlayers * (1.0 - min(kdr / 10.0, 0.9))).toInt())
-        } catch (e: Exception) {
-            plugin.logger.warning("Error calculating KDR rank: ${e.message}")
-            return 1
-        }
-    }
-
-    private fun calculateGamesRank(games: Int): Int {
-        try {
-            val totalPlayers = PlayerDAO.getTotalPlayersCount()
-            return max(1, totalPlayers / max(1, games / 10))
-        } catch (e: Exception) {
-            plugin.logger.warning("Error calculating games rank: ${e.message}")
-            return 1
-        }
-    }
 
     private fun calculateNextLevelXP(currentLevel: Int): Int {
         return currentLevel * currentLevel * 100

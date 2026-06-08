@@ -3,6 +3,8 @@ package org.Kloppie74.locoPillars.utils
 import org.Kloppie74.locoPillars.LocoPillars
 import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
+import java.io.InputStreamReader
+import java.nio.charset.StandardCharsets
 
 class LanguageManager(private val plugin: LocoPillars) {
 
@@ -18,7 +20,47 @@ class LanguageManager(private val plugin: LocoPillars) {
             plugin.saveResource("language.yml", false)
         }
         config = YamlConfiguration.loadConfiguration(file)
-        plugin.logger.info("[LanguageManager] language.yml loaded (${config.getKeys(true).count { !config.isConfigurationSection(it) }} keys)")
+        val loadedKeys = config.getKeys(true).count { !config.isConfigurationSection(it) }
+        plugin.logger.info("[LanguageManager] language.yml loaded ($loadedKeys keys)")
+
+        // ── Startup completeness check ──────────────────────────────────────
+        // Compare the bundled default language.yml (from the JAR) against the
+        // file on disk. Any missing leaf key is auto-filled with its default
+        // value so the server never prints "[Missing: …]" warnings again.
+        validateAndBackfill(file)
+    }
+
+    /**
+     * Loads the bundled `language.yml` from the JAR, finds every leaf key that
+     * is absent in the on-disk file, inserts the default value, and saves.
+     * Logs a summary so admins know the file was patched.
+     */
+    private fun validateAndBackfill(file: File) {
+        val stream = plugin.getResource("language.yml") ?: run {
+            plugin.logger.warning("[LanguageManager] Could not read bundled language.yml — skipping completeness check.")
+            return
+        }
+        val defaults = YamlConfiguration()
+        defaults.load(InputStreamReader(stream, StandardCharsets.UTF_8))
+
+        val defaultLeafKeys = defaults.getKeys(true).filter { !defaults.isConfigurationSection(it) }
+        val missing = defaultLeafKeys.filter { !config.contains(it) }
+
+        if (missing.isEmpty()) return   // file is already complete
+
+        plugin.logger.warning("[LanguageManager] language.yml is missing ${missing.size} key(s) — auto-filling with defaults:")
+        missing.forEach { key ->
+            val value = defaults.get(key)
+            config.set(key, value)
+            plugin.logger.warning("[LanguageManager]   + $key")
+        }
+
+        try {
+            config.save(file)
+            plugin.logger.info("[LanguageManager] language.yml patched and saved (${missing.size} key(s) added).")
+        } catch (e: Exception) {
+            plugin.logger.severe("[LanguageManager] Failed to save patched language.yml: ${e.message}")
+        }
     }
 
     /**

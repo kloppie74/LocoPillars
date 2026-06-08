@@ -65,6 +65,32 @@ class GameManager(private val plugin: LocoPillars) {
         return instance
     }
 
+    /**
+     * Joins all [partyMemberUUIDs] (including the [leader]) to the same game
+     * instance.  After every member joins, tab/visibility systems are refreshed
+     * for the whole group.
+     */
+    fun joinPartyToGame(
+        leader: Player,
+        partyMemberUUIDs: List<java.util.UUID>,
+        gameTypeName: String
+    ): org.Kloppie74.locoPillars.game.instance.GameInstance? {
+        // Cancel any pending queue for all members
+        partyMemberUUIDs.forEach { gameplayManager.cancelAutoQueue(it) }
+        partyMemberUUIDs.forEach { clearEliminatedState(it) }
+
+        val instance = joinManager.joinPartyToGame(leader, partyMemberUUIDs, gameTypeName, gameplayManager)
+        if (instance != null) {
+            // Refresh tab / visibility for every member that joined
+            partyMemberUUIDs.mapNotNull { plugin.server.getPlayer(it) }.filter { it.isOnline }.forEach { member ->
+                SpectatorUtils.removeSpectatorStatus(member, plugin)
+                plugin.teamsListener.onPlayerJoinGame(member)
+                plugin.spectateListener.onPlayerGameStatusChange(member)
+            }
+        }
+        return instance
+    }
+
     fun leaveGame(player: Player): Boolean {
         val success = leaveManager.leaveGame(player, gameplayManager)
         clearEliminatedState(player.uniqueId)

@@ -133,6 +133,7 @@ object VanishManager {
 
             GlobalVisibilityTicker.clearPlayerFromQueue(player)
             applyVanishVisibilityDirectWithPriority(player)
+            triggerTabUpdate()
 
             vanishListener?.updateBossBar(player)
 
@@ -167,6 +168,7 @@ object VanishManager {
 
             GlobalVisibilityTicker.clearPlayerFromQueue(player)
             applyVanishVisibilityDirectWithPriority(player)
+            triggerTabUpdate()
             vanishListener?.updateBossBar(player)
 
             // Queue updates for other players
@@ -200,6 +202,7 @@ object VanishManager {
 
             GlobalVisibilityTicker.clearPlayerFromQueue(player)
             applyVanishVisibilityDirectWithPriority(player)
+            triggerTabUpdate()
             vanishListener?.updateBossBar(player)
         } catch (e: Exception) {
             plugin.logger.severe("[VanishManager] ❌ Error setting hideOthers for ${player.name}: ${e.message}")
@@ -225,6 +228,7 @@ object VanishManager {
 
             GlobalVisibilityTicker.clearPlayerFromQueue(player)
             applyVanishVisibilityDirectWithPriority(player)
+            triggerTabUpdate()
             vanishListener?.updateBossBar(player)
         } catch (e: Exception) {
             plugin.logger.severe("[VanishManager] ❌ Error setting showOthers for ${player.name}: ${e.message}")
@@ -245,6 +249,7 @@ object VanishManager {
 
                 GlobalVisibilityTicker.clearPlayerFromQueue(player)
                 applyVanishVisibilityDirectWithPriority(player)
+                triggerTabUpdate()
                 vanishListener?.updateBossBar(player)
             } else {
                 plugin.logger.warning("[VanishManager] ✗ Failed to add ${target.name} to showOthers for ${player.name}")
@@ -268,6 +273,7 @@ object VanishManager {
 
                 GlobalVisibilityTicker.clearPlayerFromQueue(player)
                 applyVanishVisibilityDirectWithPriority(player)
+                triggerTabUpdate()
                 vanishListener?.updateBossBar(player)
             } else {
                 plugin.logger.warning("[VanishManager] ✗ Failed to remove ${target.name} from showOthers for ${player.name}")
@@ -383,6 +389,23 @@ object VanishManager {
     }
 
     // =================== FORCE UPDATE METHODS ===================
+
+    /**
+     * Stuur na een vanish-wijziging ook een tab-update via ProtocolLib.
+     * De normale applyVanishVisibilityDirect() werkt alleen op world-visibility
+     * (hidePlayer/showPlayer) maar niet op de tab-lijst. ProtocolLibTabVisibility-
+     * Manager leest de vanish-staat direct uit de cache, dus het volstaat om
+     * een gewone updateTabVisibilityForAllPlayers() aan te roepen.
+     */
+    private fun triggerTabUpdate() {
+        try {
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                if (plugin.isProtocolLibAvailable()) {
+                    plugin.protocolLibTabVisibilityManager.updateTabVisibilityForAllPlayers()
+                }
+            }, 3L)
+        } catch (_: Exception) {}
+    }
 
     /**
      * Force update all visibility with priority system.

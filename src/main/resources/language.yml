@@ -12,6 +12,65 @@
 # ─────────────────────────────────────────────────────────────
 # ALGEMEEN
 # ─────────────────────────────────────────────────────────────
+pillarsadmin:
+  no_permission: "&cYou don't have permission to use PillarsAdmin commands."
+
+  # Usage hints
+  usage:
+    addcoins:    "&cUsage: &e/pillarsadmin addcoins <player> <amount>"
+    removecoins: "&cUsage: &e/pillarsadmin removecoins <player> <amount>"
+    setcoins:    "&cUsage: &e/pillarsadmin setcoins <player> <amount>"
+    addxp:       "&cUsage: &e/pillarsadmin addxp <player> <amount>"
+    setxp:       "&cUsage: &e/pillarsadmin setxp <player> <amount>"
+    setlevel:    "&cUsage: &e/pillarsadmin setlevel <player> <level>"
+    stats:       "&cUsage: &e/pillarsadmin stats <player>"
+
+  # Success messages (sent to executor)
+  success:
+    addcoins:    "&a+{amount} coins &7→ &e{player} &7(now: &6{new_val} coins&7)"
+    removecoins: "&c-{amount} coins &7→ &e{player} &7(now: &6{new_val} coins&7)"
+    setcoins:    "&aCoins set to &6{new_val} &7for &e{player}&7."
+    addxp:       "&a+{amount} XP &7→ &e{player} &7(now: &b{new_val} XP&7)"
+    setxp:       "&aXP set to &b{new_val} &7for &e{player}&7."
+    setlevel:    "&aLevel set to &b{new_val} &7for &e{player}&7."
+
+  # Notifications (sent to the target player if online)
+  notify:
+    coins_added:   "&6+{amount} coins &7have been added to your wallet. &8(Total: {new_val})"
+    coins_removed: "&c-{amount} coins &7have been deducted from your wallet. &8(Total: {new_val})"
+    coins_set:     "&7Your coins have been set to &6{new_val}&7."
+    xp_added:      "&b+{amount} XP &7added. &8(Total: {new_val} XP)"
+    xp_set:        "&7Your XP has been set to &b{new_val}&7."
+    level_set:     "&7Your level has been set to &b{new_val}&7."
+
+  # Error messages
+  error:
+    player_not_found: "&cPlayer &e{player} &cnot found in the database. Have they joined before?"
+    invalid_amount:   "&cInvalid amount: &e{input}&c. Must be a non-negative whole number."
+    db_failed:        "&cDatabase operation failed for &e{player}&c. Check console."
+    no_stats:         "&cNo stats record found for &e{player}&c."
+
+  # Stats view
+  stats:
+    header: "&6&m---&r &6{player}&7's stats &6&m---"
+    coins:  "  &6Coins:  &f{value}"
+    xp:     "  &bXP:     &f{value}"
+    level:  "  &bLevel:  &f{value}"
+    wins:   "  &aWins:   &f{value}"
+    kills:  "  &cKills:  &f{value}"
+
+  # Help
+  help:
+    header:       "&6&m---&r &6/pillarsadmin help &6&m---"
+    addcoins:     "&e/pillarsadmin addcoins <p> <n>    &7Add coins to a player"
+    removecoins:  "&e/pillarsadmin removecoins <p> <n> &7Remove coins from a player"
+    setcoins:     "&e/pillarsadmin setcoins <p> <n>    &7Set a player's coins"
+    addxp:        "&e/pillarsadmin addxp <p> <n>       &7Add XP to a player"
+    setxp:        "&e/pillarsadmin setxp <p> <n>       &7Set a player's XP"
+    setlevel:     "&e/pillarsadmin setlevel <p> <n>    &7Set a player's level"
+    stats:        "&e/pillarsadmin stats <p>           &7View coins/XP/level"
+    rewards_hint: "&7&oTip: use these in Rewards commands with %player% placeholder!"
+
 general:
   player_only: "&cThis command can only be used by players!"
   no_permission: "&cYou do not have permission to use this command!"
@@ -567,6 +626,38 @@ editor:
     loaded: "&a✓ Schematic &f#{id} &afor &f{name} &aloaded successfully!"
     load_failed: "&c✗ Failed to load schematic &f#{id}&c. Check console for details."
 
+  # /editor team
+  team:
+    usage: "&cUsage: &e/editor team <map> <list|<team#> <name|color> [value]>"
+    usage_team: "&cUsage: &e/editor team <map> {number} <name|color> [value]"
+    name_usage: "&cUsage: &e/editor team <map> <team#> name <display-name...>"
+    color_usage: "&cUsage: &e/editor team <map> <team#> color <color>"
+    load_error: "&cCould not load map settings. Does the map exist?"
+    no_teams: "&cMap &e{name} &chas no teams configured."
+    list_header: "&6=== Teams: {name} &7({count} teams) ==="
+    list_entry: "  &7Team&e{number} &7— &r{name} &8[{color}]"
+    invalid_number: "&cInvalid team number: &e{input}&c. Use 1, 2, 3, …"
+    team_not_found: "&cTeam &e{number} &cdoes not exist in this map."
+    name_set: "&aTeam &e{number} &aname updated to: &r{name}"
+    color_set: "&aTeam &e{number} &acolor updated to: &e{color}"
+    invalid_color: "&cUnknown color: &e{input}&c. Valid colors: &e{valid}"
+
+  # /editor rewards
+  rewards:
+    usage: "&cUsage: &e/editor rewards <map> <list|add-message|add-command|clear> [target] [value]"
+    add_message_usage: "&cUsage: &e/editor rewards <map> add-message <target> <message...>"
+    add_command_usage: "&cUsage: &e/editor rewards <map> add-command <target> <command...>"
+    clear_usage: "&cUsage: &e/editor rewards <map> clear <target>"
+    load_error: "&cCould not load map settings. Does the map exist?"
+    list_header: "&6=== Rewards: {name} ==="
+    section_header: "&e  [{section}]"
+    message_entry: "  &7msg &f{msg}"
+    command_entry: "  &7cmd &f/{cmd}"
+    unknown_target: "&cUnknown target: &e{target}&c. Valid: start | kill.killer | kill.victim | kill.remaining | kill.notplayer.victim | kill.notplayer.remaining | leave.player | leave.remaining | end.winner | end.spectator"
+    message_added: "&aMessage added to &e{target}&a: &f{value}"
+    command_added: "&aCommand added to &e{target}&a: &f/{value}"
+    cleared: "&aRewards cleared for &e{target}&a."
+
   # /editor help
   help:
     header: "&6=== Admin Editor — /editor ==="
@@ -602,6 +693,130 @@ editor:
     cmd_spawn_remove: "&e/editor spawn remove <t> <s>      &7Remove spawn point"
     section_holograms: "&b— Holograms —"
     cmd_holograms: "&e/editor holograms <on|off|refresh>&7Manage spawn holograms"
+    section_teams: "&b— Teams —"
+    cmd_team_list: "&e/editor team <map> list              &7Show all team names & colors"
+    cmd_team_name: "&e/editor team <map> <#> name <name>   &7Set team display name"
+    cmd_team_color: "&e/editor team <map> <#> color <color> &7Set team color"
     section_activation: "&b— Map activation —"
     cmd_enable: "&e/editor enable <name>            &7Copy map to Data/ (make it playable)"
     cmd_disable: "&e/editor disable <name>           &7Remove map from Data/ (keep master copy)"
+
+# ============================================================
+# PARTY SYSTEM
+# ============================================================
+party:
+  # --- Creation & disband ---
+  created: "&aYou have created a party! Use &e/party invite <player> &ato invite friends."
+  disbanded: "&e{leader} &cdisbanded the party."
+
+  # --- Invites ---
+  invite:
+    sent: "&aYou invited &e{player} &ato join your party."
+    received: "&e{leader} &ahas invited you to their party!"
+    hint: "&7Use &e/party accept &7or &e/party deny &7to respond."
+    expired: "&cThe party invite has expired."
+    expired_leader: "&cYour party invite to &e{player} &chas expired."
+    denied: "&cYou declined the party invite."
+    denied_leader: "&e{player} &cdeclined your party invite."
+
+  # --- Join success ---
+  join:
+    success: "&aYou joined &e{leader}&a's party!"
+
+  # --- Member events ---
+  member:
+    joined: "&e{player} &ajoined the party!"
+    left: "&e{player} &cleft the party."
+    disconnected: "&e{player} &7disconnected from the party."
+
+  # --- Leave ---
+  leave:
+    success: "&aYou left the party."
+
+  # --- Kick ---
+  kick:
+    kicked: "&cYou were kicked from the party."
+    broadcast: "&e{player} &cwas kicked from the party."
+
+  # --- Transfer ---
+  transfer:
+    broadcast: "&e{old_leader} &7transferred leadership to &e{new_leader}&7."
+
+  # --- Leader disconnect transfer ---
+  leader:
+    disconnected_transfer: "&e{old_leader} &7disconnected — &e{new_leader} &7is the new party leader."
+
+  # --- Party chat ---
+  chat:
+    enabled: "&aParty chat &2ON &a— your messages are only visible to party members."
+    disabled: "&7Party chat &cOFF &7— back to global chat."
+    format: "&d[Party] &e{player}&7: &f{message}"
+    switched_global: "&7Switched to &fglobal &7chat."
+    already_global: "&7You are already in global chat."
+    mode_party: "&dParty"
+    mode_global: "&fGlobal"
+    current_mode: "&7Current chat mode: {mode}"
+    mode_hint: "&7Use &e/chat party &7or &e/party chat &7to toggle party chat."
+
+  # --- Info / list ---
+  info:
+    header: "&6&m-----&r &6Party &7({current}/{max}) &6&m-----"
+    leader: "&6Leader: &e{leader}"
+    size: "&7Members: &e{current}&7/&e{max}"
+    role_leader: "&6[Leader]"
+    role_member: "&7[Member]"
+    status_online: "&a●"
+    status_offline: "&8●"
+    member_entry: "  {status} &e{player} {role}"
+    not_in_party: "&cYou are not in a party."
+
+  # --- Warp ---
+  warp:
+    leader_success: "&aWarped &e{count} &aparty member(s) to your location."
+    member_warped: "&aThe party leader &e{leader} &awarped you to their location."
+    no_members: "&cNo online party members to warp."
+
+  # --- Game joining ---
+  game:
+    leader_joined_with_party: "&aYou joined &e{game} &awith &e{count} &aparty member(s)!"
+    member_joined_with_party: "&aYou joined &e{game} &awith your party (led by &e{leader}&a)!"
+    no_online_members: "&cNo online party members to join with."
+    member_already_in_game: "&c{player} &cis already in a game. Ask them to leave first."
+    member_join_failed: "&cFailed to join the game — please try again."
+    no_space: "&cNo &e{type} &cgame has space for your entire party (&e{size} &cplayers)."
+
+  # --- Usage hints ---
+  usage:
+    invite: "&7Usage: &e/party invite <player>"
+    kick: "&7Usage: &e/party kick <player>"
+    transfer: "&7Usage: &e/party transfer <player>"
+
+  # --- Error messages ---
+  error:
+    not_in_party: "&cYou are not in a party."
+    already_in_party: "&cYou are already in a party."
+    target_in_party: "&e{player} &cis already in a party."
+    not_leader: "&cOnly the party leader can do that."
+    not_member: "&e{player} &cis not in your party."
+    invite_self: "&cYou cannot invite yourself."
+    no_invite: "&cYou don't have a pending party invite."
+    party_disbanded: "&cThe party has been disbanded."
+    already_member: "&e{player} &cis already in your party."
+    party_full: "&cThe party is full! &7(max &e{limit}&7)"
+    party_full_join: "&cThe party is full — cannot join. &7(max &e{limit}&7)"
+    kick_self: "&cYou cannot kick yourself — use &e/party leave&c."
+
+  # --- Help ---
+  help:
+    header: "&6&m-----&r &6/party help &6&m-----"
+    invite: "&e/party invite <player>    &7Invite a player"
+    accept: "&e/party accept             &7Accept a party invite"
+    deny: "&e/party deny              &7Deny a party invite"
+    leave: "&e/party leave             &7Leave your party"
+    kick: "&e/party kick <player>     &7Kick a member &8(leader)"
+    disband: "&e/party disband           &7Disband the party &8(leader)"
+    transfer: "&e/party transfer <player> &7Transfer leadership &8(leader)"
+    info: "&e/party info              &7Show party status"
+    chat: "&e/party chat [msg]        &7Toggle/send party chat"
+    warp: "&e/party warp              &7Warp members to you &8(leader)"
+    limit: "&7Your party size limit: &e{limit}"

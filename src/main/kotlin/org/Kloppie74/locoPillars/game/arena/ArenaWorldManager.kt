@@ -11,6 +11,8 @@ import org.bukkit.generator.ChunkGenerator
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
 import java.lang.reflect.Field
+import java.nio.file.Files
+import java.util.Comparator
 import java.util.Random
 
 class ArenaWorldManager(
@@ -210,7 +212,20 @@ class ArenaWorldManager(
             world.setStorm(false)
             world.setThundering(false)
             world.weatherDuration = 0
-            debugLog("✓ World configuration completed for: ${world.name}")
+
+            // ── Memory optimizations ────────────────────────────────────────────
+            // Arena worlds are transient (reset after every game) — there is no
+            // reason to persist them to disk.  Disabling auto-save prevents Paper
+            // from keeping all touched chunks "hot" in memory for the 5-minute
+            // save cycle, and avoids unnecessary disk writes.
+            world.setAutoSave(false)
+
+            // Do NOT preload the spawn chunks — the arena spawn point is irrelevant
+            // (players teleport to their team spawn, not world spawn).
+            // keepSpawnInMemory = false releases the 25 always-loaded spawn chunks.
+            world.keepSpawnInMemory = false
+
+            debugLog("✓ World configuration completed for: ${world.name} (autoSave=false, keepSpawn=false)")
         } catch (e: Exception) {
             plugin.logger.severe("[ArenaWorldManager] Error configuring world ${world.name}: ${e.message}")
             e.printStackTrace()
@@ -233,20 +248,21 @@ class ArenaWorldManager(
                     player.teleport(mainWorld.spawnLocation)
                 }
             }
+            // Resolve folder BEFORE unloading — world.worldFolder is unavailable afterwards.
+            val worldFolder = resolveWorldFolder(worldName, world)
             val unloaded = Bukkit.unloadWorld(world, false)
             if (unloaded) {
                 arenaWorlds.remove(worldName)
                 debugLog("✓ World unloaded: $worldName")
-                val worldFolder = File(mainDirectory, worldName)
-                if (worldFolder.exists()) {
-                    val deleted = worldFolder.deleteRecursively()
+                if (worldFolder != null && worldFolder.exists()) {
+                    val deleted = deleteDirectoryJava(worldFolder)
                     if (deleted) {
                         debugLog("✓ World folder deleted: ${worldFolder.absolutePath}")
                     } else {
                         debugLog("✗ Failed to delete world folder: ${worldFolder.absolutePath}")
                     }
                 } else {
-                    debugLog("World folder for $worldName not found: ${worldFolder.absolutePath}")
+                    debugLog("World folder for $worldName not found — skipping delete")
                 }
                 debugLog("✓ Successfully deleted world: $worldName")
                 progressTracker?.incrementStep("Deleted world $worldName")
@@ -258,21 +274,82 @@ class ArenaWorldManager(
     }
 
     fun deleteAllUnloadedPillarsWorldFolders(progressTracker: ProgressTracker? = null) {
-        debugLog("Brute-force deleting all pillars world folders in main directory!")
+        debugLog("Brute-force deleting all pillars_ world folders (classic + dimension layout)")
+
+        // Classic layout (< Paper 1.21.2): <mainDirectory>/pillars_*/
         mainDirectory.listFiles()?.forEach { folder ->
             if (folder.isDirectory && folder.name.startsWith("pillars_")) {
-                val deleted = folder.deleteRecursively()
-                if (deleted) {
-                    debugLog("Verwijderd: ${folder.name}")
-                } else {
-                    debugLog("Kon ${folder.name} niet verwijderen!")
-                }
+                val deleted = deleteDirectoryJava(folder)
+                debugLog(if (deleted) "Verwijderd (classic): ${folder.name}" else "Kon niet verwijderen (classic): ${folder.name}")
                 progressTracker?.incrementStep("Deleted folder ${folder.name}")
                 progressMessage(progressTracker?.getPercentage() ?: 100, "Deleted folder ${folder.name}")
             }
         }
+
+        // New dimension layout (≥ Paper 1.21.2): <mainDirectory>/world/dimensions/minecraft/pillars_*/
+        val dimensionsDir = File(mainDirectory, "world/dimensions/minecraft")
+        if (dimensionsDir.exists() && dimensionsDir.isDirectory) {
+            dimensionsDir.listFiles()?.forEach { folder ->
+                if (folder.isDirectory && folder.name.startsWith("pillars_")) {
+                    val deleted = deleteDirectoryJava(folder)
+                    debugLog(if (deleted) "Verwijderd (dimension): ${folder.name}" else "Kon niet verwijderen (dimension): ${folder.name}")
+                    progressTracker?.incrementStep("Deleted folder ${folder.name}")
+                    progressMessage(progressTracker?.getPercentage() ?: 100, "Deleted folder ${folder.name}")
+                }
+            }
+        }
     }
 
+    /**
+     * Resolves the on-disk folder for a world, supporting both storage layouts:
+     *
+     * - **Classic** (< Paper 1.21.2): `<mainDirectory>/<worldName>/`
+     * - **Dimension** (≥ Paper 1.21.2): `<mainDirectory>/world/dimensions/minecraft/<worldName>/`
+     *
+     * Always pass [loadedWorld] when the world is still loaded — `world.worldFolder`
+     * is the most reliable source and works regardless of layout. Falls back to
+     * path-based probing when the world object is no longer available.
+     */
+    private fun resolveWorldFolder(worldName: String, loadedWorld: World? = null): File? {
+        // 1. Most reliable: ask the loaded world object directly.
+        loadedWorld?.worldFolder?.takeIf { it.exists() }?.let { return it }
+
+        // 2. Classic layout: <mainDirectory>/<worldName>/
+        File(mainDirectory, worldName).takeIf { it.exists() }?.let { return it }
+
+        // 3. New dimension layout (Paper ≥ 1.21.2):
+        //    <mainDirectory>/world/dimensions/minecraft/<worldName>/
+        File(mainDirectory, "world/dimensions/minecraft/$worldName").takeIf { it.exists() }?.let { return it }
+
+        return null
+    }
+
+    /**
+     * Verwijdert een map recursief via Java NIO — GEEN Kotlin FileTreeWalk / Sequence.
+     *
+     * Waarom niet File.deleteRecursively()?
+     *   Kotlin's deleteRecursively() gebruikt intern File.walk() → FileTreeWalk.
+     *   FileTreeWalk implementeert kotlin.sequences.Sequence.  Als een andere plugin
+     *   (LocoLevels) ook Kotlin shadet, worden FileTreeWalk en Sequence door twee
+     *   verschillende classloaders geladen → ClassCastException bij de cast.
+     *
+     * Files.walk() retourneert java.util.stream.Stream<Path> — een puur Java-type
+     * dat nooit via Kotlin's classloader hoeft te gaan.
+     */
+    private fun deleteDirectoryJava(dir: File): Boolean {
+        if (!dir.exists()) return true
+        return try {
+            Files.walk(dir.toPath())
+                .sorted(Comparator.reverseOrder())   // diepste bestanden eerst
+                .forEach { Files.deleteIfExists(it) }
+            !dir.exists()
+        } catch (e: Exception) {
+            debugLog("deleteDirectoryJava failed for ${dir.name}: ${e.message}")
+            false
+        }
+    }
+
+    @Deprecated("Vervangen door deleteDirectoryJava — vermijdt Kotlin FileTreeWalk ClassCastException")
     private fun deleteDirectory(directory: File): Boolean {
         if (directory.isDirectory) {
             directory.listFiles()?.forEach { file ->

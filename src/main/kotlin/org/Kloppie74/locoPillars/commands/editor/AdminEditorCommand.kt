@@ -16,6 +16,7 @@ import org.Kloppie74.locoPillars.editor.SpawnPointEditor
 import org.Kloppie74.locoPillars.game.map.EditorSessionManager
 import org.Kloppie74.locoPillars.game.map.MapRepository
 import org.Kloppie74.locoPillars.utils.MSG
+import org.Kloppie74.locoPillars.utils.deleteRecursivelyJava
 
 /**
  * AdminEditorCommand — `/editor`
@@ -118,6 +119,7 @@ class AdminEditorCommand(
             "spawn"      -> handleSpawn(sender, args)
             "schematic"  -> handleSchematic(sender, args)
             "rewards"    -> handleRewards(sender, args)
+            "team"       -> handleTeam(sender, args)
             "enable"    -> handleMapEnable(sender, args)
             "disable"   -> handleMapDisable(sender, args)
             "help", null -> showHelp(sender)
@@ -281,7 +283,7 @@ class AdminEditorCommand(
         val schemDeleted = if (schemFile.exists()) schemFile.delete() else true
         val schemFolder = java.io.File(plugin.dataFolder, "Data/Schems/$mapName")
         val schemFolderDeleted = if (schemFolder.exists() && schemFolder.isDirectory)
-            schemFolder.deleteRecursively() else true
+            schemFolder.deleteRecursivelyJava() else true
 
         if (mapDeleted) {
             player.sendMessage(MSG.lang("editor.delete.header", "name" to mapName))
@@ -710,7 +712,7 @@ class AdminEditorCommand(
 
         val removedYml   = if (gameConfig.exists())                              gameConfig.delete()    else null
         val removedSchem = if (schemFile.exists())                               schemFile.delete()     else null
-        val removedDir   = if (schemFolder.exists() && schemFolder.isDirectory)  schemFolder.deleteRecursively() else null
+        val removedDir   = if (schemFolder.exists() && schemFolder.isDirectory)  schemFolder.deleteRecursivelyJava() else null
 
         player.sendMessage(MSG.lang("editor.disable.header", "name" to mapName))
         player.sendMessage(when (removedYml) {
@@ -847,8 +849,8 @@ class AdminEditorCommand(
         }
         player.sendMessage(MSG.lang("editor.rewards.list_header", "name" to mapName))
         listOf("OnStartGameRewards", "OnKillRewards", "OnLeaveRewards", "OnEndGameRewards").forEach { section ->
-            val msgs = settings.getStringList("$section.messages")
-            val cmds = settings.getStringList("$section.commands")
+            val msgs = settings.getStringList("Rewards.$section.messages")
+            val cmds = settings.getStringList("Rewards.$section.commands")
             if (msgs.isNotEmpty() || cmds.isNotEmpty()) {
                 player.sendMessage(MSG.lang("editor.rewards.section_header", "section" to section))
                 msgs.forEach { player.sendMessage(MSG.lang("editor.rewards.message_entry", "msg" to it)) }
@@ -894,15 +896,114 @@ class AdminEditorCommand(
     }
 
     private fun rewardTargetToYamlPath(target: String): String? = when (target.lowercase()) {
-        "start"             -> "OnStartGameRewards"
-        "kill.killer"       -> "OnKillRewards.killed_by_player.killer"
-        "kill.victim"       -> "OnKillRewards.killed_by_player.killed_player"
-        "kill.remaining"    -> "OnKillRewards.killed_by_player.remaining_players"
-        "leave.player"      -> "OnLeaveRewards.left_player"
-        "leave.remaining"   -> "OnLeaveRewards.remaining_players"
-        "end.winner"        -> "OnEndGameRewards.winners"
-        "end.spectator"     -> "OnEndGameRewards.spectators"
-        else                -> null
+        "start"                   -> "Rewards.OnStartGameRewards"
+        "kill.killer"             -> "Rewards.OnKillRewards.killed_by_player.killer"
+        "kill.victim"             -> "Rewards.OnKillRewards.killed_by_player.killed_player"
+        "kill.remaining"          -> "Rewards.OnKillRewards.killed_by_player.remaining_players"
+        "kill.notplayer.victim"   -> "Rewards.OnKillRewards.not_killed_by_player.killed_player"
+        "kill.notplayer.remaining"-> "Rewards.OnKillRewards.not_killed_by_player.remaining_players"
+        "leave.player"            -> "Rewards.OnLeaveRewards.left_player"
+        "leave.remaining"         -> "Rewards.OnLeaveRewards.remaining_players"
+        "end.winner"              -> "Rewards.OnEndGameRewards.winners"
+        "end.spectator"           -> "Rewards.OnEndGameRewards.spectators"
+        else                      -> null
+    }
+
+    // -------------------------------------------------------------------------
+    // Team name / color management
+    // -------------------------------------------------------------------------
+
+    private fun handleTeam(player: Player, args: Array<out String>) {
+        val mapName = args.getOrNull(1)
+            ?: adminEditorManager.getState(player)?.activeMapName
+            ?: run { player.sendMessage(MSG.lang("editor.team.usage")); return }
+
+        if (!mapRepository.mapExists(mapName)) {
+            player.sendMessage(MSG.lang("editor.map_not_found", "name" to mapName))
+            suggestMaps(player)
+            return
+        }
+
+        when (val sub = args.getOrNull(2)?.lowercase()) {
+            "list", null -> showTeamList(player, mapName)
+            else -> {
+                val teamNumber = sub.toIntOrNull() ?: run {
+                    player.sendMessage(MSG.lang("editor.team.invalid_number", "input" to sub))
+                    return
+                }
+                when (args.getOrNull(3)?.lowercase()) {
+                    "name" -> {
+                        val name = args.drop(4).joinToString(" ")
+                            .ifBlank { run { player.sendMessage(MSG.lang("editor.team.name_usage")); return } }
+                        setTeamName(player, mapName, teamNumber, name)
+                    }
+                    "color" -> {
+                        val colorStr = args.getOrNull(4)
+                            ?: run { player.sendMessage(MSG.lang("editor.team.color_usage")); return }
+                        setTeamColor(player, mapName, teamNumber, colorStr)
+                    }
+                    null -> player.sendMessage(MSG.lang("editor.team.usage_team",
+                        "number" to teamNumber.toString()))
+                    else -> player.sendMessage(MSG.lang("editor.team.usage_team",
+                        "number" to teamNumber.toString()))
+                }
+            }
+        }
+    }
+
+    private fun showTeamList(player: Player, mapName: String) {
+        val settings = mapRepository.loadMapSettings(mapName) ?: run {
+            player.sendMessage(MSG.lang("editor.team.load_error")); return
+        }
+        val maxTeams = settings.getInt("SpawnLocations.MaxTeams", 0)
+        if (maxTeams == 0) {
+            player.sendMessage(MSG.lang("editor.team.no_teams", "name" to mapName)); return
+        }
+        player.sendMessage(MSG.lang("editor.team.list_header",
+            "name" to mapName, "count" to maxTeams.toString()))
+        for (i in 1..maxTeams) {
+            val base  = "SpawnLocations.Team$i"
+            val name  = settings.getString("$base.Name",  "Team$i") ?: "Team$i"
+            val color = settings.getString("$base.Color", "GRAY")   ?: "GRAY"
+            player.sendMessage(MSG.lang("editor.team.list_entry",
+                "number" to i.toString(), "name" to name, "color" to color))
+        }
+    }
+
+    private fun setTeamName(player: Player, mapName: String, teamNumber: Int, name: String) {
+        val settings = mapRepository.loadMapSettings(mapName) ?: run {
+            player.sendMessage(MSG.lang("editor.team.load_error")); return
+        }
+        if (!settings.contains("SpawnLocations.Team$teamNumber")) {
+            player.sendMessage(MSG.lang("editor.team.team_not_found",
+                "number" to teamNumber.toString())); return
+        }
+        settings.set("SpawnLocations.Team$teamNumber.Name", name)
+        mapRepository.saveMapSettings(mapName, settings)
+        player.sendMessage(MSG.lang("editor.team.name_set",
+            "number" to teamNumber.toString(), "name" to MSG.chatColors(name)))
+    }
+
+    private fun setTeamColor(player: Player, mapName: String, teamNumber: Int, colorStr: String) {
+        val color = runCatching {
+            org.Kloppie74.locoPillars.game.data.TeamColor.valueOf(colorStr.uppercase())
+        }.getOrNull() ?: run {
+            val valid = org.Kloppie74.locoPillars.game.data.TeamColor.entries.joinToString("&7, &e") { it.name }
+            player.sendMessage(MSG.lang("editor.team.invalid_color",
+                "input" to colorStr, "valid" to valid))
+            return
+        }
+        val settings = mapRepository.loadMapSettings(mapName) ?: run {
+            player.sendMessage(MSG.lang("editor.team.load_error")); return
+        }
+        if (!settings.contains("SpawnLocations.Team$teamNumber")) {
+            player.sendMessage(MSG.lang("editor.team.team_not_found",
+                "number" to teamNumber.toString())); return
+        }
+        settings.set("SpawnLocations.Team$teamNumber.Color", color.name)
+        mapRepository.saveMapSettings(mapName, settings)
+        player.sendMessage(MSG.lang("editor.team.color_set",
+            "number" to teamNumber.toString(), "color" to color.name))
     }
 
     // -------------------------------------------------------------------------
@@ -943,6 +1044,10 @@ class AdminEditorCommand(
         player.sendMessage(MSG.lang("editor.help.cmd_spawn_remove"))
         player.sendMessage(MSG.lang("editor.help.section_holograms"))
         player.sendMessage(MSG.lang("editor.help.cmd_holograms"))
+        player.sendMessage(MSG.lang("editor.help.section_teams"))
+        player.sendMessage(MSG.lang("editor.help.cmd_team_list"))
+        player.sendMessage(MSG.lang("editor.help.cmd_team_name"))
+        player.sendMessage(MSG.lang("editor.help.cmd_team_color"))
         player.sendMessage(MSG.lang("editor.help.section_activation"))
         player.sendMessage(MSG.lang("editor.help.cmd_enable"))
         player.sendMessage(MSG.lang("editor.help.cmd_disable"))
@@ -959,7 +1064,7 @@ class AdminEditorCommand(
             1 -> listOf(
                 "toggle", "map", "info", "doctor", "hotbar", "holograms", "setup",
                 "create", "edit", "delete", "list", "save", "cancel", "resize", "settings",
-                "lobby", "validate", "files", "spawn", "schematic", "rewards",
+                "lobby", "validate", "files", "spawn", "schematic", "rewards", "team",
                 "enable", "disable", "help"
             ).filter { it.startsWith(args[0], ignoreCase = true) }
 
@@ -968,7 +1073,7 @@ class AdminEditorCommand(
                     mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
                 "map" -> (mutableListOf("clear") + mapRepository.getAllMapNames())
                     .filter { it.startsWith(args[1], ignoreCase = true) }
-                "validate", "files", "setup", "enable", "disable", "rewards" ->
+                "validate", "files", "setup", "enable", "disable", "rewards", "team" ->
                     mapRepository.getAllMapNames().filter { it.startsWith(args[1], ignoreCase = true) }
                 "schematic" -> {
                     val inSession = editorSessionManager.hasSession(sender) &&
@@ -1001,6 +1106,14 @@ class AdminEditorCommand(
                     listOf("1", "2", "3", "4", "5").filter { it.startsWith(args[2]) }
                 args[0].equals("rewards", ignoreCase = true) ->
                     listOf("list", "add-message", "add-command", "clear").filter { it.startsWith(args[2], ignoreCase = true) }
+                args[0].equals("team", ignoreCase = true) -> {
+                    // arg[2]: "list" or team number
+                    val mapName = args[1]
+                    val settings = runCatching { mapRepository.loadMapSettings(mapName) }.getOrNull()
+                    val maxTeams = settings?.getInt("SpawnLocations.MaxTeams", 8) ?: 8
+                    (listOf("list") + (1..maxTeams).map { it.toString() })
+                        .filter { it.startsWith(args[2], ignoreCase = true) }
+                }
                 else -> emptyList()
             }
 
@@ -1013,6 +1126,32 @@ class AdminEditorCommand(
                         .map { it.playerKey }
                         .filter { it.startsWith(args[3], ignoreCase = true) }
                 }
+                // /editor rewards <map> <add-message|add-command|clear> <target>
+                args[0].equals("rewards", ignoreCase = true) &&
+                        (args[2].equals("add-message", ignoreCase = true) ||
+                         args[2].equals("add-command", ignoreCase = true) ||
+                         args[2].equals("clear", ignoreCase = true)) ->
+                    listOf(
+                        "start",
+                        "kill.killer", "kill.victim", "kill.remaining",
+                        "kill.notplayer.victim", "kill.notplayer.remaining",
+                        "leave.player", "leave.remaining",
+                        "end.winner", "end.spectator"
+                    ).filter { it.startsWith(args[3], ignoreCase = true) }
+                // /editor team <map> <#> <name|color>
+                args[0].equals("team", ignoreCase = true) && args[2].toIntOrNull() != null ->
+                    listOf("name", "color").filter { it.startsWith(args[3], ignoreCase = true) }
+                else -> emptyList()
+            }
+
+            5 -> when {
+                // /editor team <map> <#> color <COLOR>
+                args[0].equals("team", ignoreCase = true) &&
+                        args[2].toIntOrNull() != null &&
+                        args[3].equals("color", ignoreCase = true) ->
+                    org.Kloppie74.locoPillars.game.data.TeamColor.entries
+                        .map { it.name }
+                        .filter { it.startsWith(args[4], ignoreCase = true) }
                 else -> emptyList()
             }
 

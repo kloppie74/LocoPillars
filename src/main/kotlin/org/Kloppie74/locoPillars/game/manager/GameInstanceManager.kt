@@ -86,4 +86,31 @@ class GameInstanceManager(
 
         return emptyInstance
     }
+
+    /**
+     * Like [getAvailableInstance] but the returned instance must have at least
+     * [minFreeSlots] open player slots.  Used by the party join flow so that all
+     * party members can be placed in a single game.
+     */
+    fun getAvailableInstanceWithSlots(gameTypeName: String, minFreeSlots: Int): GameInstance? {
+        debugLog("Looking for instance of type $gameTypeName with at least $minFreeSlots free slots")
+
+        val candidates = instances.filter {
+            it.arenaInstance.template.name == gameTypeName &&
+            (it.state == GameState.WAITING || it.state == GameState.STARTING) &&
+            (it.arenaInstance.status == ArenaStatus.AVAILABLE ||
+                    (it.arenaInstance.status == ArenaStatus.OCCUPIED && it.players.isNotEmpty())) &&
+            (it.getMaxPlayers() - it.players.size) >= minFreeSlots
+        }
+
+        debugLog("Found ${candidates.size} candidate(s) with ≥$minFreeSlots free slots")
+
+        // Prefer instances that already have players (pack players together), but must have enough room
+        return candidates
+            .filter { it.players.isNotEmpty() }
+            .sortedWith(compareBy<GameInstance> { it.state != GameState.STARTING }
+                .thenByDescending { it.players.size })
+            .firstOrNull()
+            ?: candidates.filter { it.players.isEmpty() && it.state == GameState.WAITING }.firstOrNull()
+    }
 }

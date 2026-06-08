@@ -1,5 +1,6 @@
 package org.Kloppie74.locoPillars.game.arena
 
+import com.sk89q.worldedit.extent.clipboard.Clipboard
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.World
@@ -41,6 +42,17 @@ class ArenaManager(
     private val instances = mutableListOf<ArenaInstance>()
     private val instanceDistance = configManager.instanceDistance
 
+    /**
+     * Cache: schematic file absolute path → loaded Clipboard.
+     *
+     * Memory fix: previously every resetArena() call loaded the schematic from
+     * disk into a NEW clipboard object.  With instances-per-type=10 and 8 maps
+     * that was 80 clipboard loads at startup — each potentially 50–200 MB —
+     * none freed until GC ran.  Now each unique .schem file is loaded exactly
+     * ONCE and the clipboard is reused for all pastes until onDisable().
+     */
+    private val clipboardCache = mutableMapOf<String, Clipboard>()
+
     private fun debugLog(message: String) {
         if (configManager.debugMode) {
             plugin.logger.info("[ArenaManager] $message")
@@ -49,6 +61,38 @@ class ArenaManager(
 
     init {
         loadArenaTemplates()
+        prewarmClipboardCache()
+    }
+
+    /**
+     * Pre-loads every schematic variant of every registered template into the
+     * clipboard cache at startup.
+     *
+     * Why: getCachedClipboard() is normally lazy (loads on first resetArena call).
+     * Without pre-warming, the first game on a map would trigger a disk read mid-game.
+     * More importantly, a map with 5 schematic variants would only see all of them
+     * cached after 5+ resets — until then some resets load from disk.
+     *
+     * With pre-warming every .schem is in RAM before the first player ever joins.
+     */
+    private fun prewarmClipboardCache() {
+        if (templates.isEmpty()) return
+        val totalSchems = templates.values.sumOf { it.schemFiles.size }
+        plugin.logger.info("[ArenaManager] Pre-loading $totalSchems schematic variant(s) into cache...")
+        var loaded = 0
+        var failed = 0
+        templates.values.forEach { template ->
+            template.schemFiles.forEach { schemFile ->
+                if (getCachedClipboard(schemFile) != null) {
+                    loaded++
+                } else {
+                    failed++
+                    plugin.logger.warning("[ArenaManager] ✗ Failed to pre-load: ${template.name}/${schemFile.name}")
+                }
+            }
+        }
+        plugin.logger.info("[ArenaManager] Schematic cache ready — $loaded variant(s) loaded" +
+            (if (failed > 0) ", $failed failed" else "") + ".")
     }
 
     private fun loadArenaTemplates() {
@@ -251,6 +295,30 @@ class ArenaManager(
                 totalInstancesCreated++
             }
 
+            // ── World border: restrict chunk loading to the actual arena area ────
+            // Without a border, Paper's chunk system tracks ALL chunks between
+            // origin and the farthest instance, accumulating chunk holders until
+            // the heap is exhausted (LongLinkedOpenHashSet OOM during rehash).
+            // A tight border prevents chunk propagation outside the instance grid.
+            val worldInstances = instances.filter { it.world == world }
+            if (worldInstances.isNotEmpty()) {
+                val maxX = worldInstances.maxOf { it.origin.blockX } + instanceDistance / 2.0
+                val maxZ = worldInstances.maxOf { it.origin.blockZ } + instanceDistance / 2.0
+                val minX = worldInstances.minOf { it.origin.blockX } - instanceDistance / 2.0
+                val minZ = worldInstances.minOf { it.origin.blockZ } - instanceDistance / 2.0
+                val centerX = (maxX + minX) / 2.0
+                val centerZ = (maxZ + minZ) / 2.0
+                val borderSize = maxOf(maxX - minX, maxZ - minZ) + instanceDistance.toDouble()
+                with(world.worldBorder) {
+                    setCenter(centerX, centerZ)
+                    size = borderSize
+                    warningDistance = 0
+                    damageBuffer = 0.0
+                    damageAmount = 0.0
+                }
+                debugLog("World border set: center=(${centerX.toInt()}, ${centerZ.toInt()}) size=${borderSize.toInt()} for ${world.name}")
+            }
+
             debugLog("Completed processing config: ${config.name}")
             debugLog("Instances created for this config: $amountPerType")
         }
@@ -413,6 +481,20 @@ class ArenaManager(
         debugLog("Cleared $playersCleared players from instance")
     }
 
+    /**
+     * Returns a cached [Clipboard] for the given schematic file, loading it from
+     * disk only on the first request.  Subsequent resets for the same map reuse
+     * the same in-memory clipboard — no extra I/O and no extra heap allocation.
+     */
+    private fun getCachedClipboard(schemFile: File): Clipboard? {
+        clipboardCache[schemFile.absolutePath]?.let { return it }
+        val loaded = org.Kloppie74.locoPillars.utils.SchematicHelper.loadSchematic(plugin, configManager, schemFile)
+            ?: return null
+        clipboardCache[schemFile.absolutePath] = loaded
+        debugLog("Clipboard cached for: ${schemFile.name} (${schemFile.length() / 1024} KB on disk)")
+        return loaded
+    }
+
     fun resetArena(instance: ArenaInstance) {
         debugLog("Starting arena reset for: ${instance.template.name} (${instance.id})")
 
@@ -431,7 +513,7 @@ class ArenaManager(
         //   pasteZ = instanceGridZ + spawnCenterZ - saveRadius
         // This puts block (spawnCenterX, Y, spawnCenterZ) at (instanceGridX + spawnCenterX, Y, instanceGridZ + spawnCenterZ)
         // which is exactly where getSpawnTeleportLocation() sends the player.
-        val clipboard = org.Kloppie74.locoPillars.utils.SchematicHelper.loadSchematic(plugin, configManager, selectedSchematic)
+        val clipboard = getCachedClipboard(selectedSchematic)
         if (clipboard == null) {
             plugin.logger.severe("[ArenaManager] ✗ Failed to load schematic for ${instance.template.name} (${instance.id})")
             return
@@ -497,5 +579,12 @@ class ArenaManager(
         worldManager.unloadAllGameWorlds()
         worldManager.deleteAllUnloadedPillarsWorldFolders()
         debugLog("All game worlds unloaded and GameWorlds folder deleted.")
+
+        // Release cached clipboards so their heap can be collected.
+        clipboardCache.values.forEach { clipboard ->
+            try { (clipboard as? AutoCloseable)?.close() } catch (_: Exception) {}
+        }
+        clipboardCache.clear()
+        debugLog("Clipboard cache cleared (${clipboardCache.size} entries freed).")
     }
 }

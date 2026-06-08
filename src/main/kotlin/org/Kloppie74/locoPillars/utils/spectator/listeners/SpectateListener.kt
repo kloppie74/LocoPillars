@@ -26,6 +26,13 @@ class SpectateListener(
     private val itemManager: HotbarItemManager
 ) : Listener {
 
+    /**
+     * Hotbar-types die bij een actieve game horen. Voor deze types mag de hotbar NOOIT
+     * opnieuw gegeven worden bij teleport/respawn, want givePlayerItems() doet
+     * inventory.clear() en zou zo de game-items van de speler wissen.
+     */
+    private val GAME_HOTBAR_TYPES = setOf("game", "game_lobby", "cage")
+
     // ==================== PLAYER JOIN/LEAVE EVENTS ====================
 
     @EventHandler(priority = EventPriority.NORMAL)
@@ -56,6 +63,11 @@ class SpectateListener(
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             if (plugin.adminEditorManager.isActive(player)) return@Runnable
+            // FIX: tijdens een game NOOIT de hotbar opnieuw geven (zou inventory wissen).
+            if (HotbarUtils.getCurrentHotbarType(player, plugin) in GAME_HOTBAR_TYPES) {
+                updateVisibilityForPlayer(player)
+                return@Runnable
+            }
             HotbarUtils.setupPlayerHotbar(player, plugin)
             updateVisibilityForPlayer(player)
         }, 5L)
@@ -73,6 +85,15 @@ class SpectateListener(
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             if (plugin.adminEditorManager.isActive(player)) return@Runnable
             val oldType = HotbarUtils.getCurrentHotbarType(player, plugin)
+
+            // FIX: als de speler in een game-gerelateerde hotbar zit (game/game_lobby/cage)
+            // mag een teleport NOOIT setupPlayerHotbar aanroepen — dat wist via
+            // givePlayerItems() de volledige inventory. Alleen visibility verversen.
+            if (oldType in GAME_HOTBAR_TYPES) {
+                updateVisibilityForPlayer(player)
+                return@Runnable
+            }
+
             HotbarUtils.setupPlayerHotbar(player, plugin)
             val newType = HotbarUtils.getCurrentHotbarType(player, plugin)
             if (oldType != newType) HotbarUtils.handleHotbarTypeChange(player, oldType, newType, plugin)
@@ -97,43 +118,12 @@ class SpectateListener(
 
     @EventHandler(priority = EventPriority.NORMAL)
     fun onPlayerInteract(event: PlayerInteractEvent) {
-        val player = event.player
-        val heldItem = player.inventory.itemInMainHand
-
-        // Check if this is a locked hotbar item
-        if (HotbarUtils.isLockedHotbarItem(heldItem, plugin)) {
-            // Let the item system handle the interaction
-            handleHotbarItemInteraction(player, heldItem, event)
-            event.isCancelled = true
-            return
-        }
-
-        // If player is spectator and not using custom items, let SpectatorInteractionHandler manage it
-        if (SpectatorUtils.isSpectator(player, plugin)) {
-            // SpectatorInteractionHandler will handle this automatically
-            return
-        }
-    }
-
-    private fun handleHotbarItemInteraction(player: Player, item: org.bukkit.inventory.ItemStack, event: PlayerInteractEvent) {
-        val type = HotbarUtils.getCurrentHotbarType(player, plugin)
-        val items = itemManager.getCustomItemsForType(type.lowercase())
-
-        items.forEach { custom ->
-            if (custom.item != null && itemManager.isSameItem(item, custom.item)) {
-                when {
-                    custom.command != null && custom.command.contains("%speed%") -> {
-                        // Open speed GUI
-                        SpeedGui.open(player)
-                    }
-                    custom.command != null -> {
-                        // Execute command
-                        val cmd = custom.command.removePrefix("/")
-                        player.performCommand(cmd)
-                    }
-                }
-            }
-        }
+        // BELANGRIJK: hotbar-item interacties worden UITSLUITEND door ItemHotBarListener
+        // afgehandeld (die heeft een hand-check + cooldown). Vroeger voerde DEZE listener
+        // het commando óók uit → dubbele uitvoering. En als dat commando synchroon de
+        // game-state wijzigt (bijv. /join), voerde deze tweede listener meteen het NIEUWE
+        // item in de nieuwe hotbar uit. Daarom hier niets meer met hotbar-items doen.
+        return
     }
 
     @EventHandler(priority = EventPriority.NORMAL)

@@ -29,6 +29,21 @@ class TabManager(private val plugin: LocoPillars) {
     private var updateTask: BukkitRunnable? = null
     private val lastPlayerStates = ConcurrentHashMap<UUID, String>()
 
+    /**
+     * Paper 1.21.2+ tab-list ordering API — éénmalig opgezocht via reflectie.
+     * Probeert beide mogelijke methodenamen. null = niet beschikbaar (oudere Paper)
+     * → we vallen terug op scoreboard-teams.
+     */
+    private val listOrderMethod: java.lang.reflect.Method? = run {
+        listOf("setPlayerListOrder", "setListOrder").firstNotNullOfOrNull { name ->
+            try {
+                Player::class.java.getMethod(name, Int::class.javaPrimitiveType)
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
     init {
         loadConfig()
     }
@@ -121,7 +136,15 @@ class TabManager(private val plugin: LocoPillars) {
                 updatePlayerTab(player)
             }
             if (displayPerGameInstance) {
-                plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
+                // Route visibility update to the correct system.
+                // ProtocolLib handles actual tab-list packet filtering in modern Paper;
+                // the legacy TabVisibilityManager uses hidePlayer/showPlayer which in
+                // Paper 1.21 no longer controls the tab list — only world visibility.
+                if (plugin.isProtocolLibAvailable()) {
+                    plugin.protocolLibTabVisibilityManager.updateTabVisibilityForAllPlayers()
+                } else {
+                    plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
+                }
             }
         } catch (e: Exception) {
             plugin.logger.warning("[TabManager] Error updating all tabs: ${e.message}")
@@ -135,16 +158,36 @@ class TabManager(private val plugin: LocoPillars) {
     }
 
     /**
-     * FIXED: Setup ONLY tab team for player, no sidebar teams!
+     * Setup tab team voor de speler inclusief correcte sorteer-index.
      */
     private fun setupPlayerTabTeam(player: Player) {
         try {
             val prefix = getPrefix(player)
             val suffix = getSuffix(player)
-            // FIXED: Only create tab team, no sidebar teams that conflict with scoreboard!
-            plugin.teamManager.createTabTeam(player, prefix, suffix)
+            val sortIndex = getSortIndex(player)
+            plugin.teamManager.createTabTeam(player, prefix, suffix, sortIndex)
+            applyListOrder(player, sortIndex)
         } catch (e: Exception) {
             plugin.logger.warning("[TabManager] Error setting up tab team for ${player.name}: ${e.message}")
+        }
+    }
+
+    /**
+     * Sinds MC 1.21.2 bepalen scoreboard-team-namen NIET meer de tab-volgorde — de client
+     * sorteert nu op het nieuwe player-list "order"-veld. Paper stelt dit beschikbaar via
+     * Player#setPlayerListOrder(int). We zetten dat hier rechtstreeks per speler.
+     *
+     * Hogere waarde = hoger in de tablijst, dus de beste rang (sortIndex 0) krijgt de
+     * hoogste waarde. Via reflectie zodat de plugin ook op oudere Paper-versies (zonder
+     * deze methode) blijft compileren én draaien — daar vallen we terug op de teams.
+     */
+    private fun applyListOrder(player: Player, sortIndex: Int) {
+        val method = listOrderMethod ?: return
+        try {
+            val order = (sortingOrder.size - sortIndex).coerceAtLeast(0)
+            method.invoke(player, order)
+        } catch (_: Throwable) {
+            // Niet ondersteund op deze server → scoreboard-teams blijven de fallback.
         }
     }
 
@@ -167,14 +210,48 @@ class TabManager(private val plugin: LocoPillars) {
         return MSG.chatColors(suffix)
     }
 
-    private fun getGroup(player: Player): String {
-        for (group in sortingOrder) {
-            val perm = groupPermissions[group] ?: continue
-            if (player.hasPermission(perm)) {
-                return group
+    /**
+     * Geeft de sorteer-index van de speler terug (0 = hoogste rang).
+     * Wordt door TeamManager gebruikt om de tab team naam correct te sorteren.
+     * Public zodat TeamsListener en andere systemen het ook kunnen gebruiken.
+     *
+     * Probeert twee formaten:
+     *   1. De geconfigureerde permissie (bijv. "tab.order.owner")
+     *   2. Fallback: "tab.<groepsnaam.lowercase()>" (bijv. "tab.owner")
+     * Hierdoor werkt sortering ongeacht welk permissie-formaat in LuckPerms is gezet.
+     */
+    fun getSortIndex(player: Player): Int {
+        sortingOrder.forEachIndexed { index, group ->
+            if (playerMatchesGroup(player, group)) {
+                debugLog("Sort: ${player.name} → groep '$group' via permissie '${groupPermissions[group]}' = index $index")
+                return index
             }
         }
+        debugLog("Sort: ${player.name} heeft GEEN enkele geconfigureerde 'tab.order.*'-permissie → index ${sortingOrder.size} (onderaan). Geef de speler/groep de juiste permissie.")
+        return sortingOrder.size // onbekende rang → achteraan
+    }
+
+    private fun getGroup(player: Player): String {
+        for (group in sortingOrder) {
+            if (playerMatchesGroup(player, group)) return group
+        }
         return sortingOrder.lastOrNull() ?: "Default"
+    }
+
+    /**
+     * Bepaalt of [player] bij [group] hoort door EXACT de permissie te checken die voor
+     * die groep in de config-sectie "Sorting-Groups.Permissions" staat.
+     *
+     * Dus als de config zegt:  Owner: kindjes.group.50
+     * dan wordt precies `player.hasPermission("kindjes.group.50")` gecheckt — niets anders.
+     * De config bepaalt volledig welke groep naar welke permissie luistert.
+     */
+    private fun playerMatchesGroup(player: Player, group: String): Boolean {
+        val perm = groupPermissions[group]?.takeIf { it.isNotBlank() } ?: return false
+        // isPermissionSet() eist dat de node EXPLICIET is toegekend (direct of via groep-
+        // inheritance). Een "*"-wildcard of OP maakt hasPermission() true maar NIET
+        // isPermissionSet() → zo negeren we * en wordt niemand onterecht bovenaan gezet.
+        return player.isPermissionSet(perm) && player.hasPermission(perm)
     }
 
     private fun getPlayerTabMode(player: Player): String {
@@ -277,12 +354,22 @@ class TabManager(private val plugin: LocoPillars) {
         if (!enabled) return
         try {
             lastPlayerStates.remove(player.uniqueId)
+
+            // Prefix/suffix teams altijd instellen na join (ongeacht visibility systeem)
             Bukkit.getScheduler().runTaskLater(plugin, Runnable {
                 updatePlayerTab(player)
-                if (displayPerGameInstance) {
-                    plugin.tabVisibilityManager.updateTabVisibilityForPlayer(player)
-                }
             }, 10L)
+
+            if (displayPerGameInstance) {
+                if (plugin.isProtocolLibAvailable()) {
+                    // onPlayerJoin initialiseert de baseline correct en plant zelf de update
+                    plugin.protocolLibTabVisibilityManager.onPlayerJoin(player)
+                } else {
+                    Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                        plugin.tabVisibilityManager.updateTabVisibilityForPlayer(player)
+                    }, 10L)
+                }
+            }
         } catch (e: Exception) {
             plugin.logger.warning("[TabManager] Error handling player join for ${player.name}: ${e.message}")
         }
@@ -292,10 +379,20 @@ class TabManager(private val plugin: LocoPillars) {
         if (!enabled) return
         try {
             lastPlayerStates.remove(player.uniqueId)
+
             if (displayPerGameInstance) {
-                Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-                    plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
-                }, 5L)
+                if (plugin.isProtocolLibAvailable()) {
+                    // onPlayerQuit synchroniseert de state direct (geen delay nodig)
+                    plugin.protocolLibTabVisibilityManager.onPlayerQuit(player)
+                    // Daarna nog een normale update voor de overgebleven spelers
+                    Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                        plugin.protocolLibTabVisibilityManager.updateTabVisibilityForAllPlayers()
+                    }, 3L)
+                } else {
+                    Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                        plugin.tabVisibilityManager.updateTabVisibilityForAllPlayers()
+                    }, 5L)
+                }
             }
         } catch (e: Exception) {
             plugin.logger.warning("[TabManager] Error handling player quit for ${player.name}: ${e.message}")
@@ -309,7 +406,9 @@ class TabManager(private val plugin: LocoPillars) {
             updatePlayerTab(player)
             if (displayPerGameInstance) {
                 val gameInstance = plugin.gameManager.getPlayerInstance(player)
-                if (gameInstance != null) {
+                if (plugin.isProtocolLibAvailable()) {
+                    plugin.protocolLibTabVisibilityManager.onPlayerJoinGame(player, gameInstance)
+                } else if (gameInstance != null) {
                     plugin.tabVisibilityManager.onPlayerJoinGame(player, gameInstance)
                 }
             }
@@ -328,7 +427,11 @@ class TabManager(private val plugin: LocoPillars) {
             lastPlayerStates.remove(player.uniqueId)
             updatePlayerTab(player)
             if (displayPerGameInstance) {
-                plugin.tabVisibilityManager.onPlayerLeaveGame(player, gameInstance)
+                if (plugin.isProtocolLibAvailable()) {
+                    plugin.protocolLibTabVisibilityManager.onPlayerLeaveGame(player, gameInstance)
+                } else {
+                    plugin.tabVisibilityManager.onPlayerLeaveGame(player, gameInstance)
+                }
             }
             Bukkit.getScheduler().runTaskLater(plugin, Runnable {
                 forceUpdateAllPlayers()

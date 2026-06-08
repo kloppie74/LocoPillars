@@ -7,7 +7,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.guardsquare:proguard-gradle:7.6.1")
+        classpath("com.guardsquare:proguard-gradle:7.9.1")
     }
 }
 
@@ -18,7 +18,7 @@ plugins {
 }
 
 group = "org.Kloppie74"
-version = "26.05.1"             // YY.MM.UPDATENUMBER — bump this every release
+version = "26.06.1"             // YY.MM.UPDATENUMBER — bump this every release
 val buildType = "RELEASE"       // RELEASE | BETA | ALPHA
 
 repositories {
@@ -57,15 +57,12 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 
-    compileOnly("com.sk89q.worldedit:worldedit-core:7.3.10") {
-        exclude(group = "org.apache.logging.log4j")
-    }
-    compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.3.10") {
-        exclude(group = "org.apache.logging.log4j")
-    }
+    // FAWE 2.15.2 bundles its own (patched) WorldEdit classes — do NOT add a separate
+    // worldedit-core/bukkit dep or the vanilla WE EditSessionBuilder (without changeSetNull)
+    // will shadow FAWE's version on the compile classpath.
     implementation(platform("com.intellectualsites.bom:bom-newest:1.56"))
-    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.12.2")
-    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit:2.12.2") { isTransitive = false }
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:2.15.2")
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit:2.15.2") { isTransitive = false }
 
     compileOnly("com.github.NEZNAMY", "TAB-API", "5.2.5")
     compileOnly("me.clip", "placeholderapi", "2.11.6")
@@ -166,12 +163,12 @@ tasks.register<proguard.gradle.ProGuardTask>("obfuscate") {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 tasks.withType<JavaCompile> {
-    sourceCompatibility = "21"
-    targetCompatibility = "21"
+    sourceCompatibility = "25"
+    targetCompatibility = "25"
 }
 
 tasks.wrapper {

@@ -23,6 +23,7 @@ import org.Kloppie74.locoPillars.utils.config.ConfigManager
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.database.dao.ArenaStatsDAO
+import org.Kloppie74.locoPillars.database.dao.LeaderboardCacheDAO
 import org.Kloppie74.locoPillars.game.rewards.RewardProcessor
 import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
@@ -244,12 +245,12 @@ class GameplayManager(
 
     fun onWinStreak(player: Player, amount: Int = 1) {
         achievementListener.onWinStreak(player, amount)
-        updatePlayerStats(player, "win_streak") { playerId -> StatsDAO.addWin(playerId) }
+        // StatsDAO.addWin already called by onGameWon — do not double-count the streak
     }
 
     fun onLossStreak(player: Player, amount: Int = 1) {
         achievementListener.onLossStreak(player, amount)
-        updatePlayerStats(player, "loss_streak") { playerId -> StatsDAO.addLoss(playerId) }
+        // StatsDAO.addLoss already called by onGameLost — do not double-count the streak
     }
 
     // =================== GAME DURATION TRACKING ===================
@@ -308,6 +309,14 @@ class GameplayManager(
         debugLog("Starting game for instance ${instance.id}")
         instance.state = GameState.ACTIVE
         instance.cagesOpen = false // reset in case of back-to-back games on same instance
+
+        // Force-update scoreboards immediately for all players so the Game layout
+        // (with if-condition team lines) shows up without waiting for the 20-tick auto-update.
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            instance.players.mapNotNull { plugin.server.getPlayer(it) }.forEach { p ->
+                if (p.isOnline) plugin.scoreboardManager.updatePlayerScoreboard(p)
+            }
+        }, 2L)
         // Voting window closes the moment the start-timer fires. Force-close any open
         // voting GUIs so players can't vote from a stale menu during the cage countdown.
         if (plugin.isVotingReady) {
@@ -414,46 +423,114 @@ class GameplayManager(
     // =================== TEAM ASSIGNMENT ===================
 
     private fun assignPlayersToTeams(instance: GameInstance) {
-        debugLog("Assigning players to teams")
-        val teams = instance.arenaInstance.config.teams
-        val players = instance.players.toList()
+        debugLog("Assigning players to teams (party-aware)")
+        val teams         = instance.arenaInstance.config.teams
         val playersPerTeam = instance.arenaInstance.config.getPlayersPerTeam()
 
-        var playerIndex = 0
-        var teamIndex = 0
+        // Group players by party so that party-mates are placed in the same team
+        // (or split evenly across adjacent teams if the party is larger than the team capacity).
+        val rawPlayers   = instance.players.toMutableList().shuffled()
+        val partyGroups  = buildPartyGroups(rawPlayers)
 
-        while (playerIndex < players.size && teamIndex < teams.size) {
-            val team = teams[teamIndex]
-            val teamPlayers = mutableListOf<UUID>()
+        // Split any party that is larger than playersPerTeam into fair sub-groups,
+        // then flatten into an ordered list of sub-groups (largest first).
+        val subGroups = mutableListOf<List<UUID>>()
+        partyGroups.forEach { group -> subGroups.addAll(splitFairly(group, playersPerTeam)) }
+        subGroups.sortByDescending { it.size }
 
-            repeat(minOf(playersPerTeam, team.spawns.size, players.size - playerIndex)) {
-                teamPlayers.add(players[playerIndex])
-                playerIndex++
+        // Track how many spawn slots have been used on each team.
+        // LinkedHashMap preserves the config order so teams fill predictably.
+        val slotsUsed = LinkedHashMap<Team, Int>()
+        teams.forEach { slotsUsed[it] = 0 }
+
+        for (subGroup in subGroups) {
+            val team = findTeamForGroup(slotsUsed, subGroup.size, playersPerTeam) ?: continue
+            val baseSlot = slotsUsed[team]!!
+
+            subGroup.forEachIndexed { i, playerId ->
+                val spawnIndex = baseSlot + i
+                if (spawnIndex >= team.spawns.size) return@forEachIndexed
+                val player = Bukkit.getPlayer(playerId) ?: return@forEachIndexed
+                if (!player.isOnline) return@forEachIndexed
+
+                val spawnLocation = team.spawns[spawnIndex].toAbsolute(instance.arenaInstance.origin)
+                player.teleport(spawnLocation)
+                instance.trackTeamAssignment(playerId, team)
+                placeCageAtSpawnLocation(player.uniqueId, spawnLocation)
+                setupPlayerForTeam(player, team)
+                applyCageEffects(player)
+                plugin.gameListener.setCageProtection(player.uniqueId, true)
+                player.sendMessage(MSG.lang("game.team.assigned", "team" to team.name))
+                debugLog("Player ${player.name} → team ${team.name} (spawn $spawnIndex)")
             }
-
-            teamPlayers.forEachIndexed { spawnIndex, playerId ->
-                val player = Bukkit.getPlayer(playerId)
-                if (player != null && player.isOnline) {
-                    val spawnLocation = team.spawns[spawnIndex].toAbsolute(instance.arenaInstance.origin)
-                    player.teleport(spawnLocation)
-                    instance.trackTeamAssignment(playerId, team)
-                    placeCageAtSpawnLocation(player.uniqueId, spawnLocation)
-                    setupPlayerForTeam(player, team)
-                    applyCageEffects(player)
-                    plugin.gameListener.setCageProtection(player.uniqueId, true)
-                    player.sendMessage(MSG.lang("game.team.assigned", "team" to team.name))
-                    debugLog("Player ${player.name} assigned to team ${team.name}")
-                }
-            }
-            teamIndex++
+            slotsUsed[team] = baseSlot + subGroup.size
         }
 
-        debugLog("Team assignment completed. Teams with players:")
-        teams.forEach { team ->
-            val teamPlayers = instance.getPlayersInTeam(team)
-            debugLog("  ${team.name}: ${teamPlayers.size} players")
+        debugLog("Party-aware team assignment completed:")
+        teams.forEach { team -> debugLog("  ${team.name}: ${instance.getPlayersInTeam(team).size} players") }
+    }
+
+    /**
+     * Groups [players] by party.  Players not in a party each form their own
+     * single-player group.  Groups are sorted largest-first.
+     */
+    private fun buildPartyGroups(players: List<UUID>): List<List<UUID>> {
+        val byParty = mutableMapOf<UUID, MutableList<UUID>>()   // partyId → members in this game
+        val solos   = mutableListOf<UUID>()
+
+        for (uuid in players) {
+            val player = Bukkit.getPlayer(uuid)
+            val party  = if (player != null) plugin.partyManager.getParty(player) else null
+            if (party != null) {
+                byParty.getOrPut(party.id) { mutableListOf() }.add(uuid)
+            } else {
+                solos.add(uuid)
+            }
+        }
+
+        val result = mutableListOf<List<UUID>>()
+        byParty.values.forEach { result.add(it) }
+        solos.forEach { result.add(listOf(it)) }
+        result.sortByDescending { it.size }
+        return result
+    }
+
+    /**
+     * Splits [group] into sub-lists of at most [teamCapacity] players,
+     * distributing the remainder evenly so the sizes are as equal as possible.
+     *
+     * Example: 5 players, cap 4  →  [3, 2]  (not [4, 1])
+     * Example: 7 players, cap 4  →  [4, 3]
+     * Example: 9 players, cap 4  →  [3, 3, 3]
+     */
+    private fun splitFairly(group: List<UUID>, teamCapacity: Int): List<List<UUID>> {
+        if (group.size <= teamCapacity) return listOf(group)
+        val numGroups = Math.ceil(group.size.toDouble() / teamCapacity).toInt()
+        val base      = group.size / numGroups
+        val remainder = group.size % numGroups
+        var offset    = 0
+        return (0 until numGroups).map { i ->
+            val size = if (i < remainder) base + 1 else base
+            group.subList(offset, offset + size).also { offset += size }
         }
     }
+
+    /**
+     * Finds the team with the most used slots that still has at least
+     * [groupSize] open spawn slots.  Prefers partially-filled teams so
+     * that teams fill up before new ones are started.
+     */
+    private fun findTeamForGroup(
+        slotsUsed: Map<Team, Int>,
+        groupSize: Int,
+        teamCapacity: Int
+    ): Team? = slotsUsed.entries
+        .filter { (team, used) ->
+            val available = minOf(teamCapacity - used, team.spawns.size - used)
+            available >= groupSize
+        }
+        .maxByOrNull { (_, used) -> used }   // prefer more-filled team
+        ?.key
 
     fun assignPlayerDirectlyToCage(player: Player, instance: GameInstance): Boolean {
         val teams = instance.arenaInstance.config.teams
@@ -735,13 +812,28 @@ class GameplayManager(
             onWinStreak(winner)
         }
 
-        // Stats for losers still alive (eliminated players already had their death stats recorded)
+        // Stats for losers still alive
         survivingLosers.forEach { loser ->
             onGameLost(loser, durationSeconds)
             onLossStreak(loser)
         }
 
+        // Eliminated players also lost the game — record games_lost and update their loss streak
+        deadSpectators.forEach { spectator ->
+            onGameLost(spectator, null)
+            onLossStreak(spectator)
+        }
+
         updateGameEndStats(instance)
+
+        // Update leaderboard cache asynchronously so all ranks reflect this game's results
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, Runnable {
+            try {
+                LeaderboardCacheDAO.updateCache()
+            } catch (e: Exception) {
+                plugin.logger.warning("[GameplayManager] Failed to update leaderboard cache: ${e.message}")
+            }
+        })
 
         val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
             .getConfigurationSection("Rewards")
