@@ -132,7 +132,9 @@ Menu:
         if (event.cause != PlayerTeleportEvent.TeleportCause.SPECTATE) return
 
         val instance = plugin.gameManager.getPlayerInstance(player)
-        if (instance == null && player.world.name.startsWith("pillars_")) {
+        val worldName = player.world.name
+        if (instance == null && (worldName.startsWith("pillars_") ||
+                worldName.equals(org.Kloppie74.locoPillars.game.arena.ArenaWorldManager.GAMEWORLD_NAME, ignoreCase = true))) {
             event.isCancelled = true
             // Queue hotbar setup - no scheduled task needed
             HotbarUtils.setupPlayerHotbar(player, plugin)

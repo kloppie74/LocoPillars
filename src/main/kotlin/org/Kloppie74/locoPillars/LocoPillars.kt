@@ -5,6 +5,7 @@ import com.comphenix.protocol.ProtocolManager
 import org.Kloppie74.locoPillars.commands.ChatToggleCommand
 import org.Kloppie74.locoPillars.commands.MemoryCommand
 import org.Kloppie74.locoPillars.commands.PillarsAdminCommand
+import org.Kloppie74.locoPillars.commands.ProfileCommand
 import org.Kloppie74.locoPillars.commands.PartyCommand
 import org.Kloppie74.locoPillars.commands.editor.AdminEditorCommand
 import org.Kloppie74.locoPillars.party.PartyManager
@@ -28,6 +29,7 @@ import org.Kloppie74.locoPillars.game.map.MapRepository
 import org.Kloppie74.locoPillars.game.map.EditorSessionManager
 import org.Kloppie74.locoPillars.commands.PillarsCommand
 import org.Kloppie74.locoPillars.commands.StatsCommand
+import org.Kloppie74.locoPillars.game.manager.BedModeManager
 import org.Kloppie74.locoPillars.game.manager.SpawnAreaManager
 import org.Kloppie74.locoPillars.game.listeners.GameListener
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
@@ -76,6 +78,10 @@ import org.Kloppie74.locoPillars.worldregion.WorldRegionManager
 import org.Kloppie74.locoPillars.worldregion.commands.SpawnCommand
 import org.bukkit.Bukkit
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.entity.LivingEntity
+import org.bukkit.entity.Player
+import org.bukkit.scheduler.BukkitRunnable
+import org.Kloppie74.locoPillars.game.data.GameState
 import java.io.File
 import java.util.*
 
@@ -102,6 +108,8 @@ class LocoPillars : JavaPlugin() {
     lateinit var worldRegionManager: WorldRegionManager
         private set
     lateinit var spawnAreaManager: SpawnAreaManager
+        private set
+    lateinit var bedModeManager: BedModeManager
         private set
     lateinit var configs: List<GameConfig>
         private set
@@ -271,6 +279,7 @@ class LocoPillars : JavaPlugin() {
             gameManager.initialize()
 
             spawnAreaManager = SpawnAreaManager(this)
+            bedModeManager = BedModeManager()
 
             // 5. GAME CONFIGS & INSTANCE PRELOAD
             logger.info("[LocoPillars] Loading game configurations...")
@@ -390,7 +399,9 @@ class LocoPillars : JavaPlugin() {
             getCommand("stats")?.setExecutor(statsCommand)
             server.pluginManager.registerEvents(statsCommand, this)
 
-            logger.info("[LocoPillars] ✓ Achievements system, /achievements and /stats command registered")
+            getCommand("profile")?.setExecutor(ProfileCommand(this))
+
+            logger.info("[LocoPillars] ✓ Achievements system, /achievements, /stats and /profile commands registered")
 
             // 13. PARTY SYSTEM
             partyManager = PartyManager(this)
@@ -448,6 +459,29 @@ class LocoPillars : JavaPlugin() {
             getCommand("luckyblocks")?.tabCompleter = luckyBlocksCommand
 
             Bukkit.getPluginManager().registerEvents(LuckyBlocksMenu, this)
+
+            // 17.5. ENTITY CONTAINMENT — prevent bosses/mobs from leaving their arena
+            object : BukkitRunnable() {
+                override fun run() {
+                    val world = Bukkit.getWorld(ArenaWorldManager.GAMEWORLD_NAME) ?: return
+                    val activeInstances = gameManager.getAllInstances()
+                        .filter { it.state == GameState.ACTIVE || it.state == GameState.STARTING }
+                    if (activeInstances.isEmpty()) return
+
+                    val activeRegions = activeInstances.mapNotNull { inst ->
+                        worldRegionManager.getRegion(inst.arenaInstance.regionId)
+                    }
+                    if (activeRegions.isEmpty()) return
+
+                    world.livingEntities
+                        .filter { it !is Player }
+                        .forEach { entity ->
+                            if (activeRegions.none { region -> region.contains(entity.location) }) {
+                                entity.remove()
+                            }
+                        }
+                }
+            }.runTaskTimer(this, 80L, 40L)
 
             // 18. PLACEHOLDERS
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
@@ -579,6 +613,26 @@ class LocoPillars : JavaPlugin() {
             if (::worldManager.isInitialized) {
                 val worldCount = worldManager.getAllArenaWorlds().size
                 logger.info("[LocoPillars] Cleaning up $worldCount arena worlds...")
+
+                // Guarantee no player remains in the arena world before we call
+                // cleanup().  gameManager.cleanup() above handles tracked-game players,
+                // but spectators or crash-orphaned sessions can linger.  If any player
+                // is still in the world, unloadWorld() silently fails and Paper spends
+                // 10+ minutes flushing 60 000+ chunks on shutdown.
+                worldManager.getGameWorld()?.let { gw ->
+                    val remaining = gw.players.toList()
+                    if (remaining.isNotEmpty()) {
+                        logger.info("[LocoPillars] Evacuating ${remaining.size} remaining player(s) from arena world…")
+                        val safeSpot =
+                            (if (::configManager.isInitialized) configManager.getLobbySpawnLocation() else null)
+                                ?: server.worlds.firstOrNull { it.name != ArenaWorldManager.GAMEWORLD_NAME }?.spawnLocation
+                        remaining.forEach { player ->
+                            if (safeSpot != null) player.teleport(safeSpot)
+                            else player.kickPlayer("Server is restarting")
+                        }
+                    }
+                }
+
                 worldManager.cleanup()
                 logger.info("[LocoPillars] ✓ World cleanup completed")
             }
@@ -778,7 +832,7 @@ class LocoPillars : JavaPlugin() {
         }
 
         if (::worldManager.isInitialized) {
-            logger.info("[LocoPillars]   - Arena worlds: ${worldManager.getAllArenaWorlds().size}")
+            logger.info("[LocoPillars]   - Gameworld: ${org.Kloppie74.locoPillars.game.arena.ArenaWorldManager.GAMEWORLD_NAME}")
         }
 
         if (configManager.debugMode) {
@@ -787,7 +841,6 @@ class LocoPillars : JavaPlugin() {
             logger.info("[LocoPillars]   - Data folder: ${dataFolder.resolve("Data").absolutePath}")
             logger.info("[LocoPillars]   - Games folder: ${dataFolder.resolve("Data/Games").absolutePath}")
             logger.info("[LocoPillars]   - Schems folder: ${dataFolder.resolve("Data/Schems").absolutePath}")
-            logger.info("[LocoPillars]   - GameWorlds folder: ${dataFolder.resolve("Data/GameWorlds").absolutePath}")
 
             val runtime = Runtime.getRuntime()
             val usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024

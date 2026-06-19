@@ -48,7 +48,12 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
     override fun onRequest(p: OfflinePlayer?, params: String): String? {
         val player = p?.player
 
-        val gameInstance = player?.let { plugin.gameManager.getPlayerInstance(it) }
+        // Spectators have no active instance — fall back to the game they are watching so
+        // every game placeholder (scoreboard sidebar, timers, team status) resolves to that
+        // match instead of returning blank.
+        val gameInstance = player?.let {
+            plugin.gameManager.getPlayerInstance(it) ?: plugin.gameManager.getSpectatorInstance(it)
+        }
         val timerEvent = plugin.gameManager.timerEvent
 
         val pLower = params.lowercase()
@@ -737,7 +742,10 @@ class Placeholders(private val plugin: LocoPillars) : PlaceholderExpansion() {
     )
 
     private fun getMapStatistics(mapName: String): MapStatistics {
-        val instances = plugin.gameManager.getInstancesByGameType(mapName)
+        val mapNameLower = mapName.lowercase()
+        val instances = plugin.gameManager.getAllInstances().filter {
+            it.arenaInstance.template.name.lowercase() == mapNameLower
+        }
 
         var playersInLobby = 0
         var playersPlaying = 0

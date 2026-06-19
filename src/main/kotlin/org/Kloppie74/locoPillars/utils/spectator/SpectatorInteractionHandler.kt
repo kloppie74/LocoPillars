@@ -160,10 +160,11 @@ class SpectatorInteractionHandler(
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.HIGHEST)
     fun onEntityTarget(event: EntityTargetEvent) {
         val player = event.target as? Player ?: return
-        if (isSpectator(player)) {
+        // Use isSpectating (raw map) — catches mid-game eliminated players too
+        if (SpectatorUtils.isSpectating(player, plugin)) {
             event.isCancelled = true
         }
     }
@@ -313,6 +314,27 @@ class SpectatorInteractionHandler(
         if (isSpectator(player) && !hasSpectatorOverride(player)) {
             event.isCancelled = true
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onSpectatorCommandTeleport(event: PlayerTeleportEvent) {
+        val player = event.player
+        if (event.cause != PlayerTeleportEvent.TeleportCause.COMMAND) return
+        if (!SpectatorUtils.isSpectating(player, plugin)) return
+        if (plugin.gameManager.getPlayerInstance(player) != null) return
+        val toWorldName = event.to?.world?.name ?: return
+        // Only preserve spectator state when the destination is still a game world.
+        // Teleports to the lobby should let the player become a normal lobby player.
+        fun isGameWorld(name: String) = name.startsWith("pillars_") ||
+            name.equals(org.Kloppie74.locoPillars.game.arena.ArenaWorldManager.GAMEWORLD_NAME, ignoreCase = true)
+        if (!isGameWorld(toWorldName)) return
+        // Re-apply spectator state on the next tick so that any state reset caused by
+        // the teleport (world-change handler, client desync, etc.) is corrected.
+        plugin.server.scheduler.runTask(plugin, Runnable {
+            if (player.isOnline && plugin.gameManager.getPlayerInstance(player) == null) {
+                SpectatorUtils.setPlayerAsSpectator(player, plugin, silent = true)
+            }
+        })
     }
 
     @EventHandler(priority = EventPriority.NORMAL)

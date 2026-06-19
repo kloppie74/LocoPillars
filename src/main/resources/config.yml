@@ -30,13 +30,20 @@ debug: false
 # Game instance configuration
 game:
   # Number of arena instances to pre-create per map type.
-  # All schematic variants are pre-loaded into a shared clipboard cache at startup,
-  # so the clipboard memory cost is fixed at (unique .schem files) regardless of this number.
-  # The main cost per instance is the arena world chunk data kept in RAM.
-  instances-per-type: 10
-  # Distance between arena instances in blocks
-  # Should be larger than your biggest arena
+  # Each instance is pasted synchronously during startup, so more instances = longer startup time.
+  # 5 is the recommended default: covers concurrent matches while keeping startup fast.
+  # (e.g. 35 map configs × 5 = 175 total arenas pasted on startup)
+  instances-per-type: 5
+
+  # Single-world grid spacing is fixed at 5 000 blocks on the X axis (hardcoded).
+  # This setting now controls the REGION RADIUS used for player-detection, entity-cleanup,
+  # and WorldRegionManager boundary checks around each arena.
+  # Must be smaller than 2 500 (half the 5 000-block grid spacing) to avoid region overlap.
   instance-distance: 1000
+
+  loading-screen:
+    enabled: true
+    command: "leafui loading {player} locomc"
 
 # Auto-queue: after a game ends, players are sent directly into a fresh game
 # of the same type after a short countdown.  When disabled here, the feature is

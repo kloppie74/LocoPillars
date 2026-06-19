@@ -125,6 +125,18 @@ class GameConfig(
         return (settings["LuckyblockChance"] as? Number)?.toInt()?.coerceIn(0, 100) ?: 100
     }
 
+    /** BedModus: spelers respawnen bij hun bed zolang het intact is. */
+    fun isBedMode(): Boolean {
+        val settings = configMap["Settings"] as? Map<String, Any> ?: return false
+        return (settings["BedModus"] as? Boolean) ?: false
+    }
+
+    /** GhoasModus: 30% kans op 3x TNT ipv normaal item; explosies vernietigen ook map-blokken. */
+    fun isGhostMode(): Boolean {
+        val settings = configMap["Settings"] as? Map<String, Any> ?: return false
+        return (settings["GhoasModus"] as? Boolean) ?: false
+    }
+
     fun getSpawnCenterX(): Double {
         val settings = configMap["Settings"] as? Map<*, *> ?: return 0.0
         val sp = settings["SpawnPoint"] as? Map<*, *> ?: return 0.0

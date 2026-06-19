@@ -105,6 +105,12 @@ class ConfigManager(private val plugin: JavaPlugin) {
     var autoQueueEnabled: Boolean = true
         private set
 
+    // === LeafUI loading screen ===
+    var leafUIEnabled: Boolean = false
+        private set
+    var leafUICommand: String = ""
+        private set
+
     // === LuckyBlock settings ===
     var luckyBlocksEnabled: Boolean = true
         private set
@@ -219,6 +225,10 @@ class ConfigManager(private val plugin: JavaPlugin) {
         // === Load Auto-queue ===
         autoQueueEnabled = config.getBoolean("auto-queue.enabled", true)
 
+        // === Load LeafUI loading screen ===
+        leafUIEnabled = config.getBoolean("game.loading-screen.enabled", false)
+        leafUICommand = config.getString("game.loading-screen.command", "") ?: ""
+
         // === Load LuckyBlocks ===
         val luckySection = config.getConfigurationSection("Luckyblocks")
         luckyBlocksEnabled = luckySection?.getBoolean("enabled", true) ?: true
@@ -277,6 +287,8 @@ class ConfigManager(private val plugin: JavaPlugin) {
         config.createSection("game")
         config.set("game.instances-per-type", 10)
         config.set("game.instance-distance", 1000)
+        config.set("game.loading-screen.enabled", false)
+        config.set("game.loading-screen.command", "leafui loading {player} main")
 
         config.createSection("Spawn")
         config.set("Spawn.World", "world")

@@ -51,6 +51,9 @@ object HotbarUtils {
         return when {
             worldName.equals(plugin.configManager.lobbyWorld, ignoreCase = true) -> "lobby"
             worldName.startsWith("pillars_") && instance == null -> "spectate"
+            // Single-world grid: game world is LocoPillars_Gameworld, not "pillars_*".
+            // Any player in the spectator map with no active instance is a spectator.
+            SpectatorUtils.isSpectator(player, plugin) -> "spectate"
             instance != null -> {
                 when (instance.state) {
                     GameState.WAITING -> "game_lobby"

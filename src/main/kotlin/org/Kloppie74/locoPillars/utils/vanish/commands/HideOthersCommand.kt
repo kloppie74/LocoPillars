@@ -34,6 +34,13 @@ class HideOthersCommand : CommandExecutor {
     }
 
     private fun toggleHideOthers(target: Player, executor: Player?) {
+        // hideOthers is a lobby-only feature — block it during a game (or when targeting a
+        // player who is in a game), so it only applies in the lobby.
+        if (VanishManager.isInGameContext(target)) {
+            (executor ?: target).sendMessage(MSG.lang("vanish.hideothers.lobby_only"))
+            return
+        }
+
         val currentState = VanishManager.isHideOthers(target)
         val newState = !currentState
 

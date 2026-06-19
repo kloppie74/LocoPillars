@@ -117,11 +117,17 @@ class CosmeticManager(private val plugin: LocoPillars) {
         return try { CosmeticDAO.clearSelected(playerId, type) } catch (_: Exception) { false }
     }
 
-    /** Returns the currently active cosmetic for a player, or null if none equipped. */
+    /** Returns the currently active cosmetic for a player, falling back to the type default. */
     fun getSelected(player: Player, type: CosmeticType): CosmeticDefinition? {
         val playerId = PlayerDAO.getPlayerId(player.name) ?: return null
-        val id = try { CosmeticDAO.getSelected(playerId, type) } catch (_: Exception) { return null } ?: return null
-        return loader.get(type, id)
+        val id = try { CosmeticDAO.getSelected(playerId, type) } catch (_: Exception) { null }
+        if (id != null) {
+            val def = loader.get(type, id)
+            if (def != null) return def
+        }
+        // Nothing selected or selected cosmetic no longer exists — fall back to type default.
+        val defaultId = "default_${type.name.lowercase()}"
+        return loader.get(type, defaultId)
     }
 
     fun getOwnedIds(player: Player, type: CosmeticType): Set<String> {
@@ -177,14 +183,14 @@ class CosmeticManager(private val plugin: LocoPillars) {
             debugLog("Using cage '${selected.id}' for ${player.name}")
             return selected.schemFile
         }
-        // No selection or schem missing — fall back to the standard module cage
-        val standard = loader.get(CosmeticType.CAGE, "standard")
-        if (standard?.schemFile != null && standard.schemFile.exists()) {
-            debugLog("Fallback to standard cage for ${player.name}")
-            return standard.schemFile
+        // No selection or schem missing — fall back to the default module cage
+        val default = loader.get(CosmeticType.CAGE, "default")
+        if (default?.schemFile != null && default.schemFile.exists()) {
+            debugLog("Fallback to default cage for ${player.name}")
+            return default.schemFile
         }
         // Last-resort: direct file path in modules folder
-        val fallback = File(plugin.dataFolder, "modules/cosmetics/cages/standard/Cage.schem")
+        val fallback = File(plugin.dataFolder, "modules/cosmetics/cages/default/Cage.schem")
         return if (fallback.exists()) fallback else null
     }
 

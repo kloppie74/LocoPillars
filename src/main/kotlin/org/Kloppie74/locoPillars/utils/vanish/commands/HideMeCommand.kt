@@ -34,6 +34,13 @@ class HideMeCommand : CommandExecutor {
     }
 
     private fun toggleHideMe(target: Player, executor: Player?) {
+        // hideMe is a lobby-only feature — block it during a game (or when targeting a
+        // player who is in a game), otherwise a hidden player breaks in-game visibility.
+        if (VanishManager.isInGameContext(target)) {
+            (executor ?: target).sendMessage(MSG.lang("vanish.hideme.lobby_only"))
+            return
+        }
+
         val currentState = VanishManager.isHideMe(target)
         val newState = !currentState
 

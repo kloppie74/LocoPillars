@@ -74,7 +74,10 @@ object DatabaseManager {
                             }
                         }
 
-                        jdbcUrl = "jdbc:h2:${dbFile.absolutePath};DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE"
+                        // LOCK_TIMEOUT=10000: wait up to 10s for a row/table lock instead of
+                        // failing fast (H2's default is 1s). Safety net on top of the JVM-level
+                        // serialization in LeaderboardCacheDAO for any brief write contention.
+                        jdbcUrl = "jdbc:h2:${dbFile.absolutePath};DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;LOCK_TIMEOUT=10000"
                         username = "sa"
                         password = ""
                     }
@@ -147,7 +150,7 @@ object DatabaseManager {
                     } catch (e: Exception) {
                         plugin.logger.warning("[LocoPillars] ✗ Leaderboard cache refresh failed: ${e.message}")
                     }
-                }, 100L, 20L * 60 * 5) // eerste run na 5s, daarna elke 5 minuten
+                }, 20L * 90, 20L * 60 * 5) // eerste run na 90s (na de arena-preload), daarna elke 5 minuten
             } catch (e: Exception) {
                 plugin.logger.warning("[LocoPillars] ✗ Could not schedule leaderboard cache refresh: ${e.message}")
             }

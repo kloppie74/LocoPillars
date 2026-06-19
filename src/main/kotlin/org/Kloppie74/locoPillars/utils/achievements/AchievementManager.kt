@@ -3,6 +3,7 @@ package org.Kloppie74.locoPillars.utils.achievements
 import org.Kloppie74.locoPillars.database.dao.AchievementDAO
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
+import org.Kloppie74.locoPillars.utils.BoostUtil
 import org.bukkit.entity.Player
 import org.bukkit.Bukkit
 
@@ -132,23 +133,35 @@ class AchievementManager {
 
             // Add coins
             if (coins > 0) {
-                val coinsAdded = StatsDAO.addCoins(playerId, coins)
+                val boostedCoins = BoostUtil.applyCoins(player, coins)
+                val coinsAdded = StatsDAO.addCoins(playerId, boostedCoins)
                 if (coinsAdded) {
-                    player.sendMessage("§6+${coins} coins!")
-                    logger.info("[AchievementManager] ✓ Gave $coins coins to ${player.name}")
+                    val bonus = boostedCoins - coins
+                    val boostSuffix = if (bonus > 0) " §8(+$bonus Booster)" else ""
+                    player.sendMessage("§6+${boostedCoins} coins!$boostSuffix")
+                    logger.info("[AchievementManager] ✓ Gave $boostedCoins coins to ${player.name}")
                 } else {
-                    logger.warning("[AchievementManager] ✗ Failed to add $coins coins to ${player.name}")
+                    logger.warning("[AchievementManager] ✗ Failed to add $boostedCoins coins to ${player.name}")
                 }
             }
 
             // Add experience
             if (xp > 0) {
-                val xpAdded = StatsDAO.addExperience(playerId, xp)
+                val boostedXp = BoostUtil.applyXp(player, xp)
+                val xpAdded = StatsDAO.addExperience(playerId, boostedXp)
                 if (xpAdded) {
-                    player.sendMessage("§b+${xp} XP!")
-                    logger.info("[AchievementManager] ✓ Gave $xp XP to ${player.name}")
+                    val bonus = boostedXp - xp
+                    val boostSuffix = if (bonus > 0) " §8(+$bonus Booster)" else ""
+                    player.sendMessage("§b+${boostedXp} XP!$boostSuffix")
+                    logger.info("[AchievementManager] ✓ Gave $boostedXp XP to ${player.name}")
+                    val newLevel = StatsDAO.checkAndApplyLevelUp(playerId)
+                    if (newLevel != null) {
+                        player.sendTitle("§6§l★ LEVEL UP!", "§eYou reached level §6§l$newLevel§e!", 10, 60, 10)
+                        player.sendMessage("§6§l★ Level Up! §eYou are now level §6§l$newLevel§e!")
+                        player.playSound(player.location, org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.5f)
+                    }
                 } else {
-                    logger.warning("[AchievementManager] ✗ Failed to add $xp XP to ${player.name}")
+                    logger.warning("[AchievementManager] ✗ Failed to add $boostedXp XP to ${player.name}")
                 }
             }
 
@@ -190,7 +203,6 @@ class AchievementManager {
             val title = "§aAchievement Unlocked!"
             val subtitle = "§6${achievement.displayName}"
             player.sendTitle(title, subtitle, 10, 60, 10)
-            player.sendMessage(achievement.unlockMessage ?: "§aAchievement unlocked: §6${achievement.displayName}")
         } catch (ex: Exception) {
             logger.warning("[AchievementManager] ✗ Could not send achievement title: ${ex.message}")
         }

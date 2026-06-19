@@ -2,6 +2,7 @@ package org.Kloppie74.locoPillars.game.listeners
 
 import org.bukkit.GameMode
 import org.bukkit.Location
+import org.bukkit.block.data.type.Bed as BedData
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
@@ -10,6 +11,8 @@ import org.bukkit.event.block.BlockBreakEvent
 import org.bukkit.event.block.BlockExplodeEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.entity.EntityExplodeEvent
+import org.bukkit.potion.PotionEffect
+import org.bukkit.potion.PotionEffectType
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.FoodLevelChangeEvent
@@ -30,6 +33,7 @@ import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.game.instance.GameInstance
 import org.Kloppie74.locoPillars.game.rewards.RewardProcessor
+import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksUtil
 import org.bukkit.configuration.file.YamlConfiguration
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -69,9 +73,28 @@ class GameListener(private val plugin: LocoPillars) : Listener {
         val instance = plugin.gameManager.getPlayerInstance(player)
 
         if (instance != null) {
-            // Configure death event
             event.deathMessage = null
             event.droppedExp = 0
+
+            // BedModus: speler heeft een bed → respawn daar, geen eliminatie
+            if (instance.state == GameState.ACTIVE
+                && instance.arenaInstance.config.isBedMode()
+                && plugin.bedModeManager.hasActiveBed(player.uniqueId))
+            {
+                event.keepInventory = true
+                event.keepLevel = true
+                killedByPlayerSet.remove(player.uniqueId) // geen "not killed by player" reward
+                playerKillStreaks[player.uniqueId] = 0
+                val bedLoc = plugin.bedModeManager.getBedHeadLocation(player.uniqueId)!!
+                plugin.bedModeManager.markPendingBedRespawn(player.uniqueId, bedLoc)
+                if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
+                    plugin.cosmeticManager.fireDeath(player, instance)
+                }
+                player.sendMessage(MSG.chatColors("&6&lBED RESPAWN &7— you will respawn at your bed!"))
+                return
+            }
+
+            // Normale dood
             event.keepInventory = false
             event.keepLevel = false
 
@@ -84,7 +107,6 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             }
 
             // If this death was NOT caused by a player, fire not_killed_by_player rewards.
-            // killedByPlayerSet.remove() returns true only when handlePlayerKill registered the victim.
             if (instance.state == GameState.ACTIVE && !killedByPlayerSet.remove(player.uniqueId)) {
                 val rewardsSection = YamlConfiguration.loadConfiguration(instance.arenaInstance.config.file)
                     .getConfigurationSection("Rewards")
@@ -113,6 +135,25 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerRespawn(event: PlayerRespawnEvent) {
         val player = event.player
+
+        // BedModus respawn
+        val bedLoc = plugin.bedModeManager.consumePendingBedRespawn(player.uniqueId)
+        if (bedLoc != null) {
+            event.respawnLocation = bedLoc
+            object : BukkitRunnable() {
+                override fun run() {
+                    if (!player.isOnline) return
+                    player.isInvulnerable = false
+                    player.allowFlight = false
+                    player.isFlying = false
+                    // Korte respawn-bescherming (3 seconden resistance IV)
+                    player.addPotionEffect(PotionEffect(PotionEffectType.RESISTANCE, 60, 4, false, false))
+                    player.sendTitle("§a§lRESPAWNED!", "§7Your bed is still safe.", 0, 30, 10)
+                }
+            }.runTaskLater(plugin, POST_RESPAWN_DELAY_TICKS)
+            return
+        }
+
         val respawnLoc = plugin.gameManager.getEliminatedRespawnLocation(player.uniqueId)
         if (respawnLoc != null) {
             event.respawnLocation = respawnLoc
@@ -260,6 +301,7 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     @EventHandler(priority = EventPriority.HIGH)
     fun onPlayerQuit(event: PlayerQuitEvent) {
         val player = event.player
+        plugin.bedModeManager.clearPlayer(player.uniqueId)
         plugin.gameManager.clearEliminatedState(player.uniqueId)
 
         // Clear cage protection
@@ -370,21 +412,84 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             // Player-placed blocks are always breakable. Original map blocks are breakable
             // only when Can-Break-Map-Blocks is on, OR when this exact block was whitelisted
             // with the editor's Breakable-Block selector (stored as an origin-relative offset).
+            // Lucky block glass (placed via /luckyblocks or baked into the schematic) is
+            // handled separately so it always bypasses the map-protection restriction.
             val placed = playerPlacedBlocks[instance.id]
             val isPlayerPlaced = placed?.contains(blockLoc) == true
-            if (isPlayerPlaced) {
-                placed?.remove(blockLoc)
-            } else {
-                val config = instance.arenaInstance.config
-                val whitelisted = config.hasBreakableWhitelist() && config.isBreakableWhitelisted(
-                    blockLoc.blockX - origin.blockX,
-                    blockLoc.blockY - origin.blockY,
-                    blockLoc.blockZ - origin.blockZ
-                )
-                if (!config.canBreakMapBlocks() && !whitelisted) {
-                    event.isCancelled = true
-                    player.sendMessage(MSG.lang("gameplay.block_break_player_placed_only"))
-                    return
+
+            when {
+                // Placed lucky block (from /luckyblocks getluckyblock).
+                // May also be in playerPlacedBlocks — keep both caches consistent.
+                // Do NOT cancel: LuckyBlocksListener (NORMAL priority) runs next and
+                // triggers the lucky block effect + removes the block itself.
+                LuckyBlocksUtil.isPlacedLuckyBlock(blockLoc) -> {
+                    placed?.remove(blockLoc)
+                }
+
+                isPlayerPlaced -> {
+                    placed?.remove(blockLoc)
+                }
+
+                else -> {
+                    val config = instance.arenaInstance.config
+
+                    // Schematic lucky block: a glass block baked into the pasted arena
+                    // map that was NOT placed by a player.  When LuckyblockEnabled is
+                    // true, breaking it triggers the lucky block engine instead of a
+                    // normal block drop and bypasses the Can-Break-Map-Blocks restriction.
+                    if (config.isLuckyBlocksEnabled()
+                        && LuckyBlocksUtil.isLuckyBlockMaterial(event.block.type, plugin.configManager)) {
+                        event.isDropItems = false
+                        event.block.type = org.bukkit.Material.AIR
+                        LuckyBlocksUtil.handleLuckyBlockBreak(player, blockLoc, instance)
+                        try {
+                            val playerId = PlayerDAO.getPlayerId(player.name)
+                            if (playerId != null) StatsDAO.incrementStat(playerId, "blocks_broken")
+                        } catch (ex: Exception) {
+                            plugin.logger.warning("[GameListener] Error tracking lucky block break: ${ex.message}")
+                        }
+                        return
+                    }
+
+                    val whitelisted = config.hasBreakableWhitelist() && config.isBreakableWhitelisted(
+                        blockLoc.blockX - origin.blockX,
+                        blockLoc.blockY - origin.blockY,
+                        blockLoc.blockZ - origin.blockZ
+                    )
+                    if (!config.canBreakMapBlocks() && !whitelisted) {
+                        event.isCancelled = true
+                        player.sendMessage(MSG.lang("gameplay.block_break_player_placed_only"))
+                        return
+                    }
+                }
+            }
+
+            // BedModus: als een bed-blok gesloopt wordt → notificeer BedModeManager
+            if (instance.arenaInstance.config.isBedMode() && event.block.type.name.endsWith("_BED")) {
+                val bd = event.block.blockData as? BedData
+                if (bd != null) {
+                    val headLoc = when (bd.part) {
+                        BedData.Part.HEAD -> event.block.location
+                        else -> event.block.getRelative(bd.facing).location
+                    }
+                    val companionLoc = when (bd.part) {
+                        BedData.Part.HEAD -> event.block.getRelative(bd.facing.oppositeFace).location
+                        else -> event.block.getRelative(bd.facing).location
+                    }
+                    // Companion-blok ook uit tracking verwijderen (Minecraft verwijdert het stil)
+                    placed?.remove(companionLoc)
+                    val result = plugin.bedModeManager.onBedBroken(headLoc)
+                    if (result != null) {
+                        val (ownerUUID, _) = result
+                        val owner = plugin.server.getPlayer(ownerUUID)
+                        val ownerName = owner?.name ?: "Unknown"
+                        val destroyerName = player.name
+                        val msg = MSG.chatColors("&c&l✘ &c${destroyerName} &cdestroyed the bed of &c&l${ownerName}&c!")
+                        (instance.players + instance.spectators).mapNotNull { plugin.server.getPlayer(it) }.forEach { p ->
+                            p.sendMessage(msg)
+                        }
+                        owner?.sendTitle("§c§l✘ BED DESTROYED!", "§7You can no longer respawn!", 0, 60, 10)
+                    }
                 }
             }
 
@@ -435,6 +540,30 @@ class GameListener(private val plugin: LocoPillars) : Listener {
             val playerPlacedBlocksForInstance = playerPlacedBlocks.computeIfAbsent(instance.id) { mutableSetOf() }
             playerPlacedBlocksForInstance.add(blockLoc)
 
+            // BedModus: track beide bed-blokken en registreer bij BedModeManager
+            if (instance.arenaInstance.config.isBedMode() && event.block.type.name.endsWith("_BED")) {
+                val bd = event.block.blockData as? BedData
+                if (bd != null) {
+                    val headLoc: Location
+                    val footLoc: Location
+                    when (bd.part) {
+                        BedData.Part.HEAD -> {
+                            headLoc = event.block.location
+                            footLoc = event.block.getRelative(bd.facing.oppositeFace).location
+                        }
+                        else -> {
+                            footLoc = event.block.location
+                            headLoc = event.block.getRelative(bd.facing).location
+                        }
+                    }
+                    // Voeg ook het companion-blok toe aan placed tracking
+                    playerPlacedBlocksForInstance.add(headLoc)
+                    playerPlacedBlocksForInstance.add(footLoc)
+                    plugin.bedModeManager.placeBed(player.uniqueId, headLoc, footLoc)
+                    player.sendMessage(MSG.chatColors("&a&lBED PLACED &7— this is now your respawn point!"))
+                }
+            }
+
             // === DATABASE: Track block placed ===
             try {
                 val playerId = PlayerDAO.getPlayerId(player.name)
@@ -464,26 +593,52 @@ class GameListener(private val plugin: LocoPillars) : Listener {
     /**
      * Protects original map blocks from explosions when Can-BlowUp-Map-Blocks is off.
      * Player-placed blocks are always allowed to blow up (and are untracked when they do).
+     * In GhostMode: explosions vernietigen ook map-blokken (chaos-modus).
      * If the explosion is not inside any arena instance, nothing is changed.
      */
     private fun filterExplosionBlocks(center: Location, blocks: MutableList<Block>) {
         val instance = getInstanceAt(center) ?: return
         val placed = playerPlacedBlocks[instance.id]
+        val config = instance.arenaInstance.config
 
-        if (instance.arenaInstance.config.canBlowUpMapBlocks()) {
-            // Explosions may level the map; just stop tracking any player-placed blocks destroyed.
+        val destroyAll = config.canBlowUpMapBlocks() || config.isGhostMode()
+        if (destroyAll) {
+            // Explosions may level the map; stop tracking any player-placed blocks destroyed.
             if (placed != null) blocks.forEach { placed.remove(it.location) }
+            // BedModus: check of er bed-blokken vernietigd worden
+            if (config.isBedMode()) notifyBedsInExplosion(instance, blocks)
             return
         }
 
         // Keep only player-placed blocks in the blast; every original map block is protected.
-        // placed.remove() returns true for player-placed blocks (and untracks them as they detonate).
         val iterator = blocks.iterator()
         while (iterator.hasNext()) {
             val block = iterator.next()
             if (placed == null || !placed.remove(block.location)) {
                 iterator.remove() // map block → protected
             }
+        }
+        // BedModus: ook hier checken (player-placed bed-blokken kunnen wél opblazen)
+        if (config.isBedMode()) notifyBedsInExplosion(instance, blocks)
+    }
+
+    private fun notifyBedsInExplosion(instance: GameInstance, blocks: List<Block>) {
+        for (block in blocks) {
+            if (!block.type.name.endsWith("_BED")) continue
+            val bd = block.blockData as? BedData ?: continue
+            val headLoc = when (bd.part) {
+                BedData.Part.HEAD -> block.location
+                else -> block.getRelative(bd.facing).location
+            }
+            val result = plugin.bedModeManager.onBedBroken(headLoc) ?: continue
+            val (ownerUUID, _) = result
+            val owner = plugin.server.getPlayer(ownerUUID)
+            val ownerName = owner?.name ?: "Unknown"
+            val msg = MSG.chatColors("&c&l✘ &cThe bed of &c&l${ownerName} &cwas destroyed by an explosion!")
+            (instance.players + instance.spectators).mapNotNull { plugin.server.getPlayer(it) }.forEach { p ->
+                p.sendMessage(msg)
+            }
+            owner?.sendTitle("§c§l✘ BED DESTROYED!", "§7Explosion! You can no longer respawn.", 0, 60, 10)
         }
     }
 

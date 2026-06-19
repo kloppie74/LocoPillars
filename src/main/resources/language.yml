@@ -283,6 +283,7 @@ vanish:
   # /hideme
   hideme:
     no_permission: "&cYou do not have permission to toggle hideMe for other players."
+    lobby_only: "&cYou can only use /hideme in the lobby, not during a game!"
     enabled_self: "&aYou are now hidden from other players."
     enabled_other: "&aYou have hidden &6{target} &afrom other players."
     disabled_self: "&cYou are now visible to other players again."
@@ -291,6 +292,7 @@ vanish:
   # /hideothers
   hideothers:
     no_permission: "&cYou do not have permission to toggle hideOthers for other players."
+    lobby_only: "&cYou can only use /hideothers in the lobby, not during a game!"
     enabled_self: "&aYou are now hiding other players in this world."
     enabled_other: "&aYou have enabled hideOthers for &6{target}."
     disabled_self: "&cYou are no longer hiding other players."

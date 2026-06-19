@@ -30,7 +30,24 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:docs.gradle.org)",
-      "WebFetch(domain:repo.papermc.io)"
+      "WebFetch(domain:repo.papermc.io)",
+      "Bash(findstr /i \"game\")",
+      "Bash(findstr /i \"reward\\\\|drop\\\\|give\")",
+      "Bash(del \"D:\\\\Documenten Rowan Klop\\\\Documents\\\\GitHub\\\\LocoPillars\\\\src\\\\main\\\\kotlin\\\\org\\\\Kloppie74\\\\locoPillars\\\\utils\\\\ChunkMemoryOptimizer.kt\")",
+      "Bash(xargs grep -l \"level\\\\|Level\")",
+      "PowerShell($jar = Get-ChildItem -Recurse \"$env:USERPROFILE\\\\.gradle\\\\caches\" -Filter \"FastAsyncWorldEdit-Core-2.15.2.jar\" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName; if \\($jar\\) { Write-Output \"Found: $jar\" } else { Write-Output \"Not found in gradle cache\" })",
+      "Bash(mvn clean *)",
+      "Bash(cd \"/d/Documenten Rowan Klop/Documents/GitHub/LocoPillars\" && grep -n \"import.*VanishManager\" src/main/kotlin/org/Kloppie74/locoPillars/game/manager/PlayerManager.kt)",
+      "Bash(cd \"/d/Documenten Rowan Klop/Documents/GitHub/LocoPillars\" && grep -n \"^object VanishManager\\\\|fun isHideMe\\\\|fun setHideMe\\\\|fun isHideOthers\\\\|fun setHideOthers\" src/main/kotlin/org/Kloppie74/locoPillars/utils/vanish/VanishManager.kt)",
+      "Bash(./gradlew clean *)",
+      "Bash(kotlinc -nowarn src/main/kotlin/org/Kloppie74/locoPillars/game/manager/PlayerManager.kt -cp \".\" -no-stdlib)",
+      "Bash(cd \"/d/Documenten Rowan Klop/Documents/GitHub/LocoPillars\" && grep -n \"getSpectatorInstance\" src/main/kotlin/org/Kloppie74/locoPillars/utils/teams/scoreboard/ScoreboardManager.kt)",
+      "Bash(grep -v \"//\\\\|players.remove\")",
+      "Bash(cd \"/d/Documenten Rowan Klop/Documents/GitHub/LocoPillars\" && grep -n \"fun joinPartyToGame\" src/main/kotlin/org/Kloppie74/locoPillars/game/manager/GameJoinManager.kt)",
+      "Bash(cd \"/d/Documenten Rowan Klop/Documents/GitHub/LocoPillars\" && grep -n \"getTeamAmount\" src/main/kotlin/org/Kloppie74/locoPillars/utils/teams/scoreboard/ScoreboardManager.kt)",
+      "Bash(xargs grep -l \"maxPoolSize\\\\|minPoolSize\")",
+      "Bash(kotlin -version)",
+      "Bash(xargs grep -l \"lp_leaderboard_cache\")"
     ]
   }
 }

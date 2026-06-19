@@ -2,6 +2,7 @@ package org.Kloppie74.locoPillars.utils.teams
 
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.database.dao.VanishDAO
+import org.Kloppie74.locoPillars.game.arena.ArenaWorldManager
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorVisibilityManager
 import org.Kloppie74.locoPillars.utils.vanish.VanishManager
@@ -510,16 +511,17 @@ object GlobalVisibilityTicker {
             // verouderde spectator-map-entry nooit een gewone lobby-speler verbergt.
             if (targetIsSpectator && !viewerIsSpectator) {
                 val targetInGameContext = target.world.name.startsWith("pillars_") ||
-                        plugin.gameManager.getPlayerInstance(target) != null
+                        target.world.name.equals(ArenaWorldManager.GAMEWORLD_NAME, ignoreCase = true) ||
+                        plugin.gameManager.getPlayerInstance(target) != null ||
+                        plugin.gameManager.getSpectatorInstance(target) != null
                 if (targetInGameContext) return false
             }
 
-            // Een spectator ZIET iedereen in zijn eigen arena (zelfde pillars-wereld):
-            // zowel levende spelers als andere spectators. De game-instance-regel zou
-            // dit anders verbergen omdat een dode spectator soms geen instance meer heeft
-            // (getPlayerInstance == null) → daarom hier expliciet op WERELD matchen.
+            // A spectator SEES everyone in the same arena world (alive players + other spectators).
+            // Matches both old per-arena worlds ("pillars_*") and the new single game world.
             if (viewerIsSpectator &&
-                viewer.world.name.startsWith("pillars_") &&
+                (viewer.world.name.startsWith("pillars_") ||
+                 viewer.world.name.equals(ArenaWorldManager.GAMEWORLD_NAME, ignoreCase = true)) &&
                 viewer.world.name == target.world.name) {
                 return true
             }

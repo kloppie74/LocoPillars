@@ -84,6 +84,9 @@ class LuckyBlocksListener(private val config: ConfigManager) : Listener {
 
                 // Add to cache as TRADITIONAL lucky block
                 LuckyBlocksUtil.cacheLuckyBlock(block.location)
+                if (LuckyBlocksUtil.isGuaranteedLuckyBlockItem(item)) {
+                    LuckyBlocksUtil.cacheGuaranteedLuckyBlock(block.location)
+                }
 
                 // Spawn armorstand with texture
                 if (glassTexture != null && glassTexture.texture.isNotEmpty()) {

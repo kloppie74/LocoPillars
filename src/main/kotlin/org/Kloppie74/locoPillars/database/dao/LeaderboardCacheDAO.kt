@@ -9,6 +9,21 @@ import java.time.LocalDateTime
 
 object LeaderboardCacheDAO {
 
+    /**
+     * Serialises every full cache rebuild. Two async callers — the 5-minute refresh
+     * timer (DatabaseManager) and the per-game-end task (GameplayManager) — used to run
+     * the big MERGE on lp_leaderboard_cache concurrently, which H2 rejected with
+     * "Concurrent update" / "Timeout trying to lock table". A single JVM-wide lock
+     * guarantees only one rebuild runs at a time.
+     */
+    private val cacheUpdateLock = java.util.concurrent.locks.ReentrantLock()
+
+    /** Timestamp (ms) of the last successful rebuild — used to coalesce rapid bursts. */
+    @Volatile private var lastCacheUpdateMs = 0L
+
+    /** Minimum gap between rebuilds; collapses several games ending at once into one. */
+    private const val MIN_UPDATE_INTERVAL_MS = 1500L
+
     // Leaderboard types
     const val TYPE_WINS = "wins"
     const val TYPE_WINRATE = "winrate"
@@ -65,29 +80,42 @@ object LeaderboardCacheDAO {
     // =================== CACHE UPDATE ===================
 
     fun updateCache(): Boolean {
-        return try {
-            val startTime = System.currentTimeMillis()
-
-            val success = listOf(
-                updateWinsLeaderboard(),
-                updateWinRateLeaderboard(),
-                updateKillsLeaderboard(),
-                updateKDRatioLeaderboard(),
-                updateLevelLeaderboard(),
-                updatePlaytimeLeaderboard(),
-                updateWinStreakLeaderboard(),
-                updatePillarsLeaderboard()
-            ).all { it }
-
-            val duration = System.currentTimeMillis() - startTime
-
-            if (success) {
-                updateAllMetadata(duration)
+        // Serialise rebuilds so the two async callers never collide on the MERGE.
+        cacheUpdateLock.lock()
+        try {
+            // Debounce: if a rebuild just finished, skip — the previous one already read
+            // the latest stats. The 5-minute timer guarantees eventual freshness anyway.
+            if (System.currentTimeMillis() - lastCacheUpdateMs < MIN_UPDATE_INTERVAL_MS) {
+                return true
             }
 
-            success
-        } catch (e: Exception) {
-            false
+            return try {
+                val startTime = System.currentTimeMillis()
+
+                val success = listOf(
+                    updateWinsLeaderboard(),
+                    updateWinRateLeaderboard(),
+                    updateKillsLeaderboard(),
+                    updateKDRatioLeaderboard(),
+                    updateLevelLeaderboard(),
+                    updatePlaytimeLeaderboard(),
+                    updateWinStreakLeaderboard(),
+                    updatePillarsLeaderboard()
+                ).all { it }
+
+                val duration = System.currentTimeMillis() - startTime
+
+                if (success) {
+                    updateAllMetadata(duration)
+                    lastCacheUpdateMs = System.currentTimeMillis()
+                }
+
+                success
+            } catch (e: Exception) {
+                false
+            }
+        } finally {
+            cacheUpdateLock.unlock()
         }
     }
 
@@ -436,18 +464,36 @@ object LeaderboardCacheDAO {
             else -> throw IllegalArgumentException("Unsupported database type: ${DatabaseManager.getDatabaseType()}")
         }
 
-        DatabaseManager.getConnection().use { conn ->
-            conn.prepareStatement(upsertSql).use { ps ->
-                params.forEachIndexed { i, value ->
-                    when (value) {
-                        is String -> ps.setString(i + 1, value)
-                        is Int -> ps.setInt(i + 1, value)
-                        is LocalDateTime -> ps.setObject(i + 1, value)
-                        else -> ps.setObject(i + 1, value)
+        // Under heavy load (e.g. the 175-arena startup paste) H2's MVStore can reject the
+        // MERGE with a transient "Concurrent update"/lock-timeout. Retry on a FRESH
+        // connection (the failed one is marked broken) with a short backoff.
+        var attempt = 0
+        while (true) {
+            attempt++
+            try {
+                DatabaseManager.getConnection().use { conn ->
+                    conn.prepareStatement(upsertSql).use { ps ->
+                        params.forEachIndexed { i, value ->
+                            when (value) {
+                                is String -> ps.setString(i + 1, value)
+                                is Int -> ps.setInt(i + 1, value)
+                                is LocalDateTime -> ps.setObject(i + 1, value)
+                                else -> ps.setObject(i + 1, value)
+                            }
+                        }
+                        ps.executeUpdate()
+                        conn.commit()
                     }
                 }
-                ps.executeUpdate()
-                conn.commit()
+                break
+            } catch (e: java.sql.SQLException) {
+                if (attempt >= MAX_DB_RETRIES || !isTransientLockError(e)) throw e
+                try {
+                    Thread.sleep(DB_RETRY_BACKOFF_MS * attempt)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw e
+                }
             }
         }
 
@@ -459,6 +505,32 @@ object LeaderboardCacheDAO {
             // negeren — ranks werken ook zonder percentielen
         }
         return true
+    }
+
+    /** Max attempts for a transient-failure MERGE retry (≈ 250+500+…+2000ms ≈ 9s total). */
+    private const val MAX_DB_RETRIES = 8
+
+    /** Base backoff (ms) between retries; multiplied by the attempt number. */
+    private const val DB_RETRY_BACKOFF_MS = 250L
+
+    /**
+     * True if [e] (or any cause in its chain) is a transient H2 lock/concurrency error that
+     * is worth retrying: 50200 = "Timeout trying to lock table" (HYT00), 90131 = "Concurrent
+     * update", 40001 = serialization failure.
+     */
+    private fun isTransientLockError(e: java.sql.SQLException): Boolean {
+        var cur: Throwable? = e
+        while (cur != null) {
+            if (cur is java.sql.SQLException) {
+                if (cur.errorCode == 50200 || cur.errorCode == 90131) return true
+                if (cur.sqlState == "HYT00" || cur.sqlState == "40001") return true
+            }
+            val msg = cur.message ?: ""
+            if (msg.contains("Concurrent update", ignoreCase = true) ||
+                msg.contains("Timeout trying to lock", ignoreCase = true)) return true
+            cur = cur.cause
+        }
+        return false
     }
 
     private fun updatePercentiles(type: String): Boolean {

@@ -8,6 +8,7 @@ import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
+import org.Kloppie74.locoPillars.utils.vanish.VanishManager
 
 class PlayerManager(private val plugin: LocoPillars) {
 
@@ -17,6 +18,12 @@ class PlayerManager(private val plugin: LocoPillars) {
 
         // Remove from spectator map first so state is clean
         SpectatorUtils.clearCache(player)
+
+        // Anti pay-to-win: a player must never stay self-hidden (or hiding others) inside a
+        // game — opponents must always be able to see them. Reset any lobby vanish state.
+        // Guarded so we only touch the DB / visibility when the state is actually set.
+        if (VanishManager.isHideMe(player)) VanishManager.setHideMe(player, false)
+        if (VanishManager.isHideOthers(player)) VanishManager.setHideOthers(player, false)
 
         player.gameMode = GameMode.SURVIVAL
         resetMaxHealth(player)   // MUST run before setting health (see helper)

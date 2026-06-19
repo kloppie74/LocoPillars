@@ -523,6 +523,25 @@ object StatsDAO {
     }
 
     /**
+     * Recalculates the expected level from the player's current XP and writes it
+     * to the DB if it is higher than the stored level.  Returns the new level when
+     * a level-up occurred, or null if the level was already up-to-date.
+     *
+     * Formula: level = floor(sqrt(experience / 100)) + 1
+     *   0 XP → 1 | 100 XP → 2 | 400 XP → 3 | 900 XP → 4 | 1600 XP → 5 …
+     */
+    fun checkAndApplyLevelUp(playerId: String): Int? {
+        return try {
+            val stats = findById(playerId) ?: return null
+            val expectedLevel = kotlin.math.sqrt(stats.experience.toDouble() / 100).toInt() + 1
+            if (expectedLevel > stats.level) {
+                updateLevel(playerId, expectedLevel)
+                expectedLevel
+            } else null
+        } catch (_: Exception) { null }
+    }
+
+    /**
      * Adds coins to a player.
      */
     fun addCoins(playerId: String, amount: Int): Boolean {

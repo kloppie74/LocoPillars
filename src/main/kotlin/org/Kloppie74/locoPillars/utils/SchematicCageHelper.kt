@@ -66,23 +66,36 @@ object SchematicCageHelper {
 
             val snapshots = mutableListOf<BlockSnapshot>()
 
+            // Pass 1: snapshot every position in the new cage's region so we can restore
+            // the original terrain later (undo).
             for (clipPos in clipboard.region) {
-                val blockState = clipboard.getBlock(clipPos) // BlockState, no NBT needed
-
                 val wx = targetX + (clipPos.x - origin.x)
                 val wy = targetY + (clipPos.y - origin.y)
                 val wz = targetZ + (clipPos.z - origin.z)
-
                 val block = bWorld.getBlockAt(wx, wy, wz)
-
-                // Snapshot original block before overwriting
                 snapshots.add(BlockSnapshot(wx, wy, wz, bWorld.name, block.blockData.clone()))
-
-                // Place directly via Bukkit — no WorldGuard events fired by plugin edits
-                block.setBlockData(BukkitAdapter.adapt(blockState), false)
             }
 
-            playerCageSnapshots.computeIfAbsent(playerUUID) { mutableListOf() }.addAll(snapshots)
+            // Pass 2: clear the entire paste region first.
+            // This removes any stale blocks from a previous cage whose undo info was lost
+            // (reload / crash), preventing old cage geometry from bleeding through.
+            for (snap in snapshots) {
+                bWorld.getBlockAt(snap.x, snap.y, snap.z).type = Material.AIR
+            }
+
+            // Pass 3: write the cage blocks.
+            for (clipPos in clipboard.region) {
+                val blockState = clipboard.getBlock(clipPos)
+                val wx = targetX + (clipPos.x - origin.x)
+                val wy = targetY + (clipPos.y - origin.y)
+                val wz = targetZ + (clipPos.z - origin.z)
+                // Place directly via Bukkit — no WorldGuard events fired by plugin edits
+                bWorld.getBlockAt(wx, wy, wz).setBlockData(BukkitAdapter.adapt(blockState), false)
+            }
+
+            // Replace (not accumulate) — old append bug caused snapshot lists to grow
+            // across multiple games, breaking undo ordering.
+            playerCageSnapshots[playerUUID] = snapshots
             debugLog(plugin, configManager, "✓ Cage pasted: ${snapshots.size} blocks written for UUID $playerUUID")
             true
 

@@ -1,8 +1,10 @@
 package org.Kloppie74.locoPillars.utils.spectator
 
+import org.bukkit.entity.Mob
 import org.bukkit.entity.Player
 import org.bukkit.GameMode
 import org.Kloppie74.locoPillars.LocoPillars
+import org.Kloppie74.locoPillars.game.arena.ArenaWorldManager
 import org.Kloppie74.locoPillars.utils.MSG
 import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import java.util.*
@@ -15,7 +17,8 @@ object SpectatorUtils {
      * Set player as spectator (only if NOT in a game!)
      */
     @JvmStatic
-    fun setPlayerAsSpectator(player: Player, plugin: LocoPillars) {
+    @JvmOverloads
+    fun setPlayerAsSpectator(player: Player, plugin: LocoPillars, silent: Boolean = false) {
         // Editor players are NEVER spectators — they build freely in their edit world.
         if (plugin.adminEditorManager.isActive(player)) return
         val inGame = plugin.gameManager.getPlayerInstance(player) != null
@@ -32,10 +35,15 @@ object SpectatorUtils {
         SpectatorSpeedManager.applyDefaultSpeed(player)
         plugin.hotbarItemManager.givePlayerItems(player)
 
-        // FIXED: Use non-conflicting priority for spectator updates
+        // Clear any mob that was already chasing this player before they became a spectator.
+        // EntityTargetEvent prevents NEW targeting, but can't retract an already-set target.
+        player.world.getNearbyEntities(player.location, 64.0, 64.0, 64.0)
+            .filterIsInstance<Mob>()
+            .forEach { mob -> if (mob.target?.uniqueId == player.uniqueId) mob.target = null }
+
         GlobalVisibilityTicker.queueUpdateWithPriority(player, "SPECTATOR_UPDATE", "set_as_spectator")
 
-        player.sendMessage(MSG.chatColors("&7You are now a &espectator&7."))
+        if (!silent) player.sendMessage(MSG.chatColors("&7You are now a &espectator&7."))
     }
 
     /**
@@ -99,9 +107,12 @@ object SpectatorUtils {
         if (plugin.adminEditorManager.isActive(player)) return
         val wasSpectator = isSpectator(player, plugin)
 
-        if (!fromWorld.startsWith("pillars_") && toWorld.startsWith("pillars_")) {
+        fun isGameWorld(name: String) = name.startsWith("pillars_") ||
+                name.equals(ArenaWorldManager.GAMEWORLD_NAME, ignoreCase = true)
+
+        if (!isGameWorld(fromWorld) && isGameWorld(toWorld)) {
             setPlayerAsSpectator(player, plugin)
-        } else if (fromWorld.startsWith("pillars_") && !toWorld.startsWith("pillars_")) {
+        } else if (isGameWorld(fromWorld) && !isGameWorld(toWorld)) {
             removeSpectatorStatus(player, plugin)
         } else if (wasSpectator) {
             setPlayerAsSpectator(player, plugin)

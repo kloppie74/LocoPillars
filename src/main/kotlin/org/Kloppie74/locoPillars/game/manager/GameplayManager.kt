@@ -332,9 +332,30 @@ class GameplayManager(
 
         if (instance.arenaInstance.config.isLobbyEnabled()) {
             clearSpawnAreasForGame(instance)
-            assignPlayersToTeams(instance)
+            val leafCmd = configManager.leafUICommand.takeIf { configManager.leafUIEnabled && it.isNotBlank() }
+            if (leafCmd != null) {
+                // Loading screen voor elke speler → verbergt de teleport naar de cage
+                playersInGame(instance).forEach { player ->
+                    Bukkit.dispatchCommand(
+                        Bukkit.getConsoleSender(),
+                        leafCmd.replace("{player}", player.name)
+                    )
+                }
+                // Na 10 ticks (0.5s) is het loading screen zichtbaar → teleport + cage-timer starten
+                object : BukkitRunnable() {
+                    override fun run() {
+                        if (instance.state != GameState.ACTIVE) return
+                        assignPlayersToTeams(instance)
+                        startCageTimer(instance)
+                    }
+                }.runTaskLater(plugin, 10L)
+            } else {
+                assignPlayersToTeams(instance)
+                startCageTimer(instance)
+            }
+        } else {
+            startCageTimer(instance)
         }
-        startCageTimer(instance)
 
         val gameTimer = instance.arenaInstance.config.getGameTimer()
         timerEvent.startGameTimer(instance, gameTimer)
@@ -393,6 +414,20 @@ class GameplayManager(
                         // Mark cages as open BEFORE calling setupPlayerHotbar so
                         // determineHotbarType returns "game" and players receive game items.
                         instance.cagesOpen = true
+
+                        // Verwijder alle dropped items en XP-orbs binnen de arena-grenzen
+                        val origin = instance.arenaInstance.origin
+                        val radius = instance.arenaInstance.config.getSaveRadius().toDouble()
+                        origin.world?.entities?.forEach { entity ->
+                            if (entity is org.bukkit.entity.Item || entity is org.bukkit.entity.ExperienceOrb) {
+                                val loc = entity.location
+                                if (kotlin.math.abs(loc.x - origin.x) <= radius &&
+                                    kotlin.math.abs(loc.z - origin.z) <= radius) {
+                                    entity.remove()
+                                }
+                            }
+                        }
+
                         playersInGame(instance).forEach { player ->
                             player.sendTitle(MSG.lang("game.cage.go_title"), "", 0, 20, 10)
                             player.removePotionEffect(PotionEffectType.SLOWNESS)
@@ -559,14 +594,21 @@ class GameplayManager(
         val cageFile: File? = if (plugin.configManager.cosmeticsEnabled && plugin.isCosmeticManagerReady) {
             val player = Bukkit.getPlayer(playerUUID)
             if (player != null) plugin.cosmeticManager.getCageSchemForPlayer(player)
-            else File(plugin.dataFolder, "modules/cosmetics/cages/standard/Cage.schem").takeIf { it.exists() }
+            else File(plugin.dataFolder, "modules/cosmetics/cages/default/Cage.schem").takeIf { it.exists() }
         } else {
-            File(plugin.dataFolder, "modules/cosmetics/cages/standard/Cage.schem").takeIf { it.exists() }
+            File(plugin.dataFolder, "modules/cosmetics/cages/default/Cage.schem").takeIf { it.exists() }
         }
 
         if (cageFile == null) {
             debugLog("No cage file found for UUID: $playerUUID — skipping cage placement")
             return
+        }
+        // Remove any previously placed cage for this player before placing the new one.
+        // Covers the case where undo info still exists (e.g. cosmetic changed between rounds).
+        if (SchematicCageHelper.hasCageSessions(playerUUID)) {
+            debugLog("Existing cage sessions found for UUID: $playerUUID — undoing before re-placing")
+            val undid = SchematicCageHelper.undoCageForPlayer(plugin, configManager, playerUUID)
+            if (!undid) SchematicCageHelper.forceRemoveCageForPlayer(plugin, configManager, playerUUID)
         }
         val success = SchematicCageHelper.pasteCageForPlayer(plugin, configManager, playerUUID, cageFile, spawnLocation)
         if (success) debugLog("✅ Cage placed at spawn for UUID: $playerUUID (${cageFile.name})")
@@ -624,6 +666,7 @@ class GameplayManager(
 
     fun giveItemsToPlayers(instance: GameInstance) {
         val playersInGame = playersInGame(instance)
+        val isGhostMode = instance.arenaInstance.config.isGhostMode()
         val itemRandomizer = ItemRandomizer(instance.arenaInstance.config.getAsFileConfiguration())
         val playersWhoReceivedItems = instanceItemDistribution.computeIfAbsent(instance.id) { mutableSetOf() }
 
@@ -633,14 +676,20 @@ class GameplayManager(
         }
 
         playersInGame.forEach { player ->
-            val randomItem = itemRandomizer.getRandomItem()
-            val isCommandItem = randomItem.type == Material.COMMAND_BLOCK
             if (!playersWhoReceivedItems.contains(player.uniqueId)) {
-                if (isCommandItem) itemRandomizer.executeRandomAction(player.name)
-                else {
-                    val itemCopy = randomItem.clone()
-                    itemCopy.amount = 1
-                    player.inventory.addItem(itemCopy)
+                // GhoasModus: 30% kans op 3x TNT in plaats van normaal item
+                if (isGhostMode && Math.random() < 0.30) {
+                    player.inventory.addItem(ItemStack(Material.TNT, 3))
+                    debugLog("GhostMode: gave 3x TNT to ${player.name}")
+                } else {
+                    val randomItem = itemRandomizer.getRandomItem()
+                    val isCommandItem = randomItem.type == Material.COMMAND_BLOCK
+                    if (isCommandItem) itemRandomizer.executeRandomAction(player.name)
+                    else {
+                        val itemCopy = randomItem.clone()
+                        itemCopy.amount = 1
+                        player.inventory.addItem(itemCopy)
+                    }
                 }
                 playersWhoReceivedItems.add(player.uniqueId)
             }
@@ -792,6 +841,9 @@ class GameplayManager(
             }
         }
         gameListener.clearAllPlayerPlacedBlocks(instance.id)
+
+        // BedModus cleanup
+        (instance.players + instance.spectators).forEach { plugin.bedModeManager.clearPlayer(it) }
 
         broadcastToGame(instance, MSG.lang("game.end.game_over"))
         broadcastToGame(instance, reason)

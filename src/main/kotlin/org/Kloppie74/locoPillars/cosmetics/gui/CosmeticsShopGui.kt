@@ -22,10 +22,10 @@ import java.util.UUID
  * Shop GUI — browse and buy cosmetics.
  *
  * Flow:
- *   /cosmetics shop          → openOverview()  (category picker, 4 types)
- *   /cosmetics shop <type>   → openTypeView()  (skip directly to that type)
- *   Click category in overview → openTypeView()
- *   Back button in type view → openOverview()
+ *   /cosmetics shop          → openOverview()  (category picker)
+ *   /cosmetics shop <type>   → openTypeView()  (skip to type)
+ *   Click category → openTypeView()   (smooth — no close/reopen flicker)
+ *   Back button    → openOverview()   (smooth)
  */
 class CosmeticsShopGui(
     private val plugin: LocoPillars,
@@ -40,116 +40,131 @@ class CosmeticsShopGui(
         val slots: Map<Int, CosmeticDefinition> = emptyMap()
     )
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun pane(material: Material, name: String = " "): ItemStack {
+        val item = ItemStack(material)
+        val meta = item.itemMeta!!
+        meta.setDisplayName(name)
+        item.itemMeta = meta
+        return item
+    }
+
+    private fun fillBorder(inv: Inventory, material: Material = Material.PURPLE_STAINED_GLASS_PANE) {
+        val p = pane(material)
+        val size = inv.size
+        for (i in 0 until 9) inv.setItem(i, p)
+        for (i in size - 9 until size) inv.setItem(i, p)
+        for (i in 0 until size step 9) inv.setItem(i, p)
+        for (i in 8 until size step 9) inv.setItem(i, p)
+    }
+
+    /** Opent een nieuwe view ZONDER eerst te sluiten — voorkomt flicker. */
+    private fun switchTo(player: Player, session: ShopSession) {
+        openInventories[player.uniqueId] = session   // session vóór openInventory zetten
+        player.openInventory(session.inventory)       // sluit oude, opent nieuwe (1 packet)
+    }
+
     // ── Entry points ───────────────────────────────────────────────────────────
 
-    /** Opens the category overview when no type is specified, or directly a type view. */
     fun open(player: Player, type: CosmeticType? = null) {
         if (type == null) openOverview(player) else openTypeView(player, type)
     }
 
-    // ── Overview (category picker) ─────────────────────────────────────────────
+    // ── Overview (category picker, 54 slots) ──────────────────────────────────
 
     fun openOverview(player: Player) {
-        val inv = Bukkit.createInventory(null, 54, "§8§lCosmetics Shop")
+        val inv = Bukkit.createInventory(null, 54, "§5§lCosmetics Shop")
         fillBorder(inv)
 
         val coins = manager.getCoins(player)
 
+        // Dekoratieve accent-panes rondom categorieën
+        val accentPane = pane(Material.MAGENTA_STAINED_GLASS_PANE)
+        listOf(10, 12, 14, 16, 20, 24, 28, 29, 30, 32, 33, 34).forEach { inv.setItem(it, accentPane) }
+
+        // Categorie-knoppen  (slots: 11 KILL · 13 WIN · 15 DEATH · 31 CAGE)
         val categoryData = listOf(
             11 to CosmeticType.KILL,
             13 to CosmeticType.WIN,
             15 to CosmeticType.DEATH,
             31 to CosmeticType.CAGE
         )
-
         categoryData.forEach { (slot, type) ->
-            val all = manager.loader.getAll(type)
-            val owned = manager.getOwnedIds(player, type).size
-            val total = all.size
+            val all     = manager.loader.getAll(type)
+            val owned   = manager.getOwnedIds(player, type).size
+            val total   = all.size
             val selected = manager.getSelected(player, type)
 
             val item = ItemStack(categoryIcon(type))
             val meta = item.itemMeta!!
-            meta.setDisplayName("§e§l${type.displayName} Shop")
-            meta.lore = mutableListOf<String>().also { l ->
-                l.add("§7Owned: §f$owned §7/ §f$total")
-                if (selected != null) l.add("§7Active: §a${selected.displayName}")
-                else l.add("§7Active: §8None")
-                l.add("")
-                val cheapest = all.filter { !manager.owns(player, it) && it.price > 0 }
-                    .minByOrNull { it.price }
-                if (cheapest != null) l.add("§7Cheapest: §6${cheapest.price} coins")
-                else l.add("§7All owned!")
-                l.add("")
-                l.add("§e▶ Click to browse")
+            meta.setDisplayName("${categoryColor(type)}§l${type.displayName}")
+            meta.lore = buildList {
+                add("§8▸ §7Owned: §f$owned §7/ §f$total")
+                add(if (selected != null) "§8▸ §7Active: §a${selected.displayName}" else "§8▸ §7Active: §8None")
+                val cheapest = all.filter { !manager.owns(player, it) && it.price > 0 }.minByOrNull { it.price }
+                add("")
+                if (cheapest != null) add("§8▸ §7Cheapest: §6${cheapest.price} coins")
+                else add("§8▸ §a✔ Everything owned!")
+                if (type == CosmeticType.CAGE) add("§8▸ §b✦ Customize your spawn cage!")
+                add("")
+                add("§e▶ Click to browse")
             }
             item.itemMeta = meta
             inv.setItem(slot, item)
         }
 
-        // Coins display
+        // Coins display (slot 22 — center)
         val coinsItem = ItemStack(Material.SUNFLOWER)
         val coinsMeta = coinsItem.itemMeta!!
         coinsMeta.setDisplayName("§6§lYour Coins: §e$coins")
-        coinsMeta.lore = listOf(
-            "§7Earn coins by playing games!",
-            "§7Use them to unlock cosmetics."
-        )
+        coinsMeta.lore = listOf("§7Earn coins by playing!", "§7Use them to unlock cosmetics.")
         coinsItem.itemMeta = coinsMeta
         inv.setItem(22, coinsItem)
 
-        // My cosmetics shortcut
-        val myCosmetics = ItemStack(Material.CHEST)
-        val myCosmeticsMeta = myCosmetics.itemMeta!!
-        myCosmeticsMeta.setDisplayName("§b§lMy Cosmetics")
-        myCosmeticsMeta.lore = listOf("§7View and equip your owned cosmetics.")
-        myCosmetics.itemMeta = myCosmeticsMeta
-        inv.setItem(45, myCosmetics)
+        // My Cosmetics knop (slot 45)
+        val myItem = ItemStack(Material.CHEST)
+        val myMeta = myItem.itemMeta!!
+        myMeta.setDisplayName("§b§lMy Cosmetics")
+        myMeta.lore = listOf("§7View and equip your cosmetics.")
+        myItem.itemMeta = myMeta
+        inv.setItem(45, myItem)
 
-        // Close
-        val close = ItemStack(Material.BARRIER)
-        val closeMeta = close.itemMeta!!
-        closeMeta.setDisplayName("§c§lClose")
-        close.itemMeta = closeMeta
-        inv.setItem(49, close)
+        // Sluiten (slot 49)
+        inv.setItem(49, closeButton())
 
-        player.openInventory(inv)
-        openInventories[player.uniqueId] = ShopSession(inv, null)
+        switchTo(player, ShopSession(inv, null))
     }
 
-    // ── Type view (actual cosmetics list) ─────────────────────────────────────
+    // ── Type view (cosmetics list, 54 slots) ──────────────────────────────────
 
     fun openTypeView(player: Player, type: CosmeticType) {
-        val all = manager.loader.getAll(type)
+        val all   = manager.loader.getAll(type)
         val coins = manager.getCoins(player)
+        val title = "${categoryColor(type)}§l${type.displayName} Shop"
 
-        val title = "§8§l${type.displayName} Shop"
         val inv = Bukkit.createInventory(null, 54, title)
-        fillBorder(inv)
+        fillBorder(inv, categoryPaneColor(type))
 
         val slotMap = mutableMapOf<Int, CosmeticDefinition>()
-        var slot = 10
 
-        all.forEach { def ->
-            if (slot >= 44) return@forEach
-            if (slot % 9 == 0 || slot % 9 == 8) slot++
-            if (slot >= 44) return@forEach
-
+        // Items op inner-slots (rijen 2–5, kolommen 2–8)
+        val innerSlots = (10..43).filter { it % 9 != 0 && it % 9 != 8 }
+        all.forEachIndexed { index, def ->
+            val slot = innerSlots.getOrNull(index) ?: return@forEachIndexed
             val item = buildShopItem(player, def, coins)
             inv.setItem(slot, item)
             slotMap[slot] = def
-            slot++
         }
 
-        // Back
-        val back = ItemStack(Material.ARROW)
-        val backMeta = back.itemMeta!!
-        backMeta.setDisplayName("§e§lBack")
-        backMeta.lore = listOf("§7Return to the shop overview.")
-        back.itemMeta = backMeta
-        inv.setItem(45, back)
+        // Rij 6: Terug / Coins / Sluiten
+        val backItem = ItemStack(Material.ARROW)
+        val backMeta = backItem.itemMeta!!
+        backMeta.setDisplayName("§e§l← Back")
+        backMeta.lore = listOf("§7Back to overview.")
+        backItem.itemMeta = backMeta
+        inv.setItem(45, backItem)
 
-        // Coins display
         val coinsItem = ItemStack(Material.SUNFLOWER)
         val coinsMeta = coinsItem.itemMeta!!
         coinsMeta.setDisplayName("§6§lYour Coins: §e$coins")
@@ -157,15 +172,9 @@ class CosmeticsShopGui(
         coinsItem.itemMeta = coinsMeta
         inv.setItem(49, coinsItem)
 
-        // Close
-        val close = ItemStack(Material.BARRIER)
-        val closeMeta = close.itemMeta!!
-        closeMeta.setDisplayName("§c§lClose")
-        close.itemMeta = closeMeta
-        inv.setItem(53, close)
+        inv.setItem(53, closeButton())
 
-        player.openInventory(inv)
-        openInventories[player.uniqueId] = ShopSession(inv, type, slotMap)
+        switchTo(player, ShopSession(inv, type, slotMap))
     }
 
     // ── Click handler ─────────────────────────────────────────────────────────
@@ -180,20 +189,18 @@ class CosmeticsShopGui(
         val slot = event.rawSlot
 
         if (session.type == null) {
-            // Overview mode
             when (slot) {
-                11 -> { player.closeInventory(); openTypeView(player, CosmeticType.KILL) }
-                13 -> { player.closeInventory(); openTypeView(player, CosmeticType.WIN) }
-                15 -> { player.closeInventory(); openTypeView(player, CosmeticType.DEATH) }
-                31 -> { player.closeInventory(); openTypeView(player, CosmeticType.CAGE) }
-                45 -> { player.closeInventory(); plugin.cosmeticManager.selectGui.openOverview(player) }
+                11 -> openTypeView(player, CosmeticType.KILL)
+                13 -> openTypeView(player, CosmeticType.WIN)
+                15 -> openTypeView(player, CosmeticType.DEATH)
+                31 -> openTypeView(player, CosmeticType.CAGE)
+                45 -> plugin.cosmeticManager.selectGui.openOverview(player)
                 49 -> player.closeInventory()
             }
         } else {
-            // Type view mode
             when (slot) {
-                45 -> { player.closeInventory(); openOverview(player) }
-                49 -> { /* coins display, no action */ }
+                45 -> openOverview(player)
+                49 -> { /* coins, geen actie */ }
                 53 -> player.closeInventory()
                 else -> {
                     val def = session.slots[slot] ?: return
@@ -205,7 +212,13 @@ class CosmeticsShopGui(
 
     @EventHandler
     fun onInventoryClose(event: InventoryCloseEvent) {
-        openInventories.remove((event.player as? Player)?.uniqueId)
+        val player = event.player as? Player ?: return
+        val session = openInventories[player.uniqueId] ?: return
+        // Alleen verwijderen als dit de HUIDIGE session-inventory is
+        // (niet als er al geswitcht werd naar een nieuwe view)
+        if (event.inventory == session.inventory) {
+            openInventories.remove(player.uniqueId)
+        }
     }
 
     // ── Purchase logic ────────────────────────────────────────────────────────
@@ -214,16 +227,15 @@ class CosmeticsShopGui(
         if (manager.owns(player, def)) {
             manager.setSelected(player, def)
             player.sendMessage(MSG.chatColors("&aEquipped: &f${def.displayName}"))
-            player.closeInventory()
+            openTypeView(player, def.type)
             return
         }
 
-        val result = manager.purchase(player, def)
-        when (result) {
+        when (manager.purchase(player, def)) {
             CosmeticManager.PurchaseResult.SUCCESS -> {
                 player.sendMessage(MSG.chatColors("&aPurchased: &f${def.displayName} &afor &6${def.price} coins&a!"))
                 manager.setSelected(player, def)
-                player.sendMessage(MSG.chatColors("&aAuto-equipped as your active ${def.type.displayName}!"))
+                player.sendMessage(MSG.chatColors("&aAuto-equipped as active ${def.type.displayName}!"))
                 openTypeView(player, def.type)
             }
             CosmeticManager.PurchaseResult.NOT_ENOUGH_COINS ->
@@ -245,7 +257,7 @@ class CosmeticsShopGui(
         val item = ItemStack(def.iconMaterial)
         val meta: ItemMeta = item.itemMeta ?: return item
 
-        val owned = manager.owns(player, def)
+        val owned    = manager.owns(player, def)
         val selected = manager.getSelected(player, def.type)?.id == def.id
 
         val namePrefix = when {
@@ -254,48 +266,57 @@ class CosmeticsShopGui(
             else     -> def.rarity.color
         }
         meta.setDisplayName("$namePrefix${def.displayName}")
-
         if (def.iconCustomModelData > 0) meta.setCustomModelData(def.iconCustomModelData)
 
-        val lore = mutableListOf<String>()
-        lore.add("§8${def.rarity.color}${def.rarity.displayName}")
-        lore.add("")
-        def.lore.forEach { lore.add(MSG.chatColors(it)) }
-        lore.add("")
-        when {
-            selected -> lore.add("§a§lACTIVE")
-            owned    -> lore.add("§e▶ Click to equip")
-            def.price == 0 -> { lore.add("§a§lFREE"); lore.add("§e▶ Click to equip") }
-            else -> {
-                val canAfford = playerCoins >= def.price
-                lore.add(if (canAfford) "§6§lPrice: §e${def.price} coins" else "§c§lPrice: §4${def.price} coins §c(need ${def.price - playerCoins} more)")
-                if (def.requiredLevel > 0) lore.add("§7Required level: §f${def.requiredLevel}")
-                lore.add(if (canAfford) "§e▶ Click to purchase" else "§c✗ Can't afford")
+        meta.lore = buildList {
+            add("§8${def.rarity.color}${def.rarity.displayName}")
+            add("")
+            def.lore.forEach { add(MSG.chatColors(it)) }
+            add("")
+            when {
+                selected -> { add("§a§l★ ACTIVE"); add("§7Right-click to unequip") }
+                owned    -> add("§e▶ Click to equip")
+                def.price == 0 -> { add("§a§lFREE"); add("§e▶ Click to equip") }
+                else -> {
+                    val canAfford = playerCoins >= def.price
+                    add(if (canAfford) "§6§lPrice: §e${def.price} coins" else "§c§lPrice: §4${def.price} coins §c(${def.price - playerCoins} more needed)")
+                    if (def.requiredLevel > 0) add("§7Required level: §f${def.requiredLevel}")
+                    add(if (canAfford) "§e▶ Click to buy" else "§c✗ Not enough coins")
+                }
             }
         }
-        meta.lore = lore
         item.itemMeta = meta
         return item
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Static helpers ────────────────────────────────────────────────────────
 
-    private fun fillBorder(inv: Inventory) {
-        val pane = ItemStack(Material.BLACK_STAINED_GLASS_PANE)
-        val paneMeta = pane.itemMeta!!
-        paneMeta.setDisplayName(" ")
-        pane.itemMeta = paneMeta
-        val size = inv.size
-        for (i in 0 until 9) inv.setItem(i, pane)
-        for (i in size - 9 until size) inv.setItem(i, pane)
-        for (i in 0 until size step 9) inv.setItem(i, pane)
-        for (i in 8 until size step 9) inv.setItem(i, pane)
+    private fun closeButton(): ItemStack {
+        val item = ItemStack(Material.BARRIER)
+        val meta = item.itemMeta!!
+        meta.setDisplayName("§c§lClose")
+        item.itemMeta = meta
+        return item
     }
 
     private fun categoryIcon(type: CosmeticType) = when (type) {
-        CosmeticType.KILL  -> Material.DIAMOND_SWORD
-        CosmeticType.WIN   -> Material.GOLDEN_HELMET
-        CosmeticType.DEATH -> Material.BONE
+        CosmeticType.KILL  -> Material.SKELETON_SKULL
+        CosmeticType.WIN   -> Material.NETHER_STAR
+        CosmeticType.DEATH -> Material.WITHER_ROSE
         CosmeticType.CAGE  -> Material.IRON_BARS
+    }
+
+    private fun categoryColor(type: CosmeticType) = when (type) {
+        CosmeticType.KILL  -> "§c"
+        CosmeticType.WIN   -> "§6"
+        CosmeticType.DEATH -> "§8"
+        CosmeticType.CAGE  -> "§b"
+    }
+
+    private fun categoryPaneColor(type: CosmeticType) = when (type) {
+        CosmeticType.KILL  -> Material.RED_STAINED_GLASS_PANE
+        CosmeticType.WIN   -> Material.YELLOW_STAINED_GLASS_PANE
+        CosmeticType.DEATH -> Material.GRAY_STAINED_GLASS_PANE
+        CosmeticType.CAGE  -> Material.CYAN_STAINED_GLASS_PANE
     }
 }

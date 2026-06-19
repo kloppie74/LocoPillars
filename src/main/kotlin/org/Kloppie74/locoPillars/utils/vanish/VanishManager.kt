@@ -3,6 +3,8 @@ package org.Kloppie74.locoPillars.utils.vanish
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.database.dao.VanishDAO
 import org.Kloppie74.locoPillars.database.models.VanishState
+import org.Kloppie74.locoPillars.game.arena.ArenaWorldManager
+import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.utils.teams.GlobalVisibilityTicker
 import org.bukkit.entity.Player
 import org.bukkit.Bukkit
@@ -376,6 +378,18 @@ object VanishManager {
     fun isHideMe(player: Player): Boolean = getState(player).hideMe
     fun isHideOthers(player: Player): Boolean = getState(player).hideOthers
     fun getShowOthers(player: Player): Set<UUID> = getState(player).showOthers
+
+    /**
+     * True when [player] is in a game context (active game, spectating, or physically in
+     * the shared game world). hideMe/hideOthers are lobby-only features — the commands
+     * consult this to block usage during a game, so players can only hide in the lobby.
+     */
+    fun isInGameContext(player: Player): Boolean {
+        if (plugin.gameManager.getPlayerInstance(player) != null) return true
+        if (plugin.gameManager.getSpectatorInstance(player) != null) return true
+        if (SpectatorUtils.isSpectating(player, plugin)) return true
+        return player.world.name.equals(ArenaWorldManager.GAMEWORLD_NAME, ignoreCase = true)
+    }
 
     fun shouldHideFromOthers(player: Player): Boolean {
         val state = getState(player)

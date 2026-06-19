@@ -37,6 +37,11 @@ commands:
     usage: /showothers <player>
     permission: locopillars.showothers
     aliases: [ so ]
+  profile:
+    description: View your global stats profile
+    usage: /profile
+    permission: locopillars.profile
+    aliases: [myprofile, prof]
   stats:
     description: View your game statistics
     usage: /stats [achievements|leaderboards|history]
@@ -189,6 +194,10 @@ permissions:
     default: op
   locoPillars.stats:
     description: "View server statistics"
+    default: true
+
+  locopillars.profile:
+    description: "Use /profile to view your stats"
     default: true
 
   # === CHAT SYSTEM PERMISSIONS ===

@@ -8,6 +8,7 @@ import org.bukkit.event.player.PlayerTeleportEvent
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.game.data.GameState
 import org.Kloppie74.locoPillars.utils.MSG
+import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 
 /**
  * Enforces arena XZ boundaries for players in active game instances.
@@ -28,24 +29,50 @@ class WorldRegionListener(private val plugin: LocoPillars) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlayerMove(event: PlayerMoveEvent) {
-        val to = event.to
-
-        // Optimisation: skip if still in the same XZ block
+        val to = event.to ?: return
         val from = event.from
-        if (from.blockX == to.blockX && from.blockZ == to.blockZ) return
-
         val player = event.player
-        val instance = plugin.gameManager.getPlayerInstance(player) ?: return
 
-        // Don't block movement once the game is ending — we need to teleport players out
+        // Resolve the arena this player belongs to — either as an active participant
+        // or as a spectator watching it. handlePlayerDeath() removes eliminated players
+        // from playerToInstance but keeps them in the instance's spectators list, so a
+        // null active-instance + spectator flag reliably identifies a spectator.
+        val activeInstance = plugin.gameManager.getPlayerInstance(player)
+        val instance = activeInstance
+            ?: (if (SpectatorUtils.isSpectating(player, plugin)) plugin.gameManager.getSpectatorInstance(player) else null)
+            ?: return
+
         val state = instance.state
         if (state == GameState.ENDED || state == GameState.RESETTING) return
 
-        val region = plugin.worldRegionManager.getRegion(instance.arenaInstance.regionId) ?: return
+        val isSpectator = activeInstance == null
 
+        // ── VOID RECOVERY (spectators only) ──
+        // Active players who drop below DeathHeight are eliminated by GameListener.
+        // Spectators are invulnerable + flying, so without this they would fall into
+        // the void forever. Teleport them back to the arena spawn instead.
+        // Checked BEFORE the XZ-block optimisation below, since a straight-down fall
+        // keeps the same X/Z block and would otherwise be skipped.
+        val deathHeight = instance.arenaInstance.config.getDeathHeight()
+        if (isSpectator && to.y <= deathHeight) {
+            val safe = instance.arenaInstance.config.getSpawnTeleportLocation(instance.arenaInstance.origin)
+            // Guard against a teleport loop if the spawn is (mis)configured at/below the void line.
+            if (safe.y <= deathHeight) safe.y = deathHeight + 5.0
+            // Preserve the spectator's facing so the teleport isn't disorienting.
+            safe.yaw = player.location.yaw
+            safe.pitch = player.location.pitch
+            player.teleport(safe)
+            return
+        }
+
+        // ── XZ BOUNDARY ENFORCEMENT ──
+        // Optimisation: only check when the player actually crosses a block boundary on X or Z.
+        if (from.blockX == to.blockX && from.blockZ == to.blockZ) return
+        val region = plugin.worldRegionManager.getRegion(instance.arenaInstance.regionId) ?: return
         if (!region.containsXZ(to)) {
             event.isCancelled = true
-            player.sendMessage(MSG.chatColors("&cYou cannot leave the arena!"))
+            // Active players get a notice; spectators are bounced silently.
+            if (!isSpectator) player.sendMessage(MSG.chatColors("&cYou cannot leave the arena!"))
         }
     }
 

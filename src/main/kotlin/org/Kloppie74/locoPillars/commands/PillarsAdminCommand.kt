@@ -8,6 +8,7 @@ import org.bukkit.command.TabCompleter
 import org.Kloppie74.locoPillars.LocoPillars
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
+import org.Kloppie74.locoPillars.utils.BoostUtil
 import org.Kloppie74.locoPillars.utils.MSG
 
 /**
@@ -100,14 +101,20 @@ class PillarsAdminCommand(private val plugin: LocoPillars) : CommandExecutor, Ta
                     return@Runnable
                 }
 
+                val onlineTarget = Bukkit.getPlayer(targetName)
+                val boostedCoins = if (op == CurrencyOp.ADD && type == "coins")
+                    onlineTarget?.let { BoostUtil.applyCoins(it, amount) } ?: amount else amount
+                val boostedXp = if (op == CurrencyOp.ADD && type == "xp")
+                    onlineTarget?.let { BoostUtil.applyXp(it, amount) } ?: amount else amount
+
                 val success = when (type) {
                     "coins" -> when (op) {
-                        CurrencyOp.ADD    -> StatsDAO.addCoins(playerId, amount)
+                        CurrencyOp.ADD    -> StatsDAO.addCoins(playerId, boostedCoins)
                         CurrencyOp.REMOVE -> StatsDAO.removeCoins(playerId, amount)
                         CurrencyOp.SET    -> StatsDAO.updateIntStat(playerId, "coins", amount)
                     }
                     "xp"    -> when (op) {
-                        CurrencyOp.ADD -> StatsDAO.addExperience(playerId, amount)
+                        CurrencyOp.ADD -> StatsDAO.addExperience(playerId, boostedXp)
                         else           -> StatsDAO.updateIntStat(playerId, "experience", amount)
                     }
                     "level" -> StatsDAO.updateLevel(playerId, amount)
@@ -144,20 +151,49 @@ class PillarsAdminCommand(private val plugin: LocoPillars) : CommandExecutor, Ta
                     "new_val" to newVal.toString()))
 
                 // Notify the target if online
-                Bukkit.getPlayer(targetName)?.sendMessage(MSG.lang(
-                    when (type) {
-                        "coins" -> when (op) {
-                            CurrencyOp.ADD    -> "pillarsadmin.notify.coins_added"
-                            CurrencyOp.REMOVE -> "pillarsadmin.notify.coins_removed"
-                            CurrencyOp.SET    -> "pillarsadmin.notify.coins_set"
+                onlineTarget?.let { target ->
+                    val effectiveAmount = when {
+                        type == "coins" && op == CurrencyOp.ADD -> boostedCoins
+                        type == "xp"    && op == CurrencyOp.ADD -> boostedXp
+                        else -> amount
+                    }
+                    target.sendMessage(MSG.lang(
+                        when (type) {
+                            "coins" -> when (op) {
+                                CurrencyOp.ADD    -> "pillarsadmin.notify.coins_added"
+                                CurrencyOp.REMOVE -> "pillarsadmin.notify.coins_removed"
+                                CurrencyOp.SET    -> "pillarsadmin.notify.coins_set"
+                            }
+                            "xp"    -> if (op == CurrencyOp.ADD) "pillarsadmin.notify.xp_added" else "pillarsadmin.notify.xp_set"
+                            "level" -> "pillarsadmin.notify.level_set"
+                            else    -> "pillarsadmin.notify.coins_added"
+                        },
+                        "amount"  to effectiveAmount.toString(),
+                        "new_val" to newVal.toString()
+                    ))
+                    // Show booster bonus line when a multiplier was active
+                    if (type == "coins" && op == CurrencyOp.ADD && boostedCoins != amount) {
+                        val bonus = boostedCoins - amount
+                        target.sendMessage(MSG.chatColors("&8(+$bonus Coins Booster &8— &b${BoostUtil.getCoinsMultiplier(target) - 100}% active&8)"))
+                    } else if (type == "xp" && op == CurrencyOp.ADD && boostedXp != amount) {
+                        val bonus = boostedXp - amount
+                        target.sendMessage(MSG.chatColors("&8(+$bonus XP Booster &8— &b${BoostUtil.getXpMultiplier(target) - 100}% active&8)"))
+                    }
+                    // Level-up check when XP was added
+                    if (type == "xp" && op == CurrencyOp.ADD && success) {
+                        val playerId2 = PlayerDAO.getPlayerId(target.name)
+                        if (playerId2 != null) {
+                            val newLevel = StatsDAO.checkAndApplyLevelUp(playerId2)
+                            if (newLevel != null) {
+                                Bukkit.getScheduler().runTask(plugin, Runnable {
+                                    target.sendTitle("§6§l★ LEVEL UP!", "§eYou reached level §6§l$newLevel§e!", 10, 60, 10)
+                                    target.sendMessage("§6§l★ Level Up! §eYou are now level §6§l$newLevel§e!")
+                                    target.playSound(target.location, org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.5f)
+                                })
+                            }
                         }
-                        "xp"    -> if (op == CurrencyOp.ADD) "pillarsadmin.notify.xp_added" else "pillarsadmin.notify.xp_set"
-                        "level" -> "pillarsadmin.notify.level_set"
-                        else    -> "pillarsadmin.notify.coins_added"
-                    },
-                    "amount"  to amount.toString(),
-                    "new_val" to newVal.toString()
-                ))
+                    }
+                }
 
             } catch (e: Exception) {
                 plugin.logger.severe("[PillarsAdminCommand] DB error: ${e.message}")

@@ -149,6 +149,27 @@
 -keep class org.h2.**                               { *; }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 6b. INTERNAL UTILITY SINGLETONS
+#     Kotlin `object` singletons that are called from obfuscated code can be
+#     silently lost when -overloadaggressively assigns the same obfuscated name
+#     to two different classes (last writer wins in the JAR, one class
+#     disappears → NoClassDefFoundError at runtime).
+#     Keeping them by their original name prevents name collisions entirely.
+# ─────────────────────────────────────────────────────────────────────────────
+-keep class org.Kloppie74.locoPillars.utils.SchematicCageHelper {
+    *;
+}
+-keep class org.Kloppie74.locoPillars.utils.SchematicCageHelper$** {
+    *;
+}
+-keep class org.Kloppie74.locoPillars.utils.SmartSchematicCache {
+    *;
+}
+-keep class org.Kloppie74.locoPillars.utils.SchematicHelper {
+    *;
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 7. BUNDLED LIBRARIES (keep public API so they work as expected at runtime)
 # ─────────────────────────────────────────────────────────────────────────────
 -keep class org.slf4j.**   { *; }

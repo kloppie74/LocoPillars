@@ -42,7 +42,7 @@ class CosmeticLoader(private val plugin: LocoPillars) {
         "galaxy_death", "tornado_death", "crystal_death", "lava_death",
         "rainbow_death", "smoke_cloud_death"
     )
-    private val defaultCageIds  = listOf("standard", "golden", "obsidian", "glass")
+    private val defaultCageIds  = listOf("default")
 
     init {
         CosmeticType.values().forEach { cosmetics[it] = mutableMapOf() }

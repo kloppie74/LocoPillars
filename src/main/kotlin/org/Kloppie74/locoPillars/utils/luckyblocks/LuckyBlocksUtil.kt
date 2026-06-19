@@ -21,6 +21,7 @@ data class LuckyBlockRarity(val name: String, val chance: Int)
 object LuckyBlocksUtil {
 
     private val placedLuckyBlocks: MutableSet<Location> = mutableSetOf()
+    private val guaranteedLuckyBlocks: MutableSet<Location> = mutableSetOf()
     private var loader: LuckyblockLoader? = null
     private var gameManager: GameManager? = null
 
@@ -31,8 +32,10 @@ object LuckyBlocksUtil {
     // ── Placement cache ────────────────────────────────────────────────────────
 
     fun cacheLuckyBlock(loc: Location) = placedLuckyBlocks.add(loc)
-    fun removeLuckyBlock(loc: Location) = placedLuckyBlocks.remove(loc)
+    fun removeLuckyBlock(loc: Location) { placedLuckyBlocks.remove(loc); guaranteedLuckyBlocks.remove(loc) }
     fun isPlacedLuckyBlock(loc: Location) = placedLuckyBlocks.contains(loc)
+    fun isGuaranteedLuckyBlock(loc: Location) = guaranteedLuckyBlocks.contains(loc)
+    fun cacheGuaranteedLuckyBlock(loc: Location) = guaranteedLuckyBlocks.add(loc)
     fun getPlacedLuckyBlocksCache(): Set<Location> = placedLuckyBlocks
 
     // ── Break handler ──────────────────────────────────────────────────────────
@@ -47,7 +50,8 @@ object LuckyBlocksUtil {
             return
         }
         val activeGame = game ?: gameManager?.getPlayerInstance(player)
-        if (activeGame != null) {
+        // Admin-given guaranteed blocks always fire, regardless of LuckyblockChance.
+        if (activeGame != null && !isGuaranteedLuckyBlock(location)) {
             val chance = activeGame.arenaInstance.config.getLuckyblockChance()
             if (chance < 100 && Random.nextInt(100) >= chance) {
                 player.sendMessage(MSG.chatColors("&7The Lucky Block fizzled..."))
@@ -105,6 +109,17 @@ object LuckyBlocksUtil {
     fun getLuckyBlockGlass(config: ConfigManager): Material =
         getBlockTextures(config).randomOrNull()?.glass ?: Material.GLASS
 
+    /**
+     * Returns true when [material] should be treated as a lucky block in-world.
+     * Plain GLASS is always matched (schematic maps built before textures were configured).
+     * Any glass type explicitly listed in config is also matched.
+     */
+    fun isLuckyBlockMaterial(material: Material, config: ConfigManager): Boolean {
+        if (material == Material.GLASS) return true
+        val configured = getBlockTextures(config).map { it.glass }.toSet()
+        return material in configured
+    }
+
     fun getGlassTextureFromSkull(item: ItemStack, config: ConfigManager): LuckyBlockTexture? {
         val meta = item.itemMeta as? SkullMeta ?: return null
         val glassKey = org.bukkit.NamespacedKey.minecraft("lucky_block_glass")
@@ -140,10 +155,11 @@ object LuckyBlocksUtil {
 
     // ── Item creation ──────────────────────────────────────────────────────────
 
-    fun getLuckyBlock(config: ConfigManager, player: Player): ItemStack {
+    fun getLuckyBlock(config: ConfigManager, player: Player, guaranteed: Boolean = false): ItemStack {
         val rarity = getRandomRarityName(config)
         val textures = getBlockTextures(config)
-        val textureData = textures.randomOrNull() ?: LuckyBlockTexture(Material.GLASS, "")
+        // Use yellow stained glass as fallback so the placed block doesn't look like plain glass.
+        val textureData = textures.randomOrNull() ?: LuckyBlockTexture(Material.YELLOW_STAINED_GLASS, "")
         val item = ItemStack(Material.PLAYER_HEAD)
         val meta = item.itemMeta as? SkullMeta ?: return item
         if (textureData.texture.isNotBlank()) setHeadTexture(meta, textureData.texture)
@@ -158,8 +174,19 @@ object LuckyBlocksUtil {
         meta.persistentDataContainer.set(textureKey, org.bukkit.persistence.PersistentDataType.STRING, textureData.texture)
         val traditionalKey = org.bukkit.NamespacedKey.minecraft("traditional_lucky_block")
         meta.persistentDataContainer.set(traditionalKey, org.bukkit.persistence.PersistentDataType.STRING, "true")
+        if (guaranteed) {
+            val guaranteedKey = org.bukkit.NamespacedKey.minecraft("lucky_block_guaranteed")
+            meta.persistentDataContainer.set(guaranteedKey, org.bukkit.persistence.PersistentDataType.STRING, "true")
+        }
         item.itemMeta = meta
         return item
+    }
+
+    fun isGuaranteedLuckyBlockItem(item: ItemStack?): Boolean {
+        if (!isTraditionalLuckyBlockItem(item)) return false
+        val meta = item?.itemMeta ?: return false
+        val key = org.bukkit.NamespacedKey.minecraft("lucky_block_guaranteed")
+        return meta.persistentDataContainer.has(key, org.bukkit.persistence.PersistentDataType.STRING)
     }
 
     fun getLuckyBlockItem(config: ConfigManager, rarity: String = "COMMON"): ItemStack {

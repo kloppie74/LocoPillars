@@ -62,10 +62,10 @@ class LuckyBlocksCommand(
                     sender.sendMessage("§cPlayer not found: $targetName")
                     return true
                 }
-                val item = LuckyBlocksUtil.getLuckyBlock(config, target)
+                val item = LuckyBlocksUtil.getLuckyBlock(config, target, guaranteed = true)
                 target.inventory.addItem(item)
-                target.sendMessage("§aYou received a LuckyBlock from §e${sender.name}§a!")
-                sender.sendMessage("§aGave a LuckyBlock to §e${target.name}§a.")
+                target.sendMessage("§aYou received a §6§lGuaranteed §aLuckyBlock from §e${sender.name}§a!")
+                sender.sendMessage("§aGave a guaranteed LuckyBlock to §e${target.name}§a.")
             }
 
             "list" -> {

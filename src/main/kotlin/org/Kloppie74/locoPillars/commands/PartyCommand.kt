@@ -110,7 +110,8 @@ class PartyCommand(private val plugin: LocoPillars) : CommandExecutor, TabComple
         val leader = Bukkit.getOfflinePlayer(party.leader).name ?: "Unknown"
         val limit  = pm.getPartyLimit(Bukkit.getPlayer(party.leader) ?: player)
 
-        player.sendMessage(MSG.lang("party.info.header"))
+        player.sendMessage(MSG.lang("party.info.header",
+            "current" to party.size.toString(), "max" to limit.toString()))
         player.sendMessage(MSG.lang("party.info.leader", "leader" to leader))
         player.sendMessage(MSG.lang("party.info.size",
             "current" to party.size.toString(), "max" to limit.toString()))
