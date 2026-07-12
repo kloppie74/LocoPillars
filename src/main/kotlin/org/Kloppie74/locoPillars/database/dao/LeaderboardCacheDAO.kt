@@ -24,6 +24,9 @@ object LeaderboardCacheDAO {
     /** Minimum gap between rebuilds; collapses several games ending at once into one. */
     private const val MIN_UPDATE_INTERVAL_MS = 1500L
 
+    /** Retries per leaderboard-type bij transiente H2-conflicten (90131/50200). */
+    private const val MAX_REBUILD_ATTEMPTS = 3
+
     // Leaderboard types
     const val TYPE_WINS = "wins"
     const val TYPE_WINRATE = "winrate"
@@ -80,7 +83,7 @@ object LeaderboardCacheDAO {
     // =================== CACHE UPDATE ===================
 
     fun updateCache(): Boolean {
-        // Serialise rebuilds so the two async callers never collide on the MERGE.
+        // Serialise rebuilds so the two async callers never collide on the rebuild.
         cacheUpdateLock.lock()
         try {
             // Debounce: if a rebuild just finished, skip — the previous one already read
@@ -89,37 +92,81 @@ object LeaderboardCacheDAO {
                 return true
             }
 
-            return try {
-                val startTime = System.currentTimeMillis()
+            val startTime = System.currentTimeMillis()
 
-                val success = listOf(
-                    updateWinsLeaderboard(),
-                    updateWinRateLeaderboard(),
-                    updateKillsLeaderboard(),
-                    updateKDRatioLeaderboard(),
-                    updateLevelLeaderboard(),
-                    updatePlaytimeLeaderboard(),
-                    updateWinStreakLeaderboard(),
-                    updatePillarsLeaderboard()
-                ).all { it }
+            // Elke leaderboard-type in zijn EIGEN korte transactie (delete+insert+commit),
+            // met retry bij transiente H2-conflicten. Eén mega-transactie over alle 8
+            // types hield de enige H2-connectie lang vast en bleef "Concurrent update"
+            // (90131) / "Timeout trying to lock table" (50200) geven — korte transacties
+            // + retry herstellen zichzelf, en één vastzittend type nekt niet de hele cache.
+            val rebuilds: List<Pair<String, (Connection) -> Boolean>> = listOf(
+                TYPE_WINS to ::updateWinsLeaderboard,
+                TYPE_WINRATE to ::updateWinRateLeaderboard,
+                TYPE_KILLS to ::updateKillsLeaderboard,
+                TYPE_KD_RATIO to ::updateKDRatioLeaderboard,
+                TYPE_LEVEL to ::updateLevelLeaderboard,
+                TYPE_PLAYTIME to ::updatePlaytimeLeaderboard,
+                TYPE_STREAK to ::updateWinStreakLeaderboard,
+                TYPE_PILLARS to ::updatePillarsLeaderboard
+            )
 
-                val duration = System.currentTimeMillis() - startTime
-
-                if (success) {
-                    updateAllMetadata(duration)
-                    lastCacheUpdateMs = System.currentTimeMillis()
-                }
-
-                success
-            } catch (e: Exception) {
-                false
+            var allOk = true
+            for ((type, rebuild) in rebuilds) {
+                if (!runRebuildWithRetry(type, rebuild)) allOk = false
             }
+
+            if (allOk) {
+                try {
+                    DatabaseManager.getConnection().use { conn ->
+                        updateAllMetadata(System.currentTimeMillis() - startTime, conn)
+                        conn.commit()
+                    }
+                } catch (e: Exception) {
+                    org.bukkit.Bukkit.getLogger().warning("[LocoPillars] Leaderboard metadata update failed: ${e.message}")
+                }
+                lastCacheUpdateMs = System.currentTimeMillis()
+            }
+            return allOk
         } finally {
             cacheUpdateLock.unlock()
         }
     }
 
-    private fun updateWinsLeaderboard(): Boolean {
+    /**
+     * Voert één leaderboard-rebuild uit in zijn eigen transactie, met retries.
+     * Transiente H2-fouten ("Concurrent update" 90131, lock-timeout 50200) verdwijnen
+     * vrijwel altijd bij een nieuwe poging; permanente fouten worden na
+     * [MAX_REBUILD_ATTEMPTS] pogingen gelogd en opgegeven — nooit meer stil falen.
+     */
+    private fun runRebuildWithRetry(type: String, rebuild: (Connection) -> Boolean): Boolean {
+        for (attempt in 1..MAX_REBUILD_ATTEMPTS) {
+            try {
+                DatabaseManager.getConnection().use { conn ->
+                    return if (rebuild(conn)) {
+                        conn.commit()
+                        true
+                    } else {
+                        conn.rollback()
+                        false
+                    }
+                }
+            } catch (e: Exception) {
+                org.bukkit.Bukkit.getLogger().warning(
+                    "[LocoPillars] Leaderboard rebuild '$type' failed (attempt $attempt/$MAX_REBUILD_ATTEMPTS): ${e.message}"
+                )
+                if (attempt == MAX_REBUILD_ATTEMPTS) return false
+                try {
+                    Thread.sleep(250L * attempt)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
+            }
+        }
+        return false
+    }
+
+    private fun updateWinsLeaderboard(conn: java.sql.Connection): Boolean {
         val selectSql = """
             SELECT 
                 p.player_id, p.player_name, ? as leaderboard_type,
@@ -145,6 +192,7 @@ object LeaderboardCacheDAO {
             ORDER BY s.games_won DESC, s.games_played ASC
         """
         return upsertLeaderboardFromSelect(
+            conn,
             selectSql,
             TYPE_WINS,
             TYPE_WINS,
@@ -153,7 +201,7 @@ object LeaderboardCacheDAO {
         )
     }
 
-    private fun updateWinRateLeaderboard(): Boolean {
+    private fun updateWinRateLeaderboard(conn: java.sql.Connection): Boolean {
         val selectSql = """
             SELECT 
                 p.player_id, p.player_name, ? as leaderboard_type,
@@ -184,6 +232,7 @@ object LeaderboardCacheDAO {
         """
         val threshold = getDefaultQualifyingThreshold(TYPE_WINRATE)
         return upsertLeaderboardFromSelect(
+            conn,
             selectSql,
             TYPE_WINRATE,
             TYPE_WINRATE,
@@ -193,7 +242,7 @@ object LeaderboardCacheDAO {
         )
     }
 
-    private fun updateKillsLeaderboard(): Boolean {
+    private fun updateKillsLeaderboard(conn: java.sql.Connection): Boolean {
         val selectSql = """
             SELECT 
                 p.player_id, p.player_name, ? as leaderboard_type,
@@ -219,6 +268,7 @@ object LeaderboardCacheDAO {
             ORDER BY s.total_kills DESC, s.total_deaths ASC
         """
         return upsertLeaderboardFromSelect(
+            conn,
             selectSql,
             TYPE_KILLS,
             TYPE_KILLS,
@@ -226,7 +276,7 @@ object LeaderboardCacheDAO {
         )
     }
 
-    private fun updateKDRatioLeaderboard(): Boolean {
+    private fun updateKDRatioLeaderboard(conn: java.sql.Connection): Boolean {
         val selectSql = """
             SELECT 
                 p.player_id, p.player_name, ? as leaderboard_type,
@@ -257,6 +307,7 @@ object LeaderboardCacheDAO {
         """
         val threshold = getDefaultQualifyingThreshold(TYPE_KD_RATIO)
         return upsertLeaderboardFromSelect(
+            conn,
             selectSql,
             TYPE_KD_RATIO,
             TYPE_KD_RATIO,
@@ -266,7 +317,7 @@ object LeaderboardCacheDAO {
         )
     }
 
-    private fun updateLevelLeaderboard(): Boolean {
+    private fun updateLevelLeaderboard(conn: java.sql.Connection): Boolean {
         val selectSql = """
             SELECT 
                 p.player_id, p.player_name, ? as leaderboard_type,
@@ -292,6 +343,7 @@ object LeaderboardCacheDAO {
             ORDER BY s.level DESC, s.experience DESC
         """
         return upsertLeaderboardFromSelect(
+            conn,
             selectSql,
             TYPE_LEVEL,
             TYPE_LEVEL,
@@ -299,7 +351,7 @@ object LeaderboardCacheDAO {
         )
     }
 
-    private fun updatePlaytimeLeaderboard(): Boolean {
+    private fun updatePlaytimeLeaderboard(conn: java.sql.Connection): Boolean {
         val selectSql = """
             SELECT 
                 p.player_id, p.player_name, ? as leaderboard_type,
@@ -325,6 +377,7 @@ object LeaderboardCacheDAO {
             ORDER BY s.total_playtime DESC, s.games_played DESC
         """
         return upsertLeaderboardFromSelect(
+            conn,
             selectSql,
             TYPE_PLAYTIME,
             TYPE_PLAYTIME,
@@ -332,7 +385,7 @@ object LeaderboardCacheDAO {
         )
     }
 
-    private fun updateWinStreakLeaderboard(): Boolean {
+    private fun updateWinStreakLeaderboard(conn: java.sql.Connection): Boolean {
         val selectSql = """
             SELECT 
                 p.player_id, p.player_name, ? as leaderboard_type,
@@ -358,6 +411,7 @@ object LeaderboardCacheDAO {
             ORDER BY s.best_win_streak DESC, s.current_win_streak DESC
         """
         return upsertLeaderboardFromSelect(
+            conn,
             selectSql,
             TYPE_STREAK,
             TYPE_STREAK,
@@ -366,7 +420,7 @@ object LeaderboardCacheDAO {
         )
     }
 
-    private fun updatePillarsLeaderboard(): Boolean {
+    private fun updatePillarsLeaderboard(conn: java.sql.Connection): Boolean {
         val selectSql = """
             SELECT 
                 p.player_id, p.player_name, ? as leaderboard_type,
@@ -392,6 +446,7 @@ object LeaderboardCacheDAO {
             ORDER BY s.pillars_destroyed DESC, s.games_played ASC
         """
         return upsertLeaderboardFromSelect(
+            conn,
             selectSql,
             TYPE_PILLARS,
             TYPE_PILLARS,
@@ -399,141 +454,58 @@ object LeaderboardCacheDAO {
         )
     }
 
-    private fun upsertLeaderboardFromSelect(selectSql: String, leaderboardType: String, vararg params: Any): Boolean {
-        // BELANGRIJK: getDatabaseType() geeft de RAUWE config-waarde terug (bijv. "H2" of
-        // "MySQL"), dus hier .lowercase() — anders viel dit in de else-tak → exception →
-        // updateCache() faalde → cache leeg → alle ranks "Unranked".
-        val upsertSql = when (DatabaseManager.getDatabaseType().lowercase()) {
-            "mysql", "mariadb" -> """
-                REPLACE INTO lp_leaderboard_cache (
-                    player_id, player_name, leaderboard_type, rank_position, rank_value, rank_display_value,
-                    secondary_value, secondary_display, tertiary_value, tertiary_display,
-                    percentile, score_normalized, previous_rank, rank_change, rank_change_direction,
-                    qualifying_games, eligible, last_updated, cache_version
-                )
-                $selectSql
-            """
-            // H2 draait in MODE=MySQL maar kent GEEN "INSERT OR REPLACE" (dat is SQLite).
-            // H2 ondersteunt MERGE INTO ... KEY(...) met een SELECT-bron.
-            "h2" -> """
-                MERGE INTO lp_leaderboard_cache (
-                    player_id, player_name, leaderboard_type, rank_position, rank_value, rank_display_value,
-                    secondary_value, secondary_display, tertiary_value, tertiary_display,
-                    percentile, score_normalized, previous_rank, rank_change, rank_change_direction,
-                    qualifying_games, eligible, last_updated, cache_version
-                )
-                KEY(player_id, leaderboard_type)
-                $selectSql
-            """
-            "sqlite" -> """
-                INSERT OR REPLACE INTO lp_leaderboard_cache (
-                    player_id, player_name, leaderboard_type, rank_position, rank_value, rank_display_value,
-                    secondary_value, secondary_display, tertiary_value, tertiary_display,
-                    percentile, score_normalized, previous_rank, rank_change, rank_change_direction,
-                    qualifying_games, eligible, last_updated, cache_version
-                )
-                $selectSql
-            """
-            "postgresql" -> """
-                INSERT INTO lp_leaderboard_cache (
-                    player_id, player_name, leaderboard_type, rank_position, rank_value, rank_display_value,
-                    secondary_value, secondary_display, tertiary_value, tertiary_display,
-                    percentile, score_normalized, previous_rank, rank_change, rank_change_direction,
-                    qualifying_games, eligible, last_updated, cache_version
-                )
-                $selectSql
-                ON CONFLICT (player_id, leaderboard_type) DO UPDATE SET
-                    player_name = EXCLUDED.player_name,
-                    rank_position = EXCLUDED.rank_position,
-                    rank_value = EXCLUDED.rank_value,
-                    rank_display_value = EXCLUDED.rank_display_value,
-                    secondary_value = EXCLUDED.secondary_value,
-                    secondary_display = EXCLUDED.secondary_display,
-                    tertiary_value = EXCLUDED.tertiary_value,
-                    tertiary_display = EXCLUDED.tertiary_display,
-                    percentile = EXCLUDED.percentile,
-                    score_normalized = EXCLUDED.score_normalized,
-                    previous_rank = EXCLUDED.previous_rank,
-                    rank_change = EXCLUDED.rank_change,
-                    rank_change_direction = EXCLUDED.rank_change_direction,
-                    qualifying_games = EXCLUDED.qualifying_games,
-                    eligible = EXCLUDED.eligible,
-                    last_updated = EXCLUDED.last_updated,
-                    cache_version = EXCLUDED.cache_version
-            """
-            else -> throw IllegalArgumentException("Unsupported database type: ${DatabaseManager.getDatabaseType()}")
+    private fun upsertLeaderboardFromSelect(conn: java.sql.Connection, selectSql: String, leaderboardType: String, vararg params: Any): Boolean {
+        // Volledige rebuild van één leaderboard-type: DELETE + INSERT, dialect-neutraal.
+        // GEEN MERGE/REPLACE/ON CONFLICT meer: H2's MERGE-updatepad bleef zelfs met één
+        // enkele connectie "Concurrent update" (90131) / lock-timeouts (50200) geven
+        // (MVStore rij-versieconflicten, o.a. na hard-kills van de server). Bovendien
+        // liet een MERGE verouderde rijen staan van spelers die van het bord vallen.
+        // Na de DELETE volstaat een kale INSERT ... SELECT — identiek op H2, MySQL,
+        // MariaDB, SQLite en PostgreSQL, dus het hele dialect-when is vervallen.
+        // De caller (runRebuildWithRetry) beheert de transactie, commit en rollback.
+        conn.prepareStatement("DELETE FROM lp_leaderboard_cache WHERE leaderboard_type = ?").use { ps ->
+            ps.setString(1, leaderboardType)
+            ps.executeUpdate()
         }
 
-        // Under heavy load (e.g. the 175-arena startup paste) H2's MVStore can reject the
-        // MERGE with a transient "Concurrent update"/lock-timeout. Retry on a FRESH
-        // connection (the failed one is marked broken) with a short backoff.
-        var attempt = 0
-        while (true) {
-            attempt++
-            try {
-                DatabaseManager.getConnection().use { conn ->
-                    conn.prepareStatement(upsertSql).use { ps ->
-                        params.forEachIndexed { i, value ->
-                            when (value) {
-                                is String -> ps.setString(i + 1, value)
-                                is Int -> ps.setInt(i + 1, value)
-                                is LocalDateTime -> ps.setObject(i + 1, value)
-                                else -> ps.setObject(i + 1, value)
-                            }
-                        }
-                        ps.executeUpdate()
-                        conn.commit()
-                    }
-                }
-                break
-            } catch (e: java.sql.SQLException) {
-                if (attempt >= MAX_DB_RETRIES || !isTransientLockError(e)) throw e
-                try {
-                    Thread.sleep(DB_RETRY_BACKOFF_MS * attempt)
-                } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    throw e
+        val insertSql = """
+            INSERT INTO lp_leaderboard_cache (
+                player_id, player_name, leaderboard_type, rank_position, rank_value, rank_display_value,
+                secondary_value, secondary_display, tertiary_value, tertiary_display,
+                percentile, score_normalized, previous_rank, rank_change, rank_change_direction,
+                qualifying_games, eligible, last_updated, cache_version
+            )
+            $selectSql
+        """
+
+        conn.prepareStatement(insertSql).use { ps ->
+            params.forEachIndexed { i, value ->
+                when (value) {
+                    is String -> ps.setString(i + 1, value)
+                    is Int -> ps.setInt(i + 1, value)
+                    is LocalDateTime -> ps.setObject(i + 1, value)
+                    else -> ps.setObject(i + 1, value)
                 }
             }
+            ps.executeUpdate()
         }
 
-        // Percentielen zijn optioneel (en niet elk SQL-dialect ondersteunt UPDATE..FROM).
-        // Mag NOOIT de cache-vulling laten falen — de rank_position is al gecommit.
+        // Percentielen op dezelfde connectie — zelfde transactie.
         try {
-            updatePercentiles(leaderboardType)
+            updatePercentiles(leaderboardType, conn)
         } catch (_: Exception) {
-            // negeren — ranks werken ook zonder percentielen
+            // Optioneel — nooit de gehele rebuild blokkeren.
         }
+
         return true
     }
 
-    /** Max attempts for a transient-failure MERGE retry (≈ 250+500+…+2000ms ≈ 9s total). */
-    private const val MAX_DB_RETRIES = 8
-
-    /** Base backoff (ms) between retries; multiplied by the attempt number. */
-    private const val DB_RETRY_BACKOFF_MS = 250L
-
     /**
-     * True if [e] (or any cause in its chain) is a transient H2 lock/concurrency error that
-     * is worth retrying: 50200 = "Timeout trying to lock table" (HYT00), 90131 = "Concurrent
-     * update", 40001 = serialization failure.
+     * Werk percentielen bij voor [type] op de meegegeven connectie, zodat de
+     * percentiel-UPDATE en de voorafgaande rebuild in dezelfde transactie vallen.
+     * De caller is verantwoordelijk voor commit/rollback — hier wordt NIET gecommit.
      */
-    private fun isTransientLockError(e: java.sql.SQLException): Boolean {
-        var cur: Throwable? = e
-        while (cur != null) {
-            if (cur is java.sql.SQLException) {
-                if (cur.errorCode == 50200 || cur.errorCode == 90131) return true
-                if (cur.sqlState == "HYT00" || cur.sqlState == "40001") return true
-            }
-            val msg = cur.message ?: ""
-            if (msg.contains("Concurrent update", ignoreCase = true) ||
-                msg.contains("Timeout trying to lock", ignoreCase = true)) return true
-            cur = cur.cause
-        }
-        return false
-    }
-
-    private fun updatePercentiles(type: String): Boolean {
+    private fun updatePercentiles(type: String, conn: Connection): Boolean {
         val sql = """
             UPDATE lp_leaderboard_cache 
             SET percentile = CASE 
@@ -547,19 +519,15 @@ object LeaderboardCacheDAO {
             ) totals
             WHERE leaderboard_type = ? AND eligible = 1
         """
-
-        DatabaseManager.getConnection().use { conn ->
-            conn.prepareStatement(sql).use { ps ->
-                ps.setString(1, type)
-                ps.setString(2, type)
-                val updated = ps.executeUpdate()
-                conn.commit()
-                return updated >= 0
-            }
+        conn.prepareStatement(sql).use { ps ->
+            ps.setString(1, type)
+            ps.setString(2, type)
+            val updated = ps.executeUpdate()
+            return updated >= 0
         }
     }
 
-    private fun updateAllMetadata(updateDuration: Long): Boolean {
+    private fun updateAllMetadata(updateDuration: Long, conn: java.sql.Connection): Boolean {
         val sql = """
             UPDATE lp_leaderboard_metadata 
             SET last_full_update = ?, 
@@ -575,16 +543,14 @@ object LeaderboardCacheDAO {
                 updated_at = ?
         """
 
-        DatabaseManager.getConnection().use { conn ->
-            conn.prepareStatement(sql).use { ps ->
-                val now = LocalDateTime.now()
-                ps.setObject(1, now)
-                ps.setLong(2, updateDuration)
-                ps.setObject(3, now)
-                val updated = ps.executeUpdate()
-                conn.commit()
-                return updated >= 0
-            }
+        // De caller (updateCache) beheert commit — hier niet committen.
+        conn.prepareStatement(sql).use { ps ->
+            val now = LocalDateTime.now()
+            ps.setObject(1, now)
+            ps.setLong(2, updateDuration)
+            ps.setObject(3, now)
+            val updated = ps.executeUpdate()
+            return updated >= 0
         }
     }
 

@@ -50,14 +50,9 @@ object LuckyBlocksUtil {
             return
         }
         val activeGame = game ?: gameManager?.getPlayerInstance(player)
-        // Admin-given guaranteed blocks always fire, regardless of LuckyblockChance.
-        if (activeGame != null && !isGuaranteedLuckyBlock(location)) {
-            val chance = activeGame.arenaInstance.config.getLuckyblockChance()
-            if (chance < 100 && Random.nextInt(100) >= chance) {
-                player.sendMessage(MSG.chatColors("&7The Lucky Block fizzled..."))
-                return
-            }
-        }
+        // Geen kans-check ("fizzle") meer bij het breken: LuckyblockChance wordt
+        // toegepast bij het UITDELEN van het item (GameplayManager.giveItemsToPlayers).
+        // Een geplaatst luckyblock vuurt dus altijd — de engine handelt de rest af.
         l.execute(player, location, activeGame)
     }
 

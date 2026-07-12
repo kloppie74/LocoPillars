@@ -20,6 +20,7 @@ import org.Kloppie74.locoPillars.utils.spectator.listeners.SpectateListener
 import org.Kloppie74.locoPillars.utils.spectator.SpectatorUtils
 import org.Kloppie74.locoPillars.utils.hotbar.HotbarUtils
 import org.Kloppie74.locoPillars.utils.config.ConfigManager
+import org.Kloppie74.locoPillars.utils.luckyblocks.LuckyBlocksUtil
 import org.Kloppie74.locoPillars.database.dao.PlayerDAO
 import org.Kloppie74.locoPillars.database.dao.StatsDAO
 import org.Kloppie74.locoPillars.database.dao.ArenaStatsDAO
@@ -667,6 +668,8 @@ class GameplayManager(
     fun giveItemsToPlayers(instance: GameInstance) {
         val playersInGame = playersInGame(instance)
         val isGhostMode = instance.arenaInstance.config.isGhostMode()
+        val luckyBlocksEnabled = instance.arenaInstance.config.isLuckyBlocksEnabled()
+        val luckyblockChance = instance.arenaInstance.config.getLuckyblockChance()
         val itemRandomizer = ItemRandomizer(instance.arenaInstance.config.getAsFileConfiguration())
         val playersWhoReceivedItems = instanceItemDistribution.computeIfAbsent(instance.id) { mutableSetOf() }
 
@@ -681,6 +684,15 @@ class GameplayManager(
                 if (isGhostMode && Math.random() < 0.30) {
                     player.inventory.addItem(ItemStack(Material.TNT, 3))
                     debugLog("GhostMode: gave 3x TNT to ${player.name}")
+                } else if (luckyBlocksEnabled && Math.random() * 100 < luckyblockChance) {
+                    // Luckyblock-game: geef het fysieke luckyblock-item (identiek aan
+                    // /luckyblocks get) in plaats van een random item. LuckyblockChance
+                    // bepaalt hoe vaak de item-cyclus een luckyblock oplevert. De speler
+                    // plaatst het blok; LuckyBlocksListener + LuckyblockEngine doen de rest.
+                    val luckyBlock = LuckyBlocksUtil.getLuckyBlock(configManager, player)
+                    val leftover = player.inventory.addItem(luckyBlock)
+                    leftover.values.forEach { player.world.dropItemNaturally(player.location, it) }
+                    debugLog("LuckyBlocks: gave physical luckyblock item to ${player.name}")
                 } else {
                     val randomItem = itemRandomizer.getRandomItem()
                     val isCommandItem = randomItem.type == Material.COMMAND_BLOCK

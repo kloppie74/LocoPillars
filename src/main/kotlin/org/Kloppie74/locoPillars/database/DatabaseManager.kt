@@ -74,12 +74,17 @@ object DatabaseManager {
                             }
                         }
 
-                        // LOCK_TIMEOUT=10000: wait up to 10s for a row/table lock instead of
-                        // failing fast (H2's default is 1s). Safety net on top of the JVM-level
-                        // serialization in LeaderboardCacheDAO for any brief write contention.
-                        jdbcUrl = "jdbc:h2:${dbFile.absolutePath};DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;LOCK_TIMEOUT=10000"
+                        // H2 embedded is single-writer: pool size 1 ensures Hikari never hands out
+                        // two connections simultaneously. LOCK_TIMEOUT=5000: met één connectie
+                        // bestaan er geen legitieme lock-waits tussen sessies, dus bij een
+                        // (transient) conflict snel falen en de retry in LeaderboardCacheDAO
+                        // het laten oplossen — niet 30s de enige connectie gijzelen.
+                        jdbcUrl = "jdbc:h2:${dbFile.absolutePath};DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;LOCK_TIMEOUT=5000"
                         username = "sa"
                         password = ""
+                        // Single connection: H2 embedded supports only one writer at a time.
+                        maximumPoolSize = 1
+                        minimumIdle = 1
                     }
                     "mysql" -> {
                         plugin.logger.info("[LocoPillars] Connecting to MySQL: ${config.host}:${config.port}/${config.database}")
@@ -100,9 +105,16 @@ object DatabaseManager {
                     }
                 }
 
-                // Connection pool settings
-                maximumPoolSize = config.maxPoolSize
-                minimumIdle = config.minPoolSize
+                // Connection pool settings.
+                // LET OP: H2 embedded is single-writer — de H2-branch hierboven pint de
+                // pool op 1 connectie. Die mag hier NIET overschreven worden met de
+                // config-waarden, anders krijgen meerdere connecties gelijktijdige
+                // transacties op dezelfde tabellen → "Concurrent update" (90131) /
+                // "Timeout trying to lock table" (50200) op lp_leaderboard_cache.
+                if (config.type.lowercase() != "h2") {
+                    maximumPoolSize = config.maxPoolSize
+                    minimumIdle = config.minPoolSize
+                }
                 connectionTimeout = config.connectionTimeoutMs
                 idleTimeout = config.idleTimeoutMs
                 maxLifetime = config.maxLifetimeMs
@@ -288,8 +300,11 @@ object DatabaseManager {
      * Checks if database is connected.
      */
     fun isConnected(): Boolean {
+        // Do NOT open a new connection here — with H2 pool size 1, grabbing a connection
+        // while a MERGE is in progress causes a deadlock. Check the pool state instead.
         return try {
-            dataSource?.connection?.use { it.isValid(2) } ?: false
+            val ds = dataSource ?: return false
+            !ds.isClosed
         } catch (e: Exception) {
             false
         }
